@@ -1,0 +1,53 @@
+# Build context cleanliness — same logic as .gitignore plus a few extras
+# that we DO commit but don't want shipped into the image.
+
+# Heavy / non-runtime
+node_modules
+**/node_modules
+.next
+**/.next
+dist
+**/dist
+.turbo
+.cache
+coverage
+artifacts
+typechain-types
+
+# Secrets — never copy into image
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+
+# Local databases — runtime mounts override these anyway
+*.db
+*.db-wal
+*.db-shm
+data
+**/data
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode
+.idea
+*.swp
+
+# Git history (image doesn't need it)
+.git
+.github
+
+# Large static assets the runtime image doesn't need
+apps/landing/lib/Googolplex_Whitepaper.pdf
+
+# Misc
+*.log
+*.tsbuildinfo
+_landing.bak.*
+*.bak
+.aider*
+.claude
+.gemini
