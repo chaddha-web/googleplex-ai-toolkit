@@ -12,13 +12,13 @@ echo "=== Pulling latest from origin/main"
 git pull --ff-only origin main
 
 echo "=== Building monorepo image (5-10 min on first run, ~1 min cached)"
-docker compose -f docker-compose.prod.yml build
+docker compose --env-file .env.prod -f docker-compose.prod.yml build
 
 echo "=== Restarting containers"
-docker compose -f docker-compose.prod.yml up -d --remove-orphans
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --remove-orphans
 
 echo "=== Pruning dangling images"
 docker image prune -f
 
 echo "=== Done. Container status:"
-docker compose -f docker-compose.prod.yml ps
+docker compose --env-file .env.prod -f docker-compose.prod.yml ps
