@@ -22,6 +22,9 @@ services:
     image: traefik:v3.5
     container_name: gplex-traefik
     restart: unless-stopped
+    environment:
+      # Docker 29 daemon rejects API <1.40; pin client to a modern version.
+      - DOCKER_API_VERSION=1.45
     command:
       - --api.dashboard=false
       - --providers.docker=true
