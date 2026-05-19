@@ -1,13 +1,27 @@
-name: Deploy
+name: Deploy to Lightsail
+
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
+
+# Don't run two deploys in parallel — let one finish before queuing the next.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Deploy to Server
-        run: |
-          ssh deploy@${{ secrets.SERVER_IP }} 'bash -s' < scripts/deploy.sh blue
+      - name: SSH to VPS and run deploy.sh
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ${{ secrets.LIGHTSAIL_USER }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          port: 22
+          script_stop: true
+          script: |
+            cd ~/apps/googolplex
+            bash scripts/deploy.sh

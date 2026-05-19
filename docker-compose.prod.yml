@@ -1,0 +1,179 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Production compose — single Lightsail VPS
+#
+# Services:
+#   traefik  → :80 / :443 reverse proxy with auto Let's Encrypt
+#   landing  → ggakingclub.com
+#   web      → app.ggakingclub.com
+#   admin    → admin.ggakingclub.com
+#   auth     → auth.ggakingclub.com  (services/auth)
+#   wallet   → wallet.ggakingclub.com (services/wallet)
+#
+# Volumes:
+#   auth-data    — services/auth/data (SQLite)
+#   wallet-data  — services/wallet/data (SQLite)
+#   letsencrypt  — Traefik cert cache
+#
+# All secrets come from .env.prod (NOT in git). See .env.prod.example.
+# ─────────────────────────────────────────────────────────────────────────
+
+services:
+  traefik:
+    image: traefik:v3.2
+    container_name: gplex-traefik
+    restart: unless-stopped
+    command:
+      - --api.dashboard=false
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=gplex-net
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      # Auto-redirect HTTP → HTTPS
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      # Let's Encrypt
+      - --certificatesresolvers.le.acme.email=${LETSENCRYPT_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.le.acme.tlschallenge=true
+      - --log.level=INFO
+      - --accesslog=true
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt:/letsencrypt
+    networks:
+      - gplex-net
+
+  landing:
+    build: .
+    image: gplex-monorepo:latest
+    container_name: gplex-landing
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      - PORT=3010
+      - NEXT_PUBLIC_AUTH_BASE=https://auth.${DOMAIN}
+      - NEXT_PUBLIC_WALLET_BASE=https://wallet.${DOMAIN}
+      - NEXT_PUBLIC_WEB_URL=https://app.${DOMAIN}
+      - NEXT_PUBLIC_SITE_URL=https://${DOMAIN}
+    command: ["npm", "run", "start", "--workspace", "@googolplex/landing"]
+    expose:
+      - "3010"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.landing.rule=Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`)
+      - traefik.http.routers.landing.entrypoints=websecure
+      - traefik.http.routers.landing.tls.certresolver=le
+      - traefik.http.services.landing.loadbalancer.server.port=3010
+    networks:
+      - gplex-net
+    depends_on:
+      - auth
+
+  web:
+    image: gplex-monorepo:latest
+    container_name: gplex-web
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      - PORT=3000
+      - NEXT_PUBLIC_AUTH_BASE=https://auth.${DOMAIN}
+      - NEXT_PUBLIC_WALLET_BASE=https://wallet.${DOMAIN}
+      - NEXT_PUBLIC_LANDING_URL=https://${DOMAIN}
+    command: ["npm", "run", "start", "--workspace", "@googolplex/web"]
+    expose:
+      - "3000"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.web.rule=Host(`app.${DOMAIN}`)
+      - traefik.http.routers.web.entrypoints=websecure
+      - traefik.http.routers.web.tls.certresolver=le
+      - traefik.http.services.web.loadbalancer.server.port=3000
+    networks:
+      - gplex-net
+    depends_on:
+      - landing
+
+  admin:
+    image: gplex-monorepo:latest
+    container_name: gplex-admin
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      - PORT=3001
+      - NEXT_PUBLIC_AUTH_BASE=https://auth.${DOMAIN}
+    command: ["npm", "run", "start", "--workspace", "@googolplex/admin"]
+    expose:
+      - "3001"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.admin.rule=Host(`admin.${DOMAIN}`)
+      - traefik.http.routers.admin.entrypoints=websecure
+      - traefik.http.routers.admin.tls.certresolver=le
+      - traefik.http.services.admin.loadbalancer.server.port=3001
+    networks:
+      - gplex-net
+    depends_on:
+      - landing
+
+  auth:
+    image: gplex-monorepo:latest
+    container_name: gplex-auth
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      - PORT=4200
+      - AUTH_DB_PATH=/data/auth.db
+      - CORS_ORIGINS=https://${DOMAIN},https://app.${DOMAIN},https://admin.${DOMAIN}
+    command: ["npx", "tsx", "services/auth/src/server.ts"]
+    expose:
+      - "4200"
+    volumes:
+      - auth-data:/data
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.auth.rule=Host(`auth.${DOMAIN}`)
+      - traefik.http.routers.auth.entrypoints=websecure
+      - traefik.http.routers.auth.tls.certresolver=le
+      - traefik.http.services.auth.loadbalancer.server.port=4200
+    networks:
+      - gplex-net
+
+  wallet:
+    image: gplex-monorepo:latest
+    container_name: gplex-wallet
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      - PORT=4201
+      - WALLET_DB_PATH=/data/wallet.db
+      - AUTH_BASE_URL=http://auth:4200
+      - CORS_ORIGINS=https://${DOMAIN},https://app.${DOMAIN},https://admin.${DOMAIN}
+    command: ["npx", "tsx", "services/wallet/src/server.ts"]
+    expose:
+      - "4201"
+    volumes:
+      - wallet-data:/data
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.wallet.rule=Host(`wallet.${DOMAIN}`)
+      - traefik.http.routers.wallet.entrypoints=websecure
+      - traefik.http.routers.wallet.tls.certresolver=le
+      - traefik.http.services.wallet.loadbalancer.server.port=4201
+    networks:
+      - gplex-net
+    depends_on:
+      - auth
+
+volumes:
+  auth-data:
+  wallet-data:
+  letsencrypt:
+
+networks:
+  gplex-net:
+    name: gplex-net
+    driver: bridge
