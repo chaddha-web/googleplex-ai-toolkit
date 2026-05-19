@@ -35,9 +35,8 @@ COPY packages/wallet/package.json packages/wallet/package.json
 COPY packages/governance-shared/package.json packages/governance-shared/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/ai/package.json packages/ai/package.json
-COPY packages/analytics/package.json packages/analytics/package.json
-COPY packages/db/package.json packages/db/package.json
-COPY packages/email/package.json packages/email/package.json
+# packages/{analytics,db,email} are orphan dirs with src/ but no package.json
+# — npm install will skip them, full source still copied in build stage.
 
 RUN npm install --no-audit --no-fund
 
