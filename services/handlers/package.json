@@ -1,0 +1,26 @@
+{
+  "name": "@googolplex/handlers",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:treasury": "cross-env HANDLER=treasury PORT=4101 tsx watch src/run.ts",
+    "dev:gas": "cross-env HANDLER=gasRelayer PORT=4102 tsx watch src/run.ts",
+    "dev:ai": "cross-env HANDLER=aiOrchestrator PORT=4103 tsx watch src/run.ts",
+    "dev:hosting": "cross-env HANDLER=hostingController PORT=4104 tsx watch src/run.ts",
+    "dev:cid": "cross-env HANDLER=cidRegistry PORT=4105 tsx watch src/run.ts",
+    "dev:identity": "cross-env HANDLER=identityRegistry PORT=4106 tsx watch src/run.ts"
+  },
+  "dependencies": {
+    "@googolplex/dao-actions": "*",
+    "@googolplex/governance-service": "*",
+    "@googolplex/governance-shared": "*",
+    "fastify": "^4.28.0"
+  },
+  "devDependencies": {
+    "@googolplex/config": "*",
+    "@types/node": "^20.12.12",
+    "tsx": "^4.15.0",
+    "typescript": "^5.4.5"
+  }
+}

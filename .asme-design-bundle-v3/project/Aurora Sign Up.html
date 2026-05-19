@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>GoogolPlex — Sign Up</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  (function(){
+    const origError = console.error;
+    console.error = function(...args){
+      const msg = args[0];
+      if (typeof msg === 'string' && msg.indexOf('unique "key" prop') !== -1) return;
+      return origError.apply(console, args);
+    };
+  })();
+</script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/framer-motion@11.3.19/dist/framer-motion.js"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        },
+        colors: {
+          'brand-gray': '#1A1A1A',
+        },
+      },
+    },
+  };
+</script>
+<style>
+  html, body {
+    background: #000;
+    color: #fff;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body { margin: 0; }
+  ::selection { background: rgba(255,255,255,0.3); color: #fff; }
+
+  input:focus { outline: none; }
+  input::placeholder { color: rgba(255,255,255,0.2); }
+
+  /* placeholder when video fails to load */
+  .placeholder-video {
+    background:
+      radial-gradient(ellipse at 30% 20%, rgba(140,160,200,0.4) 0%, transparent 55%),
+      radial-gradient(ellipse at 70% 80%, rgba(220,180,160,0.3) 0%, transparent 60%),
+      linear-gradient(160deg, #0a0a14 0%, #1a1420 100%);
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useEffect, useRef, useState } = React;
+const { motion } = window.Motion;
+
+/* ---------- Lucide-style icons ---------- */
+const Icon = ({ d, size = 18, stroke = 1.6, className = '', fill = 'none' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={fill}
+       stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round"
+       className={className}>
+    {d}
+  </svg>
+);
+const Circle = (p) => <Icon {...p} d={<><circle cx="12" cy="12" r="10" /></>} />;
+const Chrome = (p) => <Icon {...p} d={<>
+  <circle cx="12" cy="12" r="10" />
+  <circle cx="12" cy="12" r="4" />
+  <line x1="21.17" y1="8" x2="12" y2="8" />
+  <line x1="3.95" y1="6.06" x2="8.54" y2="14" />
+  <line x1="10.88" y1="21.94" x2="15.46" y2="14" />
+</>} />;
+const Github = (p) => <Icon {...p} d={<>
+  <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
+</>} />;
+const Eye = (p) => <Icon {...p} d={<>
+  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+  <circle cx="12" cy="12" r="3" />
+</>} />;
+const EyeOff = (p) => <Icon {...p} d={<>
+  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+  <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+  <line x1="2" x2="22" y1="2" y2="22" />
+</>} />;
+const ArrowLeft = (p) => <Icon {...p} d={<>
+  <path d="M19 12H5" /><path d="m11 19-7-7 7-7" />
+</>} />;
+
+/* ---------- Video with placeholder fallback ---------- */
+function BgVideo({ src }) {
+  const ref = useRef(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    const tryPlay = () => { v.play().catch(() => {}); };
+    const onError = () => setFailed(true);
+    v.addEventListener('error', onError);
+    v.addEventListener('canplay', tryPlay);
+    v.addEventListener('loadeddata', tryPlay);
+    tryPlay();
+    const tm = setTimeout(() => { if (v.readyState < 2) setFailed(true); }, 4500);
+    return () => {
+      v.removeEventListener('error', onError);
+      v.removeEventListener('canplay', tryPlay);
+      v.removeEventListener('loadeddata', tryPlay);
+      clearTimeout(tm);
+    };
+  }, [src]);
+  return (
+    <>
+      {failed && <div className="absolute inset-0 w-full h-full placeholder-video" />}
+      <video
+        ref={ref}
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="auto"
+        className={`absolute inset-0 w-full h-full object-cover ${failed ? 'hidden' : ''}`}
+      >
+        <source src={src} type="video/mp4" />
+      </video>
+    </>
+  );
+}
+
+/* ---------- StepItem ---------- */
+const StepItem = ({ number, text, active = false }) => (
+  <div className={`flex items-center gap-3 px-4 py-3 rounded-xl ${
+    active
+      ? 'bg-white text-black border border-white'
+      : 'bg-brand-gray text-white border-none'
+  }`}>
+    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${
+      active ? 'bg-black text-white' : 'bg-white/10 text-white/40'
+    }`}>
+      {number}
+    </div>
+    <span className="text-sm font-medium">{text}</span>
+  </div>
+);
+
+/* ---------- SocialButton ---------- */
+const SocialButton = ({ icon: Ico, label }) => (
+  <button type="button" className="bg-black border border-white/10 rounded-xl h-12 flex items-center justify-center gap-2 text-white text-sm font-medium hover:bg-white/5 transition-colors">
+    <Ico size={16} />
+    <span>{label}</span>
+  </button>
+);
+
+/* ---------- InputGroup ---------- */
+const InputGroup = ({ label, placeholder, type = 'text', rightSlot, helper }) => {
+  const id = label.replace(/\s+/g, '-').toLowerCase();
+  return (
+    <div className="space-y-2">
+      <label htmlFor={id} className="text-sm font-medium text-white block">{label}</label>
+      <div className="relative">
+        <input
+          id={id}
+          type={type}
+          placeholder={placeholder}
+          className="bg-brand-gray border-none rounded-xl h-11 w-full px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20 transition-shadow"
+        />
+        {rightSlot && (
+          <div className="absolute inset-y-0 right-3 flex items-center">{rightSlot}</div>
+        )}
+      </div>
+      {helper && <p className="text-xs text-white/40">{helper}</p>}
+    </div>
+  );
+};
+
+/* ---------- Left Hero ---------- */
+function HeroLeft() {
+  const container = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: { staggerChildren: 0.15, delayChildren: 0.2 },
+    },
+  };
+  const child = {
+    hidden: { opacity: 0, y: 10 },
+    show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } },
+  };
+
+  return (
+    <div className="relative hidden lg:flex w-[52%] flex-col items-center justify-end pb-32 px-12 rounded-3xl overflow-hidden shadow-2xl h-full">
+      <BgVideo src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260324_151826_c7218672-6e92-402c-9e45-f1e0f454bdc4.mp4" />
+      {/* Soft readability gradient over the video */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/40 pointer-events-none" />
+
+      <motion.div
+        initial="hidden"
+        animate="show"
+        variants={container}
+        className="relative z-10 w-full max-w-xs space-y-8"
+      >
+        <motion.div variants={child} className="flex items-center gap-2 text-white">
+          <img src="https://i.ibb.co/KcCTxp2s/2.png" alt="GoogolPlex" className="h-6 w-auto object-contain" />
+          <span className="text-xl font-semibold tracking-tight">GoogolPlex</span>
+        </motion.div>
+
+        <motion.div variants={child} className="space-y-3">
+          <h1 className="text-4xl font-medium tracking-tight whitespace-nowrap">Join GoogolPlex</h1>
+          <p className="text-white/60 text-sm leading-relaxed px-4">
+            Follow these 3 quick phases to activate your space.
+          </p>
+        </motion.div>
+
+        <motion.div variants={child} className="space-y-2">
+          <StepItem number={1} text="Register your identity" active />
+        </motion.div>
+        <motion.div variants={child} className="space-y-2 -mt-6">
+          <StepItem number={2} text="Configure your studio" />
+        </motion.div>
+        <motion.div variants={child} className="space-y-2 -mt-6">
+          <StepItem number={3} text="Finalize your profile" />
+        </motion.div>
+      </motion.div>
+    </div>
+  );
+}
+
+/* ---------- Right Form ---------- */
+function FormRight() {
+  const [stage, setStage] = useState('request'); // 'request' | 'verify'
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [email, setEmail] = useState('');
+  const otpRefs = useRef([]);
+
+  const handleOtpChange = (i, val) => {
+    if (!/^\d?$/.test(val)) return;
+    const next = [...otp];
+    next[i] = val;
+    setOtp(next);
+    if (val && i < 5) otpRefs.current[i + 1]?.focus();
+  };
+  const handleOtpKey = (i, e) => {
+    if (e.key === 'Backspace' && !otp[i] && i > 0) {
+      otpRefs.current[i - 1]?.focus();
+    }
+  };
+  const handleOtpPaste = (e) => {
+    const txt = e.clipboardData.getData('text').trim();
+    if (/^\d{6}$/.test(txt)) {
+      e.preventDefault();
+      setOtp(txt.split(''));
+      otpRefs.current[5]?.focus();
+    }
+  };
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center py-12 lg:py-6 px-4 sm:px-12 lg:px-16 xl:px-24 overflow-y-auto lg:overflow-hidden">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.8, ease: 'easeOut' }}
+        className="w-full max-w-xl space-y-8 lg:space-y-6 sm:space-y-10"
+      >
+        {/* Back to home */}
+        <a href="Asme Landing.html" className="inline-flex items-center gap-2 text-white/50 hover:text-white text-xs transition-colors">
+          <ArrowLeft size={14} /> Back to home
+        </a>
+
+        {stage === 'request' ? (
+          <>
+            <div className="space-y-2">
+              <h2 className="text-3xl font-medium tracking-tight">Create New Profile</h2>
+              <p className="text-white/40 text-sm">Input your basic details — we'll send a one-time code to verify it's you.</p>
+            </div>
+
+            <form onSubmit={(e) => { e.preventDefault(); setStage('verify'); }} className="space-y-5">
+              <div className="grid grid-cols-2 gap-4">
+                <InputGroup label="First Name" placeholder="Jane" />
+                <InputGroup label="Last Name" placeholder="Doe" />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="email" className="text-sm font-medium text-white block">Email</label>
+                <div className="relative">
+                  <input
+                    id="email"
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="jane@googolplex.studio"
+                    className="bg-brand-gray border-none rounded-xl h-11 w-full px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20 transition-shadow"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full h-14 bg-white text-black font-semibold rounded-xl hover:bg-white/90 active:scale-[0.98] transition-all mt-4"
+              >
+                Request OTP
+              </button>
+            </form>
+          </>
+        ) : (
+          <>
+            <div className="space-y-2">
+              <h2 className="text-3xl font-medium tracking-tight">Enter your code</h2>
+              <p className="text-white/40 text-sm">
+                We sent a 6-digit code to <span className="text-white/80">{email || 'your email'}</span>.
+              </p>
+            </div>
+
+            <form onSubmit={(e) => { e.preventDefault(); }} className="space-y-6">
+              <div className="flex gap-2 sm:gap-3 justify-between" onPaste={handleOtpPaste}>
+                {otp.map((d, i) => (
+                  <input
+                    key={i}
+                    ref={(el) => (otpRefs.current[i] = el)}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={d}
+                    onChange={(e) => handleOtpChange(i, e.target.value)}
+                    onKeyDown={(e) => handleOtpKey(i, e)}
+                    className="w-12 h-14 sm:w-14 sm:h-16 text-center text-2xl font-semibold bg-brand-gray border-none rounded-xl text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/40 transition-shadow"
+                  />
+                ))}
+              </div>
+
+              <p className="text-xs text-white/40 text-center">
+                Didn't get it?{' '}
+                <button type="button" onClick={() => setOtp(['', '', '', '', '', ''])} className="text-white hover:underline">Resend code</button>
+              </p>
+
+              <button
+                type="submit"
+                disabled={otp.some((d) => !d)}
+                className="w-full h-14 bg-white text-black font-semibold rounded-xl hover:bg-white/90 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Verify & continue
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setStage('request'); setOtp(['', '', '', '', '', '']); }}
+                className="w-full text-xs text-white/50 hover:text-white transition-colors"
+              >
+                ← Use a different email
+              </button>
+            </form>
+          </>
+        )}
+
+        <p className="text-center text-sm text-white/50">
+          Member of the team?{' '}
+          <a href="Aurora Login.html" className="text-white font-medium hover:underline">Log in</a>
+        </p>
+      </motion.div>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <main className="flex min-h-screen w-full bg-black selection:bg-white/30 p-2 transition-all duration-500 lg:h-screen lg:overflow-hidden lg:p-4">
+      <HeroLeft />
+      <FormRight />
+    </main>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>

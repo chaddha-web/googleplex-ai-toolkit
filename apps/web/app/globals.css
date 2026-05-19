@@ -1,0 +1,169 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url("https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap");
+
+/* ────────────────────────────────────────────────────────────────────────
+ * apps/web — light, vibrant, artsy, professional.
+ *
+ *  - Surface: warm ivory + low-saturation aurora wash behind every page.
+ *  - Ink: deep ink #0E1326 (strong contrast without pure black).
+ *  - Accents: vivid pastels for card washes / chips.
+ *  - The .liquid-glass primitive is overloaded for light: same class so
+ *    none of the existing page files need to change.
+ *  - Tailwind `text-white`, `bg-black`, `white/N` tokens are remapped at
+ *    the bottom so dark-mode-written pages render legibly in light.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --ink: #0E1326;
+  --ink-soft: #3B4365;
+  --ink-mute: #6E789C;
+  --ink-hair: #C8CFE3;
+
+  --surface: #FAF7F2;
+  --surface-2: #F2EEEA;
+  --surface-card: #FFFFFFEE;
+
+  --accent-peach: #FFC7B8;
+  --accent-mint:  #BEEAD9;
+  --accent-peri:  #C7D2FE;
+  --accent-lilac: #E3CFFB;
+  --accent-rose:  #FBC4D5;
+
+  --primary: #5B4BFF;
+  --primary-ink: #3324C7;
+  --positive: #1F9D6C;
+  --warning: #C97A2A;
+  --danger: #C0364D;
+}
+
+html, body {
+  background: var(--surface);
+  color: var(--ink);
+  font-family: "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+  position: relative;
+  min-height: 100vh;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 50% at 12% 10%,  rgba(199,210,254,0.55) 0%, transparent 60%),
+    radial-gradient(40% 40% at 88% 18%,  rgba(255,199,184,0.45) 0%, transparent 65%),
+    radial-gradient(45% 45% at 78% 92%,  rgba(190,234,217,0.45) 0%, transparent 65%),
+    radial-gradient(35% 35% at 22% 88%,  rgba(227,207,251,0.55) 0%, transparent 70%);
+  filter: saturate(1.1);
+}
+
+body > * { position: relative; z-index: 1; }
+
+::selection { background: var(--ink); color: var(--surface); }
+
+/* Typography hooks */
+.font-serif    { font-family: "Instrument Serif", serif; }
+.font-serif-i  { font-family: "Instrument Serif", serif; font-style: italic; }
+
+/* Card primitive — overload .liquid-glass for light */
+.liquid-glass {
+  background: var(--surface-card);
+  border-radius: inherit;
+  border: none;
+  box-shadow:
+    0 1px 0 rgba(14,19,38,0.04),
+    0 8px 24px -12px rgba(14,19,38,0.12);
+  position: relative;
+  overflow: hidden;
+  color: var(--ink);
+}
+.liquid-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    160deg,
+    rgba(91,75,255,0.35) 0%,
+    rgba(200,207,227,0.4) 40%,
+    rgba(200,207,227,0.1) 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Pastel chips for tags / status / category */
+.chip-peach { background: var(--accent-peach); color: var(--ink); }
+.chip-mint  { background: var(--accent-mint);  color: var(--ink); }
+.chip-peri  { background: var(--accent-peri);  color: var(--ink); }
+.chip-lilac { background: var(--accent-lilac); color: var(--ink); }
+.chip-rose  { background: var(--accent-rose);  color: var(--ink); }
+
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+  border-radius: 9999px;
+  padding: 0.75rem 1.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  transition: background 200ms;
+}
+.btn-primary:hover { background: var(--primary-ink); }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Tailwind color aliases — let dark-mode-written pages render in light */
+.bg-black                          { background-color: transparent !important; }
+.text-white                        { color: var(--ink) !important; }
+.text-white\/80                    { color: rgba(14,19,38,0.85) !important; }
+.text-white\/70                    { color: var(--ink-soft) !important; }
+.text-white\/60                    { color: rgba(14,19,38,0.6) !important; }
+.text-white\/50                    { color: var(--ink-mute) !important; }
+.text-white\/40                    { color: var(--ink-mute) !important; }
+.text-white\/30                    { color: rgba(14,19,38,0.35) !important; }
+.text-white\/20                    { color: var(--ink-hair) !important; }
+.placeholder\:text-white\/20::placeholder { color: var(--ink-hair) !important; }
+.placeholder\:text-white\/40::placeholder { color: var(--ink-mute) !important; }
+.border-white\/5                   { border-color: rgba(14,19,38,0.06) !important; }
+.border-white\/10                  { border-color: rgba(14,19,38,0.08) !important; }
+.border-white\/20                  { border-color: rgba(14,19,38,0.12) !important; }
+.ring-white\/10                    { --tw-ring-color: rgba(14,19,38,0.08) !important; }
+.ring-white\/15                    { --tw-ring-color: rgba(14,19,38,0.12) !important; }
+.ring-white\/20                    { --tw-ring-color: rgba(14,19,38,0.18) !important; }
+.ring-white\/30                    { --tw-ring-color: rgba(14,19,38,0.25) !important; }
+.bg-white                          { background-color: var(--ink) !important; color: var(--surface) !important; }
+.bg-white\/5                       { background-color: rgba(14,19,38,0.04) !important; }
+.bg-white\/10                      { background-color: rgba(14,19,38,0.08) !important; }
+.hover\:bg-white\/5:hover          { background-color: rgba(14,19,38,0.04) !important; }
+.hover\:bg-white\/90:hover         { background-color: var(--primary-ink) !important; }
+.hover\:text-white:hover           { color: var(--ink) !important; }
+.hover\:ring-white\/30:hover       { --tw-ring-color: rgba(14,19,38,0.25) !important; }
+
+/* Dark input wells [#1A1A1A] → soft inset for light */
+.bg-\[\#1A1A1A\] { background-color: rgba(14,19,38,0.04) !important; color: var(--ink) !important; }
+
+/* Amber stays amber; emerald + rose calmed for light */
+.ring-amber-300\/20  { --tw-ring-color: rgba(231,158,52,0.45) !important; }
+.ring-amber-300\/40  { --tw-ring-color: rgba(231,158,52,0.7)  !important; }
+.text-amber-200      { color: var(--warning) !important; }
+.bg-emerald-400      { background-color: var(--positive) !important; }
+.text-emerald-300    { color: var(--positive) !important; }
+.text-rose-300\/90   { color: var(--danger)   !important; }
+.text-rose-300\/80   { color: var(--danger)   !important; }
+.text-rose-500       { color: var(--danger)   !important; }
+
+/* Shell surfaces */
+header.bg-black\/60 { background-color: rgba(250,247,242,0.7) !important; backdrop-filter: blur(10px) !important; }
+aside.bg-black\/40  { background-color: var(--surface-2)      !important; backdrop-filter: blur(10px) !important; }

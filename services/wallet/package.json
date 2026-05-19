@@ -1,0 +1,43 @@
+{
+  "name": "@googolplex/wallet-service",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file=.env src/server.ts",
+    "start": "tsx --env-file=.env src/server.ts",
+    "init-seeds": "tsx --env-file=.env bin/init-seeds.ts",
+    "check-rpcs": "tsx --env-file=.env bin/check-rpcs.ts",
+    "derive": "tsx --env-file=.env bin/derive.ts",
+    "balances": "tsx --env-file=.env bin/check-balances.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-kms": "^3.685.0",
+    "@fastify/cors": "^8.5.0",
+    "@fastify/helmet": "^11.1.1",
+    "@fastify/rate-limit": "^9.1.0",
+    "@noble/curves": "^1.6.0",
+    "@node-rs/argon2": "^2.0.2",
+    "@scure/bip32": "^1.5.0",
+    "@scure/bip39": "^1.4.0",
+    "better-sqlite3": "12.10.0",
+    "bitcoinjs-lib": "^6.1.6",
+    "bs58check": "^4.0.0",
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^4.29.1",
+    "jose": "^6.2.3",
+    "tiny-secp256k1": "^2.2.3",
+    "tronweb": "^6.0.0",
+    "ulid": "^3.0.2",
+    "viem": "^2.21.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@googolplex/config": "*",
+    "@types/better-sqlite3": "7.6.13",
+    "@types/node": "^20.12.12",
+    "cross-env": "^10.1.0",
+    "tsx": "^4.15.0",
+    "typescript": "^5.4.5"
+  }
+}

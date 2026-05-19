@@ -1,0 +1,1301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Asme — Know it all</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  // Suppress a benign React dev-mode "key prop" warning emitted from inside
+  // framer-motion's internals (not from any of our components). It's a known
+  // false positive when motion components are rendered with React 18 dev build.
+  (function(){
+    const origError = console.error;
+    console.error = function(...args){
+      const msg = args[0];
+      if (typeof msg === 'string' && msg.indexOf('unique "key" prop') !== -1) return;
+      return origError.apply(console, args);
+    };
+  })();
+</script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/framer-motion@11.3.19/dist/framer-motion.js"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          serif: ['"Instrument Serif"', 'serif'],
+          sans: ['"Helvetica Regular"', 'Inter', 'system-ui', 'sans-serif'],
+        },
+      },
+    },
+  };
+</script>
+<style>
+  @font-face {
+    font-family: "Helvetica Regular";
+    src: url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.eot");
+    src: url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.eot?#iefix") format("embedded-opentype"),
+         url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.woff2") format("woff2"),
+         url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.woff") format("woff"),
+         url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.ttf") format("truetype"),
+         url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.svg#Helvetica Regular") format("svg");
+  }
+  html, body {
+    background: #000;
+    color: #fff;
+    font-family: "Helvetica Regular", 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body { margin: 0; }
+
+  .font-serif-i { font-family: 'Instrument Serif', serif; font-style: italic; }
+  .font-serif { font-family: 'Instrument Serif', serif; }
+
+  /* === Liquid Glass === */
+  .liquid-glass {
+    background: rgba(255, 255, 255, 0.01);
+    background-blend-mode: luminosity;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: none;
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+    position: relative;
+    overflow: hidden;
+  }
+  .liquid-glass::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.4px;
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.45) 0%,
+      rgba(255, 255, 255, 0.15) 20%,
+      rgba(255, 255, 255, 0) 40%,
+      rgba(255, 255, 255, 0) 60%,
+      rgba(255, 255, 255, 0.15) 80%,
+      rgba(255, 255, 255, 0.45) 100%
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* Placeholder video bg (since the cloudfront URLs may not load in this env, we fall back to gradients) */
+  .placeholder-video {
+    background:
+      radial-gradient(ellipse at 30% 20%, rgba(120,140,180,0.35) 0%, transparent 55%),
+      radial-gradient(ellipse at 70% 80%, rgba(200,170,140,0.25) 0%, transparent 60%),
+      radial-gradient(ellipse at 50% 50%, rgba(60,60,80,0.6) 0%, #050505 70%);
+  }
+  .placeholder-video-2 {
+    background:
+      radial-gradient(circle at 20% 30%, rgba(180,160,210,0.3), transparent 50%),
+      radial-gradient(circle at 80% 70%, rgba(220,180,160,0.25), transparent 55%),
+      linear-gradient(135deg, #0a0a0f 0%, #14101a 100%);
+  }
+  .placeholder-video-3 {
+    background:
+      radial-gradient(circle at 50% 0%, rgba(160,200,200,0.25), transparent 60%),
+      radial-gradient(circle at 10% 90%, rgba(255,220,180,0.18), transparent 55%),
+      linear-gradient(160deg, #060708 0%, #0d1014 100%);
+  }
+  .placeholder-video-4 {
+    background:
+      radial-gradient(circle at 70% 30%, rgba(255,210,180,0.28), transparent 60%),
+      radial-gradient(circle at 20% 80%, rgba(140,160,200,0.22), transparent 55%),
+      linear-gradient(200deg, #08070a 0%, #110d14 100%);
+  }
+  .placeholder-video-5 {
+    background:
+      radial-gradient(circle at 30% 40%, rgba(190,170,140,0.3), transparent 60%),
+      radial-gradient(circle at 80% 60%, rgba(120,150,180,0.22), transparent 55%),
+      linear-gradient(120deg, #0a0908 0%, #14110d 100%);
+  }
+
+  /* Footer dressing — liquid-glass alone is invisible on pure black,
+     so layer a soft starfield + corner glow inside the footer card. */
+  .footer-dress {
+    background:
+      radial-gradient(ellipse 80% 60% at 0% 0%, rgba(255,255,255,0.06), transparent 60%),
+      radial-gradient(ellipse 70% 50% at 100% 100%, rgba(255,255,255,0.04), transparent 60%),
+      radial-gradient(circle at 22% 38%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.6px, transparent 1.2px),
+      radial-gradient(circle at 78% 22%, rgba(255,255,255,0.4) 0, rgba(255,255,255,0.4) 0.6px, transparent 1.2px),
+      radial-gradient(circle at 55% 70%, rgba(255,255,255,0.35) 0, rgba(255,255,255,0.35) 0.6px, transparent 1.2px),
+      radial-gradient(circle at 88% 78%, rgba(255,255,255,0.3) 0, rgba(255,255,255,0.3) 0.6px, transparent 1.2px),
+      radial-gradient(circle at 12% 82%, rgba(255,255,255,0.3) 0, rgba(255,255,255,0.3) 0.6px, transparent 1.2px),
+      linear-gradient(180deg, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0.01) 100%);
+  }
+
+  input::placeholder { color: rgba(255,255,255,0.4); }
+  input:focus { outline: none; }
+
+  /* Hide the file-fallback note unless videos fail */
+  video { display: block; }
+
+  /* ===== Trust logos marquee ===== */
+  @keyframes trustMarquee {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+  .trust-track {
+    display: flex;
+    width: max-content;
+    gap: 56px;
+    animation: trustMarquee 70s linear infinite;
+  }
+  .trust-track:hover { animation-play-state: paused; }
+  .trust-fade {
+    mask-image: linear-gradient(90deg, transparent 0, #000 8%, #000 92%, transparent 100%);
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 8%, #000 92%, transparent 100%);
+  }
+</style>
+</head>
+<body class="bg-black text-white" style="font-size: 16px">
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+
+
+
+
+
+
+
+
+
+const { useEffect, useRef, useState } = React;
+const { motion, useInView } = window.Motion || window.FramerMotion || {};
+
+/* ---------- Icons (inline SVG, original — no third-party brand marks) ---------- */
+const Icon = ({ d, size = 20, stroke = 1.6, className = '' }) =>
+<svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round"
+className={className}>
+    {d}
+  </svg>;
+
+const GlobeIcon = (props) => <Icon {...props} d={<>
+  <circle cx="12" cy="12" r="10" />
+  <path d="M2 12h20" />
+  <path d="M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20" />
+</>} />;
+const ArrowRight = (props) => <Icon {...props} d={<>
+  <path d="M5 12h14" /><path d="m13 5 7 7-7 7" />
+</>} />;
+const ArrowUpRight = (props) => <Icon {...props} d={<>
+  <path d="M7 17 17 7" /><path d="M8 7h9v9" />
+</>} />;
+const CameraDot = (props) => <Icon {...props} d={<>
+  <rect x="3" y="6" width="18" height="13" rx="2.5" />
+  <circle cx="12" cy="12.5" r="3.2" />
+  <path d="M8 6V4.5A1.5 1.5 0 0 1 9.5 3h5A1.5 1.5 0 0 1 16 4.5V6" />
+</>} />;
+const Spark = (props) => <Icon {...props} d={<>
+  <path d="M12 3v4" /><path d="M12 17v4" /><path d="M3 12h4" /><path d="M17 12h4" />
+  <path d="m5.6 5.6 2.8 2.8" /><path d="m15.6 15.6 2.8 2.8" />
+  <path d="m18.4 5.6-2.8 2.8" /><path d="m8.4 15.6-2.8 2.8" />
+</>} />;
+const SignalIcon = (props) => <Icon {...props} d={<>
+  <path d="M4 20 Q12 4 20 20" />
+  <circle cx="12" cy="14" r="1.2" fill="currentColor" />
+</>} />;
+
+/* ---------- Video with crossfade-to-black loop & graceful placeholder ---------- */
+function FadeLoopVideo({ src, placeholderClass = 'placeholder-video', className = '', objectPos = 'object-bottom' }) {
+  const vidRef = useRef(null);
+  const rafRef = useRef(null);
+  const [failed, setFailed] = useState(false);
+
+  const animateOpacity = (from, to, dur, onDone) => {
+    cancelAnimationFrame(rafRef.current);
+    const start = performance.now();
+    const tick = (now) => {
+      const t = Math.min(1, (now - start) / dur);
+      const v = from + (to - from) * t;
+      if (vidRef.current) vidRef.current.style.opacity = v;
+      if (t < 1) rafRef.current = requestAnimationFrame(tick);else
+      if (onDone) onDone();
+    };
+    rafRef.current = requestAnimationFrame(tick);
+  };
+
+  useEffect(() => {
+    const v = vidRef.current;
+    if (!v) return;
+    v.style.opacity = 0;
+    const onCanPlay = () => {
+      v.play().catch(() => {});
+      animateOpacity(0, 1, 500);
+    };
+    const onTimeUpdate = () => {
+      if (!v.duration) return;
+      const remaining = v.duration - v.currentTime;
+      if (remaining <= 0.55 && remaining > 0) {
+        const cur = parseFloat(v.style.opacity || '1');
+        if (cur > 0.05) animateOpacity(cur, 0, 500);
+      }
+    };
+    const onEnded = () => {
+      v.style.opacity = 0;
+      setTimeout(() => {
+        v.currentTime = 0;
+        v.play().catch(() => {});
+        animateOpacity(0, 1, 500);
+      }, 100);
+    };
+    const onError = () => setFailed(true);
+    v.addEventListener('canplay', onCanPlay);
+    v.addEventListener('timeupdate', onTimeUpdate);
+    v.addEventListener('ended', onEnded);
+    v.addEventListener('error', onError);
+    // failure fallback if it never loads
+    const tm = setTimeout(() => {if (v.readyState < 2) setFailed(true);}, 4500);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      clearTimeout(tm);
+      v.removeEventListener('canplay', onCanPlay);
+      v.removeEventListener('timeupdate', onTimeUpdate);
+      v.removeEventListener('ended', onEnded);
+      v.removeEventListener('error', onError);
+    };
+  }, [src]);
+
+  return (
+    <>
+      {failed && <div className={`${placeholderClass} absolute inset-0 ${className}`} />}
+      <video
+        ref={vidRef}
+        src={src}
+        muted
+        autoPlay
+        playsInline
+        preload="auto"
+        className={`${className} ${failed ? 'hidden' : ''}`}
+        style={{ opacity: 0 }} />
+      
+    </>);
+
+}
+
+/* For simple looping videos (no crossfade) */
+function LoopVideo({ src, placeholderClass = 'placeholder-video', className = '' }) {
+  const vidRef = useRef(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    const v = vidRef.current;
+    if (!v) return;
+    const tryPlay = () => {v.play().catch(() => {});};
+    const onError = () => setFailed(true);
+    v.addEventListener('error', onError);
+    v.addEventListener('canplay', tryPlay);
+    v.addEventListener('loadeddata', tryPlay);
+    tryPlay();
+    const tm = setTimeout(() => {if (v.readyState < 2) setFailed(true);}, 4500);
+    return () => {
+      v.removeEventListener('error', onError);
+      v.removeEventListener('canplay', tryPlay);
+      v.removeEventListener('loadeddata', tryPlay);
+      clearTimeout(tm);
+    };
+  }, [src]);
+  return (
+    <>
+      {failed && <div className={`${placeholderClass} absolute inset-0 ${className}`} />}
+      <video ref={vidRef} src={src} muted autoPlay loop playsInline preload="auto"
+      className={`${className} ${failed ? 'hidden' : ''}`} />
+    </>);
+
+}
+
+/* Absolute-fill background video for the footer section (with placeholder fallback) */
+function FooterBgVideo({ src }) {
+  const vidRef = useRef(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    const v = vidRef.current;
+    if (!v) return;
+    const tryPlay = () => {v.play().catch(() => {});};
+    const onError = () => setFailed(true);
+    v.addEventListener('error', onError);
+    v.addEventListener('canplay', tryPlay);
+    v.addEventListener('loadeddata', tryPlay);
+    tryPlay();
+    const tm = setTimeout(() => {if (v.readyState < 2) setFailed(true);}, 4500);
+    return () => {
+      v.removeEventListener('error', onError);
+      v.removeEventListener('canplay', tryPlay);
+      v.removeEventListener('loadeddata', tryPlay);
+      clearTimeout(tm);
+    };
+  }, [src]);
+  return (
+    <>
+      {failed && <div className="absolute inset-0 w-full h-full placeholder-video z-[0]" />}
+      <video
+        ref={vidRef}
+        src={src}
+        muted
+        autoPlay
+        loop
+        playsInline
+        preload="auto"
+        className={`absolute inset-0 w-full h-full object-cover z-[0] ${failed ? 'hidden' : ''}`} />
+      
+    </>);
+
+}
+
+/* ---------- Hero ---------- */
+function Hero() {
+  return (
+    <section className="min-h-screen relative overflow-hidden flex flex-col">
+      {/* Background video */}
+      <div className="absolute inset-0 w-full h-full">
+        <FadeLoopVideo
+          src="https://olzhwrdlyvwwyjaupuec.supabase.co/storage/v1/object/sign/free/Generated%20video%201%20(7).mp4?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV82NjYzNWZiYS05ZWVmLTRhN2QtODljZi01N2NmZDFmZmVjOGMiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJmcmVlL0dlbmVyYXRlZCB2aWRlbyAxICg3KS5tcDQiLCJpYXQiOjE3NzkxNDAwMzUsImV4cCI6MTgxMDY3NjAzNX0.MIPxHvb_FO6zG04artL_y-gsXY6DVLxDgdFtteWwp7c"
+          placeholderClass="placeholder-video"
+          className="absolute inset-0 w-full h-full object-cover object-center" />
+        
+        {/* readability vignette */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/10 to-black/60 pointer-events-none" />
+      </div>
+
+      {/* Nav */}
+      <nav className="relative z-20 px-6 py-6">
+        <div className="liquid-glass rounded-full max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center">
+            <div className="flex items-center gap-2 text-white">
+              <img src="https://i.ibb.co/KcCTxp2s/2.png" alt="GoogolPlex" className="h-7 w-auto object-contain" />
+              <span className="font-semibold text-lg tracking-tight">GoogolPlex</span>
+            </div>
+            <div className="hidden md:flex gap-8 ml-8">
+              {['Features', 'Pricing', 'About'].map((l) =>
+              <a key={l} href="#" className="text-white/80 hover:text-white text-sm font-medium transition-colors">{l}</a>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center">
+            <a href="Aurora Sign Up.html" className="liquid-glass rounded-full px-6 py-2 text-white text-sm font-medium">Get Started</a>
+          </div>
+        </div>
+      </nav>
+
+      {/* Hero content */}
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 py-12 text-center">
+        <h1 className="font-serif text-white tracking-tight whitespace-nowrap text-6xl sm:text-7xl md:text-8xl lg:text-9xl">
+          Know it <em className="font-serif-i">all</em>
+        </h1>
+
+        <p className="mt-6 text-white text-sm leading-relaxed px-4 max-w-xl">
+          Stay updated with the latest news and insights. Subscribe to our newsletter today and never miss out on exciting updates.
+        </p>
+
+        <form onSubmit={(e) => e.preventDefault()} className="mt-8 w-full max-w-xl">
+          <div className="liquid-glass rounded-full pl-6 pr-2 py-2 flex items-center gap-3">
+            <input
+              type="email"
+              placeholder="Enter your email"
+              className="flex-1 bg-transparent text-white placeholder:text-white/40 text-sm py-2" />
+            <button type="submit" className="bg-white rounded-full p-3 text-black hover:bg-white/90 transition">
+              <ArrowRight size={20} />
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Bottom row: manifesto (left) — socials (right) */}
+      <div className="relative z-10 w-full flex flex-col md:flex-row md:items-end md:justify-between gap-6 px-6 md:px-12 pb-12">
+        <div className="flex md:justify-start justify-center">
+          <button className="liquid-glass rounded-full px-8 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors">
+            Read the manifesto
+          </button>
+        </div>
+
+        <div className="flex md:justify-end justify-center gap-4">
+          {[CameraDot, Spark, GlobeIcon].map((Ico, i) =>
+            <a key={i} href="#" className="liquid-glass rounded-full p-4 text-white/80 hover:text-white hover:bg-white/5 transition-all">
+              <Ico size={20} />
+            </a>
+          )}
+        </div>
+      </div>
+    </section>);
+
+}
+
+/* ---------- About ---------- */
+function AboutSection() {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: '-100px' });
+  return (
+    <section ref={ref} className="bg-black pt-32 md:pt-44 pb-10 md:pb-14 px-6 overflow-hidden bg-[radial-gradient(ellipse_at_top,_rgba(255,255,255,0.03)_0%,_transparent_70%)]">
+      <div className="max-w-6xl mx-auto">
+        <motion.p
+          initial={{ opacity: 0, y: 20 }}
+          animate={inView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.6 }}
+          className="text-white/40 text-sm tracking-widest uppercase mb-8">
+          
+          About Us
+        </motion.p>
+        <motion.h2
+          initial={{ opacity: 0, y: 40 }}
+          animate={inView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.8, delay: 0.1 }}
+          className="text-white text-4xl md:text-6xl lg:text-7xl leading-[1.1] tracking-tight">
+          
+          <span>Pioneering </span>
+          <span className="font-serif-i text-white/60">ideas</span>
+          <span> for </span>
+          <br className="hidden md:block" />
+          <span className="font-serif-i text-white/60">minds that</span>
+          <span> create, build, </span>
+          <span className="font-serif-i text-white/60">and inspire.</span>
+        </motion.h2>
+      </div>
+    </section>);
+
+}
+
+/* ---------- Featured Video ---------- */
+function FeaturedVideoSection() {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: '-100px' });
+  return (
+    <section className="bg-black pt-6 md:pt-10 pb-20 md:pb-32 px-6 overflow-hidden">
+      <motion.div
+        ref={ref}
+        initial={{ opacity: 0, y: 60 }}
+        animate={inView ? { opacity: 1, y: 0 } : {}}
+        transition={{ duration: 0.9 }}
+        className="max-w-6xl mx-auto relative rounded-3xl overflow-hidden aspect-video">
+        
+        <LoopVideo
+          src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260402_054547_9875cfc5-155a-4229-8ec8-b7ba7125cbf8.mp4"
+          placeholderClass="placeholder-video-2"
+          className="w-full h-full object-cover" />
+        
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+
+        <div className="absolute bottom-0 left-0 right-0 p-6 md:p-10 flex flex-col md:flex-row md:items-end md:justify-between gap-6">
+          <div className="liquid-glass rounded-2xl p-6 md:p-8 max-w-md">
+            <p className="text-white/50 text-xs tracking-widest uppercase mb-3">Our Approach</p>
+            <p className="text-white text-sm md:text-base leading-relaxed">
+              We believe in the power of curiosity-driven exploration. Every project starts with a question, and every answer opens a new door to innovation.
+            </p>
+          </div>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="liquid-glass rounded-full px-8 py-3 text-white text-sm font-medium self-start md:self-end">
+            
+            Explore more
+          </motion.button>
+        </div>
+      </motion.div>
+    </section>);
+
+}
+
+/* ---------- Philosophy ---------- */
+function PhilosophySection() {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: '-100px' });
+  return (
+    <section ref={ref} className="bg-black py-28 md:py-40 px-6 overflow-hidden">
+      <div className="max-w-6xl mx-auto">
+        <motion.h2
+          initial={{ opacity: 0, y: 40 }}
+          animate={inView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.8 }}
+          className="text-white text-5xl md:text-7xl lg:text-8xl tracking-tight mb-16 md:mb-24">
+          
+          Innovation <span className="font-serif-i text-white/40">x</span> Vision
+        </motion.h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-stretch">
+          <motion.div
+            initial={{ opacity: 0, x: -40 }}
+            animate={inView ? { opacity: 1, x: 0 } : {}}
+            transition={{ duration: 0.9, delay: 0.1 }}
+            className="relative rounded-3xl overflow-hidden aspect-[4/3]">
+            
+            <LoopVideo
+              src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260307_083826_e938b29f-a43a-41ec-a153-3d4730578ab8.mp4"
+              placeholderClass="placeholder-video-3"
+              className="w-full h-full object-cover" />
+            
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, x: 40 }}
+            animate={inView ? { opacity: 1, x: 0 } : {}}
+            transition={{ duration: 0.9, delay: 0.1 }}
+            className="flex flex-col justify-center gap-10">
+            
+            <div>
+              <p className="text-white/40 text-xs tracking-widest uppercase mb-4">Choose your space</p>
+              <p className="text-white/70 text-base md:text-lg leading-relaxed">
+                Every meaningful breakthrough begins at the intersection of disciplined strategy and remarkable creative vision. We operate at that crossroads, turning bold thinking into tangible outcomes that move people and reshape industries.
+              </p>
+            </div>
+            <div className="w-full h-px bg-white/10" />
+            <div>
+              <p className="text-white/40 text-xs tracking-widest uppercase mb-4">Shape the future</p>
+              <p className="text-white/70 text-base md:text-lg leading-relaxed">
+                We believe that the best work emerges when curiosity meets conviction. Our process is designed to uncover hidden opportunities and translate them into experiences that resonate long after the first impression.
+              </p>
+            </div>
+          </motion.div>
+        </div>
+      </div>
+    </section>);
+
+}
+
+/* ---------- Trust / Logos section ---------- */
+function TrustSection() {
+  // Real partner logos
+  const logos = [
+    'https://i.ibb.co/FGYbCDx/1.png',
+    'https://i.ibb.co/7JFb8tGY/2.png',
+    'https://i.ibb.co/JRH4Yw4m/3.png',
+    'https://i.ibb.co/nt3gG3w/4.png',
+    'https://i.ibb.co/0jvxfdrv/5.png',
+    'https://i.ibb.co/WWR8GsSZ/6.png',
+    'https://i.ibb.co/7J5jyrDQ/7.png',
+  ];
+  // Duplicate the track so the CSS translateX(-50%) loops seamlessly
+  const track = [...logos, ...logos];
+
+  const enter = (i = 0) => ({
+    initial: { opacity: 0, y: 30 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.7, delay: 0.05 + i * 0.06, ease: 'easeOut' },
+  });
+
+  return (
+    <section className="bg-[#f6f5f1] text-neutral-900 py-24 md:py-32 px-6">
+      <div className="max-w-6xl mx-auto">
+        {/* Heading row */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-12 items-start mb-16 md:mb-20">
+          <motion.h2
+            {...enter(0)}
+            className="md:col-span-8 text-4xl md:text-5xl lg:text-6xl tracking-tight leading-[1.05]"
+            style={{ fontFamily: '"Helvetica Regular", Inter, sans-serif', fontWeight: 400 }}
+          >
+            Driving progress through ,<br />
+            <span className="text-neutral-400">Strategic partnerships</span>
+          </motion.h2>
+          <motion.p
+            {...enter(1)}
+            className="md:col-span-4 text-neutral-500 text-sm leading-relaxed md:pt-3"
+          >
+            Innovation isn't built in isolation. We work hand-in-hand with exceptional partner companies to combine cutting-edge technology with sustainable practices, shaping a better future together.
+          </motion.p>
+        </div>
+      </div>
+
+      {/* Marquee — full bleed inside the section padding */}
+      <motion.div
+        {...enter(2)}
+        className="trust-fade overflow-hidden -mx-6"
+      >
+        <div className="trust-track py-2">
+          {track.map((src, i) => (
+            <div
+              key={i}
+              className="shrink-0 rounded-full bg-[#ececea] flex items-center justify-center overflow-hidden"
+              style={{ width: '180px', height: '180px' }}
+            >
+              <img
+                src={src}
+                alt=""
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                className="w-[92%] h-[92%] object-cover rounded-full"
+              />
+            </div>
+          ))}
+        </div>
+      </motion.div>
+    </section>
+  );
+}
+
+/* ---------- Benefit / Stats section ---------- */
+function BenefitSection() {
+  const enter = (i = 0) => ({
+    initial: { opacity: 0, y: 30 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.7, delay: 0.05 + i * 0.1, ease: 'easeOut' }
+  });
+
+  const stats = [
+  { pct: 72, copy: 'Faster time to first insight across audited engagements.' },
+  { pct: 65, copy: 'Lift in qualified user task completion after redesign.' },
+  { pct: 39, copy: 'Reduction in production cost per published artefact.' }];
+
+
+  // halftone orb — yellow-green gradient with a soft halftone dot pattern
+  const Orb = ({ size = 180 }) =>
+  <div
+    className="rounded-[28%] relative"
+    style={{
+      width: `${size}px`,
+      height: `${size}px`,
+      background:
+      'radial-gradient(circle at 50% 50%, #e9f76b 0%, #d6e85f 38%, #b9c94e 70%, #94a23b 100%)',
+      boxShadow:
+      '0 18px 38px -14px rgba(160,180,60,0.55), inset 0 -8px 18px rgba(120,140,30,0.18)'
+    }}>
+    
+      {/* halftone dots */}
+      <div
+      className="absolute inset-0 rounded-[28%]"
+      style={{
+        backgroundImage:
+        'radial-gradient(rgba(255,255,255,0.55) 1px, transparent 1.6px)',
+        backgroundSize: '7px 7px',
+        mixBlendMode: 'screen',
+        maskImage: 'radial-gradient(circle at 50% 50%, black 0%, transparent 78%)',
+        WebkitMaskImage: 'radial-gradient(circle at 50% 50%, black 0%, transparent 78%)', opacity: "0.5"
+      }} />
+    
+    </div>;
+
+
+  // Orb sizes shrink with the percentage (matches the reference)
+  const ORB_SIZES = [180, 150, 120];
+
+  return (
+    <section className="bg-black py-20 md:py-28 px-6">
+      <div className="max-w-7xl mx-auto bg-white text-neutral-900 rounded-3xl px-6 md:px-12 py-12 md:py-16">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-8 items-start">
+          {/* Left intro */}
+          <motion.div {...enter(0)} className="lg:col-span-4">
+            <span className="inline-block whitespace-nowrap text-[11px] font-medium px-3 py-1 rounded-full border border-neutral-300 text-neutral-800 bg-white">
+              Benefit received
+            </span>
+            <h2
+              className="mt-8 text-4xl sm:text-5xl lg:text-[56px] tracking-tight leading-[1.02]"
+              style={{ fontFamily: '"Helvetica Regular", Inter, sans-serif', fontWeight: 700 }}>
+              
+              Boosting<br />Efficiency with<br />Asme Insight<br />Practice
+            </h2>
+          </motion.div>
+
+          {/* Stats grid */}
+          <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-3">
+            {stats.map((s, i) =>
+            <motion.div
+              key={s.pct}
+              {...enter(1 + i)}
+              className={`px-6 py-4 flex flex-col ${i > 0 ? 'sm:border-l sm:border-dashed sm:border-neutral-300' : ''}`}>
+              
+                {/* % number */}
+                <div className="flex items-start">
+                  <span
+                  className="text-[56px] sm:text-[64px] md:text-[72px] leading-[0.95] tracking-tight text-neutral-900"
+                  style={{ fontFamily: '"Helvetica Regular", Inter, sans-serif', fontWeight: 700 }}>
+                  
+                    {s.pct}
+                  </span>
+                  <span
+                  className="text-xl sm:text-2xl mt-1 ml-1 text-neutral-900"
+                  style={{ fontFamily: '"Helvetica Regular", Inter, sans-serif', fontWeight: 700 }}>
+                  
+                    %
+                  </span>
+                </div>
+
+                <p className="text-neutral-500 text-sm mt-4 leading-relaxed max-w-[22ch]">
+                  {s.copy}
+                </p>
+
+                {/* Orb in dashed rounded-square frame */}
+                <div className="mt-8 sm:mt-10 md:mt-14 flex justify-center">
+                  <div
+                  className="rounded-[28%] border border-dashed border-neutral-300 flex items-center justify-center w-[200px] h-[200px] sm:w-[220px] sm:h-[220px] md:w-[240px] md:h-[240px]">
+                  
+                    <Orb size={ORB_SIZES[i]} />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>);
+
+}
+
+/* ---------- Services ---------- */
+function ServicesSection() {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: '-100px' });
+
+  const cards = [
+  {
+    tag: 'Strategy',
+    title: 'Research & Insight',
+    body: 'We dig deep into data, culture, and human behavior to surface the insights that drive meaningful, lasting change.',
+    video: 'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260314_131748_f2ca2a28-fed7-44c8-b9a9-bd9acdd5ec31.mp4',
+    placeholder: 'placeholder-video-4'
+  },
+  {
+    tag: 'Craft',
+    title: 'Design & Execution',
+    body: 'From concept to launch, we obsess over every detail to deliver experiences that feel effortless and look extraordinary.',
+    video: 'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260324_151826_c7218672-6e92-402c-9e45-f1e0f454bdc4.mp4',
+    placeholder: 'placeholder-video-5'
+  }];
+
+
+  return (
+    <section ref={ref} className="bg-black py-28 md:py-40 px-6 overflow-hidden bg-[radial-gradient(ellipse_at_center,_rgba(255,255,255,0.02)_0%,_transparent_60%)]">
+      <div className="max-w-6xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={inView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.7 }}
+          className="flex items-end justify-between mb-12 md:mb-16">
+          
+          <h2 className="text-3xl md:text-5xl text-white tracking-tight font-serif">What we do</h2>
+          <p className="text-white/40 text-sm hidden md:block tracking-widest uppercase">Our services</p>
+        </motion.div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+          {cards.map((c, i) =>
+          <motion.div
+            key={c.title}
+            initial={{ opacity: 0, y: 50 }}
+            animate={inView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.8, delay: 0.15 * i }}
+            className="group liquid-glass rounded-3xl overflow-hidden">
+            
+              <div className="relative aspect-video overflow-hidden">
+                <div className="absolute inset-0 transition-transform duration-700 group-hover:scale-105">
+                  <LoopVideo src={c.video} placeholderClass={c.placeholder} className="w-full h-full object-cover" />
+                </div>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
+              </div>
+
+              <div className="p-6 md:p-8">
+                <div className="flex items-start justify-between mb-4">
+                  <p className="text-white/40 text-xs tracking-widest uppercase">{c.tag}</p>
+                  <div className="liquid-glass rounded-full p-2 text-white">
+                    <ArrowUpRight size={16} />
+                  </div>
+                </div>
+                <h3 className="text-white text-xl md:text-2xl mb-3 tracking-tight font-serif">{c.title}</h3>
+                <p className="text-white/50 text-sm leading-relaxed">{c.body}</p>
+              </div>
+            </motion.div>
+          )}
+        </div>
+      </div>
+    </section>);
+
+}
+
+/* ---------- Lucide-style inline icons for footer ---------- */
+const Music2 = (props) => <Icon {...props} d={<>
+  <circle cx="8" cy="18" r="4" />
+  <path d="M12 18V2l7 4" />
+</>} />;
+const Facebook = (props) => <Icon {...props} d={<>
+  <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+</>} />;
+const Twitter = (props) => <Icon {...props} d={<>
+  <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z" />
+</>} />;
+const Youtube = (props) => <Icon {...props} d={<>
+  <path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17" />
+  <path d="m10 15 5-3-5-3z" />
+</>} />;
+const Instagram = (props) => <Icon {...props} d={<>
+  <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+  <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+  <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+</>} />;
+
+/* ---------- Testimonials section ---------- */
+function TestimonialsSection() {
+  // Carefully arranged to match the reference: a left-of-text cluster of 5
+  // and a right-of-text cluster of 7, plus the one larger mid card just below
+  // the heading on the right. Positions are in % of the card's width so the
+  // layout breathes correctly at any container size; verticals are in px.
+  const headshots = [
+  'https://lirp.cdn-website.com/18180652/dms3rep/multi/opt/NimaAsadiLAW-15_2-683x1024-640w.webp', // 0  glasses guy
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTlb7F0i0BlDcvDua-NISKWsR0UEay_JEw42A&s', // 1  bearded man
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTlAlevQUlIHU2KfkaGF5ntWIibks8mXw0dsA&s', // 2  glasses 2
+  'https://static.wixstatic.com/media/7d5b6a_f4e41fa6eeaf4800ac3431e1d6744c5d~mv2.jpg/v1/fill/w_316,h_444,al_c,q_80,usm_0.66_1.00_0.01,enc_auto/7d5b6a_f4e41fa6eeaf4800ac3431e1d6744c5d~mv2.jpg', // 3
+  'https://static.wixstatic.com/media/46ccc2_5e924ba613e5467eba3d3f3977357036~mv2.jpeg/v1/fit/w_320,h_320,q_90,enc_avif,quality_auto/46ccc2_5e924ba613e5467eba3d3f3977357036~mv2.jpeg', // 4
+  'https://static.wixstatic.com/media/26aa7f_85dbd38c15934864a18f3d7eebf75c76~mv2.jpg/v1/fill/w_640,h_778,al_c,q_85,usm_1.20_1.00_0.01,enc_avif,quality_auto/26aa7f_85dbd38c15934864a18f3d7eebf75c76~mv2.jpg', // 5
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRUKNomCi3qs0vl2aQkv92B6DoKv1J4sUwe_w&s', // 6
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_nEZYz3ccQwnwwJiJ3S9uFMHJ4Jb755JgLg&s', // 7
+  'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT__lS4uT8V65kHZPLxAiTU_8peBWbemCMfxA&s' // 8
+  ];
+
+  // Layout matches the reference photo by photo. `l` is left %, `t` is top px,
+  // `w` is width in px (height auto-derived 1.25x). Portrait aspect.
+  const portraits = [
+  // ── Left cluster (3–28% horizontal) ───────────────────────────
+  { l: '3%', t: 100, w: 115, img: headshots[0] }, // far-left mid (glasses)
+  { l: '14%', t: 45, w: 130, img: headshots[1] }, // upper
+  { l: '24%', t: 70, w: 120, img: headshots[2] }, // upper-mid (glasses 2)
+  { l: '14%', t: 215, w: 120, img: headshots[3] }, // mid
+  { l: '3%', t: 260, w: 120, img: headshots[4] }, // bottom-left
+  // ── Center band — only in the TOP half (above heading) ────────
+  { l: '34%', t: 50, w: 125, img: headshots[5] }, // top-center-left
+  { l: '45%', t: 80, w: 125, img: headshots[6] }, // top-center
+  { l: '56%', t: 50, w: 130, img: headshots[7] }, // top-center-right
+  // ── Right cluster (66–94% horizontal) ─────────────────────────
+  { l: '68%', t: 90, w: 125, img: headshots[8] }, // upper-right
+  { l: '79%', t: 50, w: 125, img: headshots[0] }, // far-right top
+  { l: '68%', t: 240, w: 130, img: headshots[1] }, // mid-right
+  { l: '90%', t: 165, w: 110, img: headshots[2] }, // far-right mid
+  { l: '90%', t: 290, w: 110, img: headshots[3] } // far-right bottom
+  ];
+
+  const ArrowRightSmall = (props) =>
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M5 12h14" /><path d="m13 5 7 7-7 7" />
+    </svg>;
+
+
+  return (
+    <section className="bg-black py-20 md:py-28 px-6">
+      <div className="max-w-7xl mx-auto bg-white text-neutral-900 rounded-3xl relative overflow-hidden md:min-h-[720px]">
+        {/* Soft inner glow */}
+        <div className="absolute inset-0 pointer-events-none"
+        style={{ background: 'radial-gradient(ellipse 55% 35% at 50% 65%, rgba(255,255,255,0.95), transparent 65%)' }} />
+
+        {/* Faint vertical column guides */}
+        <div className="hidden md:block absolute inset-0 pointer-events-none">
+          {['11%', '22%', '32%', '67%', '77%', '88%'].map((x) =>
+          <div
+            key={x}
+            className="absolute top-12 bottom-12 border-l border-dashed border-neutral-200/70"
+            style={{ left: x }} />
+
+          )}
+        </div>
+
+        {/* Portrait gallery — only on md+ where there's room */}
+        <div className="hidden md:block absolute inset-0">
+          {portraits.map((p, i) =>
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.04 + i % 7 * 0.05, ease: 'easeOut' }}
+            className="absolute rounded-2xl overflow-hidden shadow-[0_8px_24px_-12px_rgba(0,0,0,0.35)] ring-1 ring-black/5 bg-neutral-200"
+            style={{
+              left: p.l,
+              top: `${p.t}px`,
+              width: `${p.w}px`,
+              height: `${Math.round(p.w * 1.25)}px`
+            }}>
+            
+              <img
+              src={p.img}
+              alt=""
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                e.currentTarget.parentElement.style.background = 'linear-gradient(160deg, #d4c0a8, #5a4530)';
+              }}
+              className="w-full h-full object-cover" />
+            
+            </motion.div>
+          )}
+        </div>
+
+        {/* Centered text block */}
+        <div className="relative z-10 flex flex-col items-center text-center px-6 pt-20 md:pt-[330px] pb-20 md:pb-24">
+          <motion.span
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+            className="inline-block text-[11px] font-medium px-3 py-1 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-700" style={{ fontWeight: "700", fontFamily: "Tahoma" }}>
+            
+            Testimonials
+          </motion.span>
+
+          <motion.h2
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.5 }}
+            className="mt-6 text-4xl md:text-5xl lg:text-6xl tracking-tight leading-[1.05]"
+            style={{ fontFamily: '"Helvetica Regular", Inter, sans-serif', fontWeight: 700 }}>
+            
+            Trusted by leaders<br />
+            <span className="text-neutral-400">from various industries</span>
+          </motion.h2>
+
+          <motion.p
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.65 }}
+            className="mt-6 text-neutral-700 text-sm md:text-base leading-relaxed max-w-md" style={{ fontWeight: "800", fontSize: "18px" }}>Learn why professionals trust our solutions to
+complete their customer journeys.
+
+          </motion.p>
+
+          <motion.a
+            href="#"
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.8 }}
+            whileHover={{ scale: 1.04 }}
+            whileTap={{ scale: 0.97 }}
+            className="mt-10 inline-flex items-center gap-2 bg-neutral-900 text-white text-sm font-medium px-6 py-3 rounded-full hover:bg-neutral-800 transition-colors">
+            
+            Read Success Stories <ArrowRightSmall />
+          </motion.a>
+        </div>
+      </div>
+    </section>);
+
+}
+
+/* ---------- FAQ section (carousel) ---------- */
+function FAQSection() {
+  const [active, setActive] = useState(0);
+  const [vw, setVw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280);
+  useEffect(() => {
+    const onResize = () => setVw(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const isMobile = vw < 768;
+  // Mobile: cards fill ~85vw (one at a time); Desktop: active 600 / inactive 320
+  const CARD_W_ACTIVE = isMobile ? Math.min(vw - 48, 560) : 600;
+  const CARD_W_INACTIVE = isMobile ? Math.min(vw - 48, 560) : 320;
+  const CARD_H = isMobile ? 440 : 520;
+  const GAP = isMobile ? 16 : 24;
+
+  const faqs = [
+  {
+    q: 'What kinds of projects do you take on?',
+    a: 'We partner with teams on brand systems, product redesigns, content strategy, and full-stack experience work. Most engagements run 6–14 weeks, with a sprint cadence designed around the depth of the problem rather than calendar time.'
+  },
+  {
+    q: 'How do engagements typically begin?',
+    a: 'Every project opens with a discovery week — interviews, audits, and a written point of view. You leave that week with a real plan we both believe in. If it isn’t the right fit, we say so before any larger commitment is made.'
+  },
+  {
+    q: 'Who will actually be doing the work?',
+    a: 'The same senior team you meet in the pitch. We don’t hand work off to juniors after the deal closes — every artefact passes through a partner before it reaches you, and you have a direct line to whoever is leading the engagement.'
+  },
+  {
+    q: 'How do you handle pricing?',
+    a: 'Fixed-scope engagements are quoted as a single number; longer partnerships are structured as monthly retainers with a clear deliverable cadence. Either way, you see the math before you sign, and we re-baseline together if scope changes.'
+  },
+  {
+    q: 'Can you work with our existing in-house team?',
+    a: 'Yes — most of our best work happens alongside in-house teams. We embed inside your tooling and rituals, share working files openly, and run a weekly review your team can join. The goal is leaving you stronger, not more dependent.'
+  },
+  {
+    q: 'What do you need from us to start?',
+    a: 'A signed SOW, a single point of contact, and access to whatever past research, brand assets, or analytics already exist. We’ll handle the rest of the onboarding — calendar holds, tool invites, kick-off agenda — in the first 48 hours.'
+  }];
+
+  const ACCENT = '#1e3a8a'; // deep blue, like the reference
+
+  const prev = () => setActive((a) => (a - 1 + faqs.length) % faqs.length);
+  const next = () => setActive((a) => (a + 1) % faqs.length);
+
+  const ArrowL = (p) =>
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <path d="M19 12H5" /><path d="m11 19-7-7 7-7" />
+    </svg>;
+
+  const ArrowR = (p) =>
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <path d="M5 12h14" /><path d="m13 5 7 7-7 7" />
+    </svg>;
+
+
+  return (
+    <section
+      className="py-16 md:py-20 px-6 md:px-10 overflow-hidden"
+      style={{
+        background:
+        'radial-gradient(ellipse 60% 50% at 20% 20%, #f4f6fa 0%, transparent 70%),' +
+        'radial-gradient(ellipse 70% 50% at 90% 80%, #e9eef6 0%, transparent 70%),' +
+        'linear-gradient(180deg, #f0f3f8 0%, #e7ecf3 100%)'
+      }}>
+      
+      <div className="max-w-7xl mx-auto">
+        {/* Header row */}
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-8 md:gap-16 mb-10 md:mb-12">
+          <motion.h2
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: 'easeOut' }}
+            className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl tracking-tight leading-[1.02] text-neutral-900"
+            style={{ fontFamily: '"Helvetica Regular", Inter, sans-serif', fontWeight: 600 }}>
+            
+            Frequently<br />
+            Asked <span style={{ color: ACCENT }}>Questions</span>
+          </motion.h2>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.1, ease: 'easeOut' }}
+            className="md:max-w-xs">
+            
+            <p className="text-neutral-700 text-sm leading-relaxed mb-6">
+              Find answers to common questions about how we work, scope projects, and partner with in-house teams.
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={prev}
+                aria-label="Previous question"
+                className="w-11 h-11 rounded-full border border-neutral-400 text-neutral-700 flex items-center justify-center hover:bg-neutral-200/60 transition-colors">
+                
+                <ArrowL />
+              </button>
+              <button
+                onClick={next}
+                aria-label="Next question"
+                className="w-11 h-11 rounded-full bg-neutral-900 text-white flex items-center justify-center hover:bg-neutral-800 transition-colors">
+                
+                <ArrowR />
+              </button>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Carousel track */}
+        <div className="relative">
+          <motion.div
+            className="flex"
+            style={{ gap: `${GAP}px` }}
+            animate={{
+              x: -active * (CARD_W_INACTIVE + GAP)
+            }}
+            transition={{ duration: 0.6, ease: [0.32, 0.72, 0, 1] }}>
+            
+            {faqs.map((f, i) => {
+              const isActive = i === active;
+              return (
+                <motion.button
+                  key={i}
+                  onClick={() => setActive(i)}
+                  whileHover={!isActive ? { y: -4 } : undefined}
+                  className="shrink-0 text-left rounded-3xl p-6 sm:p-8 md:p-10 flex flex-col overflow-hidden"
+                  initial={false}
+                  animate={{ width: isActive ? CARD_W_ACTIVE : CARD_W_INACTIVE }}
+                  transition={{ duration: 0.55, ease: [0.32, 0.72, 0, 1] }}
+                  style={{
+                    height: `${CARD_H}px`,
+                    background: isActive ? ACCENT : 'rgba(255,255,255,0.55)',
+                    color: isActive ? '#fff' : '#cbd2dc',
+                    boxShadow: isActive ?
+                    '0 24px 60px -20px rgba(30,58,138,0.55)' :
+                    '0 8px 24px -16px rgba(20,30,55,0.18)',
+                    backdropFilter: isActive ? 'none' : 'blur(8px)',
+                    WebkitBackdropFilter: isActive ? 'none' : 'blur(8px)',
+                    border: isActive ? 'none' : '1px solid rgba(255,255,255,0.6)',
+                    cursor: isActive ? 'default' : 'pointer',
+                    transition: 'background 0.4s ease, color 0.4s ease, box-shadow 0.4s ease'
+                  }}>
+                  
+                  <h3
+                    className="text-2xl md:text-[28px] leading-[1.15] tracking-tight"
+                    style={{
+                      fontFamily: '"Helvetica Regular", Inter, sans-serif',
+                      fontWeight: 500,
+                      color: isActive ? '#fff' : '#9ba3b0'
+                    }}>
+                    
+                    {f.q}
+                  </h3>
+
+                  {/* Spacer */}
+                  <div className="flex-1" />
+
+                  {/* Answer body — only when active */}
+                  <motion.p
+                    initial={false}
+                    animate={{ opacity: isActive ? 1 : 0, y: isActive ? 0 : 8 }}
+                    transition={{ duration: 0.4, ease: 'easeOut' }}
+                    className="text-sm leading-relaxed mt-6"
+                    style={{ color: 'rgba(255,255,255,0.85)', minHeight: '6rem' }}>
+                    
+                    {isActive ? f.a : ''}
+                  </motion.p>
+                </motion.button>);
+
+            })}
+          </motion.div>
+        </div>
+
+        {/* Progress dots */}
+        <div className="flex justify-center gap-2 mt-10">
+          {faqs.map((_, i) =>
+          <button
+            key={i}
+            onClick={() => setActive(i)}
+            aria-label={`Go to question ${i + 1}`}
+            className="h-1.5 rounded-full transition-all duration-300"
+            style={{
+              width: i === active ? 28 : 8,
+              background: i === active ? ACCENT : 'rgba(30,58,138,0.25)'
+            }} />
+
+          )}
+        </div>
+      </div>
+    </section>);
+
+}
+
+/* ---------- GoogolPlex Footer ---------- */
+function Footer() {
+  const discover = ['Labs & Workshops', 'Deep Dive Series', 'Global Circle', 'Resource Vault', 'Future Roadmap'];
+  const mission = ['Origin Story', 'The Collective', 'Newsroom Hub', 'Join the Team'];
+  const concierge = ['Get in Touch', 'Legal Privacy', 'User Agreement', 'Report Concern'];
+
+  const Column = ({ title, items }) =>
+  <div>
+      <h4 className="text-sm uppercase tracking-wider text-white font-medium mb-4">{title}</h4>
+      <ul className="text-xs space-y-2">
+        {items.map((i) =>
+      <li key={i}><a href="#" className="hover:text-white transition-colors">{i}</a></li>
+      )}
+      </ul>
+    </div>;
+
+
+  return (
+    <section className="relative w-full overflow-hidden bg-black min-h-[100vh] flex flex-col">
+      {/* Background video — fills the whole section */}
+      <FooterBgVideo src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260429_114316_1c7889ad-2885-410e-b493-98119fee0ddb.mp4" />
+      <div className="absolute inset-0 bg-black/25 z-[1] pointer-events-none" />
+      <div className="absolute inset-x-0 bottom-0 h-72 bg-gradient-to-t from-black/60 to-transparent z-[1] pointer-events-none" />
+
+      {/* Upper CTA */}
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center text-center px-6 pt-28 md:pt-40 pb-12" style={{ fontFamily: "\"Helvetica Regular\"", padding: "160px 24px 48px" }}>
+        <motion.h2
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-80px' }}
+          transition={{ duration: 0.9, ease: 'easeOut' }}
+          className="text-white text-4xl md:text-6xl lg:text-7xl tracking-tight max-w-4xl"
+          style={{ fontFamily: '"Helvetica Regular", Inter, sans-serif', fontWeight: 500 }}>
+          
+          Pure Insight. Zero Noise.
+        </motion.h2>
+
+        <motion.form
+          onSubmit={(e) => e.preventDefault()}
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-80px' }}
+          transition={{ duration: 0.9, delay: 0.15, ease: 'easeOut' }}
+          className="liquid-glass rounded-full pl-6 pr-2 py-2 mt-10 max-w-xl w-full flex items-center gap-3">
+          
+          <input
+            type="email"
+            placeholder="Your favorite email"
+            className="flex-1 bg-transparent text-white placeholder:text-white/50 text-sm py-2" />
+          
+          <button
+            type="submit"
+            className="bg-[#1a2440] hover:bg-[#22305a] transition-colors text-white rounded-full px-6 py-3 text-xs font-medium tracking-[2px]">
+            
+            STAY NOTIFIED
+          </button>
+        </motion.form>
+      </div>
+
+      {/* Footer card pinned at bottom */}
+      <div className="relative z-10 w-full px-4 md:px-6 pb-4 md:pb-6">
+        <motion.footer
+          initial={{ opacity: 0, y: 40 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-40px' }}
+          transition={{ duration: 1, delay: 0.2, ease: 'easeOut' }}
+          className="liquid-glass w-full rounded-3xl p-6 md:p-10 text-white/70">
+
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-10 md:gap-12">
+            {/* Brand block */}
+            <div className="md:col-span-5">
+              <div className="flex items-center gap-3 mb-4 text-white">
+                <img src="https://i.ibb.co/KcCTxp2s/2.png" alt="GoogolPlex" className="h-7 w-auto object-contain" />
+                <span className="text-xl font-medium tracking-tight">GoogolPlex</span>
+              </div>
+              <p className="text-sm leading-relaxed max-w-sm">
+                GoogolPlex builds calm, premium experiences for teams who treat clarity as a craft — research, design and content, shared with intent.
+              </p>
+            </div>
+
+            {/* Link columns */}
+            <div className="md:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-8">
+              <Column title="Discover" items={discover} />
+              <Column title="The Mission" items={mission} />
+              <Column title="Concierge" items={concierge} />
+            </div>
+          </div>
+
+          {/* Bottom bar */}
+          <div className="mt-10 pt-6 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-6 md:gap-4">
+            <p className="text-[10px] uppercase tracking-widest opacity-50">© 2026 GoogolPlex — All rights reserved</p>
+            <div className="flex items-center gap-4">
+              <span className="text-[10px] uppercase tracking-widest opacity-50">Join the Journey:</span>
+              <div className="flex items-center gap-3">
+                {[Music2, Facebook, Twitter, Youtube, Instagram].map((Ico, i) =>
+                <a key={i} href="#" className="opacity-70 hover:opacity-100 transition-colors hover:text-white">
+                    <Ico size={16} />
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        </motion.footer>
+      </div>
+    </section>);
+
+}
+
+function App() {
+  return (
+    <main className="bg-black" style={{ fontSize: "16px" }}>
+      <Hero />
+      <AboutSection />
+      <FeaturedVideoSection />
+      <PhilosophySection />
+      <TrustSection />
+      <ServicesSection />
+      <BenefitSection />
+      <TestimonialsSection />
+      <FAQSection />
+      <Footer />
+    </main>);
+
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+
+</script>
+</body>
+</html>

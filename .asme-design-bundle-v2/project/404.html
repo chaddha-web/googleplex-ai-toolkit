@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>404 — Lost in space</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  // Suppress a benign React dev-mode "key prop" false-positive emitted from inside framer-motion internals.
+  (function(){
+    const origError = console.error;
+    console.error = function(...args){
+      const msg = args[0];
+      if (typeof msg === 'string' && msg.indexOf('unique "key" prop') !== -1) return;
+      return origError.apply(console, args);
+    };
+  })();
+</script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/framer-motion@11.3.19/dist/framer-motion.js"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          serif: ['"Instrument Serif"', 'serif'],
+          sans: ['"Helvetica Regular"', 'Inter', 'system-ui', 'sans-serif'],
+        },
+      },
+    },
+  };
+</script>
+<style>
+  @font-face {
+    font-family: "Helvetica Regular";
+    src: url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.eot");
+    src: url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.eot?#iefix") format("embedded-opentype"),
+         url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.woff2") format("woff2"),
+         url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.woff") format("woff"),
+         url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.ttf") format("truetype"),
+         url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.svg#Helvetica Regular") format("svg");
+  }
+  html, body {
+    background: #000;
+    color: #fff;
+    font-family: "Helvetica Regular", 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body { margin: 0; }
+
+  .font-serif-i { font-family: 'Instrument Serif', serif; font-style: italic; }
+  .font-serif { font-family: 'Instrument Serif', serif; }
+
+  /* === Liquid Glass === */
+  .liquid-glass {
+    background: rgba(255, 255, 255, 0.01);
+    background-blend-mode: luminosity;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: none;
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+    position: relative;
+    overflow: hidden;
+  }
+  .liquid-glass::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.4px;
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.45) 0%,
+      rgba(255, 255, 255, 0.15) 20%,
+      rgba(255, 255, 255, 0) 40%,
+      rgba(255, 255, 255, 0) 60%,
+      rgba(255, 255, 255, 0.15) 80%,
+      rgba(255, 255, 255, 0.45) 100%
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  .placeholder-video {
+    background:
+      radial-gradient(ellipse at 30% 20%, rgba(120,140,180,0.35) 0%, transparent 55%),
+      radial-gradient(ellipse at 70% 80%, rgba(200,170,140,0.25) 0%, transparent 60%),
+      radial-gradient(ellipse at 50% 50%, rgba(60,60,80,0.6) 0%, #050505 70%);
+  }
+
+  input::placeholder { color: rgba(255,255,255,0.4); }
+  input:focus { outline: none; }
+
+  /* faint drifting stars behind the 404 */
+  .stars {
+    background-image:
+      radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.8), transparent 60%),
+      radial-gradient(1px 1px at 70% 60%, rgba(255,255,255,0.6), transparent 60%),
+      radial-gradient(1px 1px at 40% 80%, rgba(255,255,255,0.5), transparent 60%),
+      radial-gradient(1px 1px at 85% 20%, rgba(255,255,255,0.7), transparent 60%),
+      radial-gradient(1px 1px at 10% 70%, rgba(255,255,255,0.4), transparent 60%),
+      radial-gradient(1px 1px at 55% 40%, rgba(255,255,255,0.6), transparent 60%),
+      radial-gradient(1px 1px at 90% 90%, rgba(255,255,255,0.5), transparent 60%);
+    background-size: 600px 600px;
+    animation: drift 60s linear infinite;
+    opacity: 0.5;
+  }
+  @keyframes drift {
+    from { background-position: 0 0; }
+    to   { background-position: 600px 600px; }
+  }
+</style>
+</head>
+<body class="bg-black text-white">
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useEffect, useRef, useState } = React;
+const { motion, useInView } = window.Motion;
+
+/* ---------- Icons ---------- */
+const Icon = ({ d, size = 20, stroke = 1.6, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round"
+       className={className}>
+    {d}
+  </svg>
+);
+const GlobeIcon = (props) => <Icon {...props} d={<>
+  <circle cx="12" cy="12" r="10" />
+  <path d="M2 12h20" />
+  <path d="M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20" />
+</>} />;
+const ArrowRight = (props) => <Icon {...props} d={<>
+  <path d="M5 12h14" /><path d="m13 5 7 7-7 7" />
+</>} />;
+const ArrowLeft = (props) => <Icon {...props} d={<>
+  <path d="M19 12H5" /><path d="m11 19-7-7 7-7" />
+</>} />;
+const Search = (props) => <Icon {...props} d={<>
+  <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+</>} />;
+const Music2 = (props) => <Icon {...props} d={<>
+  <circle cx="8" cy="18" r="4" />
+  <path d="M12 18V2l7 4" />
+</>} />;
+const Facebook = (props) => <Icon {...props} d={<>
+  <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+</>} />;
+const Twitter = (props) => <Icon {...props} d={<>
+  <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z" />
+</>} />;
+const Youtube = (props) => <Icon {...props} d={<>
+  <path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17" />
+  <path d="m10 15 5-3-5-3z" />
+</>} />;
+const Instagram = (props) => <Icon {...props} d={<>
+  <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+  <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+  <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+</>} />;
+
+/* ---------- Background video with graceful fallback ---------- */
+function BgVideo({ src }) {
+  const vidRef = useRef(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    const v = vidRef.current;
+    if (!v) return;
+    const onError = () => setFailed(true);
+    v.addEventListener('error', onError);
+    const tm = setTimeout(() => { if (v.readyState < 2) setFailed(true); }, 4500);
+    return () => { v.removeEventListener('error', onError); clearTimeout(tm); };
+  }, [src]);
+  return (
+    <>
+      {failed && <div className="fixed inset-0 w-full h-full placeholder-video z-[0]" />}
+      <video
+        ref={vidRef}
+        src={src}
+        muted
+        autoPlay
+        loop
+        playsInline
+        preload="auto"
+        className={`fixed inset-0 w-full h-full object-cover z-[0] ${failed ? 'hidden' : ''}`}
+      />
+    </>
+  );
+}
+
+/* ---------- Nav (re-used) ---------- */
+function Nav() {
+  return (
+    <nav className="relative z-20 w-full px-6 py-6">
+      <div className="liquid-glass rounded-full max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
+        <div className="flex items-center">
+          <a href="Asme Landing.html" className="flex items-center gap-2 text-white">
+            <img src="https://i.ibb.co/KcCTxp2s/2.png" alt="GoogolPlex" className="h-7 w-auto object-contain" />
+            <span className="font-semibold text-lg tracking-tight">GoogolPlex</span>
+          </a>
+          <div className="hidden md:flex gap-8 ml-8">
+            {['Features', 'Pricing', 'About'].map((l) => (
+              <a key={l} href="#" className="text-white/80 hover:text-white text-sm font-medium transition-colors">{l}</a>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <a href="#" className="text-white text-sm font-medium px-2">Sign Up</a>
+          <a href="#" className="liquid-glass rounded-full px-6 py-2 text-white text-sm font-medium">Login</a>
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+/* ---------- 404 Hero ---------- */
+function NotFoundHero() {
+  return (
+    <section className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 pt-8 pb-24 text-center">
+      <motion.p
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+        className="text-white/40 text-xs tracking-[0.3em] uppercase mb-6"
+      >
+        Error · 404
+      </motion.p>
+
+      <motion.h1
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.9, delay: 0.05 }}
+        className="font-serif text-white tracking-tight leading-none text-[26vw] md:text-[18vw] lg:text-[260px]"
+        style={{ lineHeight: 0.88 }}
+      >
+        4<span className="font-serif-i text-white/60">0</span>4
+      </motion.h1>
+
+      <motion.h2
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, delay: 0.25 }}
+        className="font-serif text-white text-4xl md:text-6xl lg:text-7xl tracking-tight mt-4"
+      >
+        Lost in <span className="font-serif-i text-white/60">space</span>.
+      </motion.h2>
+
+      <motion.p
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.7, delay: 0.4 }}
+        className="text-white/70 text-sm md:text-base leading-relaxed max-w-xl mt-6 px-4"
+      >
+        The page you were looking for has drifted beyond the edge of the map.
+        Don't worry — every wrong turn opens a new door to discovery.
+      </motion.p>
+
+      {/* Search */}
+      <motion.form
+        onSubmit={(e) => e.preventDefault()}
+        initial={{ opacity: 0, y: 18 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.7, delay: 0.5 }}
+        className="mt-8 max-w-xl w-full"
+      >
+        <div className="liquid-glass rounded-full pl-6 pr-2 py-2 flex items-center gap-3">
+          <Search size={18} className="text-white/50 shrink-0" />
+          <input
+            type="text"
+            placeholder="Search the archive"
+            className="flex-1 bg-transparent text-white placeholder:text-white/40 text-sm py-2"
+          />
+          <button type="submit" className="bg-white rounded-full p-3 text-black hover:bg-white/90 transition">
+            <ArrowRight size={20} />
+          </button>
+        </div>
+      </motion.form>
+
+      {/* Actions */}
+      <motion.div
+        initial={{ opacity: 0, y: 18 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.7, delay: 0.6 }}
+        className="mt-6 flex flex-wrap items-center justify-center gap-3"
+      >
+        <a href="Asme Landing.html" className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors inline-flex items-center gap-2">
+          <ArrowLeft size={16} /> Back to home
+        </a>
+        <a href="#" className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors">
+          Read the manifesto
+        </a>
+      </motion.div>
+
+      {/* Suggested links */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, delay: 0.75 }}
+        className="mt-16 w-full max-w-3xl"
+      >
+        <p className="text-white/40 text-xs tracking-widest uppercase mb-5">You might be looking for</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {[
+            { label: 'Features', sub: 'What Asme can do' },
+            { label: 'Pricing', sub: 'Plans for every team' },
+            { label: 'Manifesto', sub: 'Our philosophy in full' },
+          ].map((it) => (
+            <a key={it.label} href="#" className="liquid-glass rounded-2xl p-4 text-left flex items-start justify-between gap-3 hover:bg-white/5 transition-colors group">
+              <div>
+                <p className="text-white text-sm font-medium">{it.label}</p>
+                <p className="text-white/50 text-xs mt-1">{it.sub}</p>
+              </div>
+              <div className="text-white/40 group-hover:text-white transition-colors mt-0.5">
+                <ArrowRight size={16} />
+              </div>
+            </a>
+          ))}
+        </div>
+      </motion.div>
+    </section>
+  );
+}
+
+/* ---------- GoogolPlex Footer (matches landing) ---------- */
+function Footer() {
+  const discover = ['Labs & Workshops', 'Deep Dive Series', 'Global Circle', 'Resource Vault', 'Future Roadmap'];
+  const mission  = ['Origin Story', 'The Collective', 'Newsroom Hub', 'Join the Team'];
+  const concierge = ['Get in Touch', 'Legal Privacy', 'User Agreement', 'Report Concern'];
+
+  const Column = ({ title, items }) => (
+    <div>
+      <h4 className="text-sm uppercase tracking-wider text-white font-medium mb-4">{title}</h4>
+      <ul className="text-xs space-y-2">
+        {items.map((i) => (
+          <li key={i}><a href="#" className="hover:text-white transition-colors">{i}</a></li>
+        ))}
+      </ul>
+    </div>
+  );
+
+  return (
+    <div className="relative z-10 w-full px-6 pb-10">
+      <motion.footer
+        initial={{ opacity: 0, y: 40 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: '-80px' }}
+        transition={{ duration: 1, delay: 0.4, ease: 'easeOut' }}
+        className="liquid-glass w-full max-w-7xl mx-auto rounded-3xl p-6 md:p-10 text-white/70 mt-16 md:mt-24"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-10 md:gap-12 mb-10">
+          <div className="md:col-span-5">
+            <div className="flex items-center gap-3 mb-4 text-white">
+              <img src="https://i.ibb.co/KcCTxp2s/2.png" alt="GoogolPlex" className="h-7 w-auto object-contain" />
+              <span className="text-xl font-medium tracking-tight">GoogolPlex</span>
+            </div>
+            <p className="text-sm leading-relaxed max-w-sm">
+              GoogolPlex builds calm, premium experiences for teams who treat clarity as a craft — research, design and content, shared with intent.
+            </p>
+          </div>
+
+          <div className="md:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-8">
+            <Column title="Discover" items={discover} />
+            <Column title="The Mission" items={mission} />
+            <Column title="Concierge" items={concierge} />
+          </div>
+        </div>
+
+        <div className="pt-6 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-6 md:gap-4">
+          <p className="text-[10px] uppercase tracking-widest opacity-50">© 2026 GoogolPlex — All rights reserved</p>
+          <div className="flex items-center gap-4">
+            <span className="text-[10px] uppercase tracking-widest opacity-50">Join the Journey:</span>
+            <div className="flex items-center gap-3">
+              {[Music2, Facebook, Twitter, Youtube, Instagram].map((Ico, i) => (
+                <a key={i} href="#" className="opacity-70 hover:opacity-100 transition-colors hover:text-white">
+                  <Ico size={16} />
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+      </motion.footer>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <main className="relative w-full min-h-[115vh] overflow-x-hidden flex flex-col items-center font-sans selection:bg-white/20 selection:text-white">
+      <BgVideo src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260429_114316_1c7889ad-2885-410e-b493-98119fee0ddb.mp4" />
+      {/* readability scrim + faint stars over the video */}
+      <div className="fixed inset-0 z-[1] pointer-events-none bg-gradient-to-b from-black/40 via-black/30 to-black/70" />
+      <div className="fixed inset-0 z-[2] pointer-events-none stars" />
+
+      <div className="relative z-10 w-full max-w-7xl flex flex-col items-center flex-1">
+        <Nav />
+        <NotFoundHero />
+      </div>
+
+      <Footer />
+    </main>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>

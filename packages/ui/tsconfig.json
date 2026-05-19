@@ -1,0 +1,4 @@
+{
+  "extends": "@googolplex/config/tsconfig.base.json",
+  "include": ["src/**/*.{ts,tsx}"]
+}

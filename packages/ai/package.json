@@ -1,0 +1,10 @@
+{
+  "name": "@googolplex/ai",
+  "version": "0.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "devDependencies": {
+    "@googolplex/config": "*",
+    "typescript": "^5.4.5"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "@googolplex/landing",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Googolplex marketing landing page — Next.js + Tailwind + framer-motion. Auth flows call the central services/auth backend.",
+  "scripts": {
+    "dev": "next dev -p 3010",
+    "build": "next build",
+    "start": "next start -p 3010",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@types/qrcode": "^1.5.6",
+    "framer-motion": "^11.3.19",
+    "next": "^14.2.5",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@googolplex/config": "*",
+    "@types/node": "^20.12.12",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5.4.5"
+  }
+}
