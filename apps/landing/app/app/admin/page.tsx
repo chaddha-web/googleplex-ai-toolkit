@@ -45,7 +45,7 @@ export default function AdminHome() {
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 text-white">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/icon.png" alt="GoogolPlex" className="h-7 w-auto object-contain" />
+            <img src="/logo.png" alt="GoogolPlex" className="h-7 w-auto object-contain" />
             <span className="font-semibold text-lg tracking-tight">GoogolPlex</span>
           </Link>
           <div className="text-white/40 text-xs tracking-[0.3em] uppercase">

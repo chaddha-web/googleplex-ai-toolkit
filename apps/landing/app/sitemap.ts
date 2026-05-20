@@ -3,11 +3,11 @@ import type { MetadataRoute } from "next";
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://ggakingclub.com";
 
 const SERVICE_SLUGS = [
-  "research-insight",
-  "design-execution",
-  "narrative-brand",
-  "product-platform",
-  "growth-iteration"
+  "community-hub",
+  "universal-finance",
+  "shared-wealth",
+  "city-of-peace",
+  "ai-powered-ventures"
 ];
 
 const STATIC_ROUTES = [

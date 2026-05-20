@@ -52,14 +52,26 @@ export function ServiceDetail({ service }: { service: Service }) {
               {service.title}
             </motion.h1>
 
-            <motion.p
+            <motion.div
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, delay: 0.25 }}
-              className="text-white/70 text-base md:text-lg leading-relaxed max-w-2xl mt-8"
+              className="text-white/70 text-base md:text-lg leading-relaxed max-w-3xl mt-8 space-y-6 font-light"
             >
-              {service.intro}
-            </motion.p>
+              {service.intro.split("\n\n").map((para, idx) => (
+                <p key={idx}>
+                  {para.split("**").map((part, pIdx) =>
+                    pIdx % 2 === 1 ? (
+                      <strong key={pIdx} className="text-white font-medium">
+                        {part}
+                      </strong>
+                    ) : (
+                      part
+                    )
+                  )}
+                </p>
+              ))}
+            </motion.div>
           </div>
 
           {/* Video hero */}
@@ -93,9 +105,65 @@ export function ServiceDetail({ service }: { service: Service }) {
                     {s.label}
                   </p>
                 </div>
-                <p className="md:col-span-8 text-white/80 text-base md:text-lg leading-relaxed">
-                  {s.body}
-                </p>
+                <div className="md:col-span-8 space-y-6">
+                  {s.body.split("\n\n").map((para, pIdx) => {
+                    // Check if paragraph contains bullet items (lines starting with •)
+                    if (para.includes("\n• ") || para.startsWith("• ")) {
+                      const lines = para.split("\n");
+                      return (
+                        <ul key={pIdx} className="space-y-4 my-4 pl-1">
+                          {lines.map((line, lIdx) => {
+                            const cleanLine = line.replace(/^[•\-]\s*/, "");
+                            return (
+                              <li
+                                key={lIdx}
+                                className="flex items-start gap-3 text-white/70 text-base md:text-lg leading-relaxed animate-[fadeIn_0.5s_ease-out]"
+                              >
+                                <span className="text-[#a5b4fc] mt-[10px] select-none text-[8px] flex-shrink-0">
+                                  ◆
+                                </span>
+                                <span>
+                                  {cleanLine.split("**").map((part, partIdx) =>
+                                    partIdx % 2 === 1 ? (
+                                      <strong
+                                        key={partIdx}
+                                        className="text-white font-semibold"
+                                      >
+                                        {part}
+                                      </strong>
+                                    ) : (
+                                      part
+                                    )
+                                  )}
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      );
+                    }
+
+                    return (
+                      <p
+                        key={pIdx}
+                        className="text-white/70 text-base md:text-lg leading-relaxed"
+                      >
+                        {para.split("**").map((part, partIdx) =>
+                          partIdx % 2 === 1 ? (
+                            <strong
+                              key={partIdx}
+                              className="text-white font-semibold"
+                            >
+                              {part}
+                            </strong>
+                          ) : (
+                            part
+                          )
+                        )}
+                      </p>
+                    );
+                  })}
+                </div>
               </motion.div>
             ))}
           </div>

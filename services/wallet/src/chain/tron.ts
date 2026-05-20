@@ -12,13 +12,13 @@ function headers(): HeadersInit {
   return h;
 }
 
-/** TRX balance (decimal string, 6 decimals). */
+/** TRX balance as a RAW base-unit string (sun, 6 decimals). */
 export async function getTrxBalance(address: string): Promise<string> {
   const res = await fetch(`${API}/v1/accounts/${address}`, { headers: headers() });
   if (!res.ok) throw new Error(`TronGrid /accounts ${res.status}`);
   const data: { data?: { balance?: number }[] } = await res.json();
   const sun = data.data?.[0]?.balance ?? 0;
-  return (sun / 1_000_000).toString();
+  return BigInt(sun).toString();
 }
 
 /** TRC20 balanceOf via trigger_constant_contract. */
@@ -52,7 +52,7 @@ export async function getTrc20Balance(opts: {
   const data: { constant_result?: string[] } = await res.json();
   const hex = data.constant_result?.[0] ?? "0";
   const raw = BigInt("0x" + hex);
-  return formatBigDecimal(raw, opts.decimals);
+  return raw.toString();
 }
 
 export async function pingTron(): Promise<number> {
@@ -65,13 +65,6 @@ export async function pingTron(): Promise<number> {
 // ────────────────────────────────────────────────────────────────────────────
 // Local helpers
 // ────────────────────────────────────────────────────────────────────────────
-
-function formatBigDecimal(raw: bigint, decimals: number): string {
-  if (decimals === 0) return raw.toString();
-  const s = raw.toString().padStart(decimals + 1, "0");
-  const i = s.length - decimals;
-  return s.slice(0, i) + "." + s.slice(i).replace(/0+$/, "") || s.slice(0, i);
-}
 
 function base58ToHex(b58: string): string {
   // Minimal in-line decoder so we don't import bs58 here too.

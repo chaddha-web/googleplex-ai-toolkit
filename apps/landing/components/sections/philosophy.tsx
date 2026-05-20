@@ -31,7 +31,7 @@ export function PhilosophySection() {
             <LoopVideo
               src={VIDEOS.philosophy}
               placeholderClass="placeholder-video-3"
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover scale-110"
             />
           </motion.div>
 
@@ -43,25 +43,27 @@ export function PhilosophySection() {
           >
             <div>
               <p className="text-white/40 text-xs tracking-widest uppercase mb-4">
-                Choose your space
+                Har Maidan Fateh
               </p>
               <p className="text-white/70 text-base md:text-lg leading-relaxed">
-                Every meaningful breakthrough begins at the intersection of
-                disciplined strategy and remarkable creative vision. We operate at
-                that crossroads, turning bold thinking into tangible outcomes that
-                move people and reshape industries.
+                Our innovation is anchored in the{" "}
+                <span className="text-white">&ldquo;Har Maidan Fateh&rdquo;</span> vision — a
+                strategic mandate for universal victory and global prosperity. Under
+                this vision, we aim to deliver shared wealth and digital sovereignty
+                to every participant in the global economy.
               </p>
             </div>
             <div className="w-full h-px bg-white/10" />
             <div>
               <p className="text-white/40 text-xs tracking-widest uppercase mb-4">
-                Shape the future
+                One Team. One Family. One Future.
               </p>
               <p className="text-white/70 text-base md:text-lg leading-relaxed">
-                We believe that the best work emerges when curiosity meets
-                conviction. Our process is designed to uncover hidden opportunities
-                and translate them into experiences that resonate long after the
-                first impression.
+                We believe true prosperity is collective. We do not ask anyone to
+                change their faith, their culture, their language, or their way of
+                life. We simply ask humanity to add love to their prayers, bring
+                their unique gifts to our shared community, and join us in building a
+                world where everyone prospers together.
               </p>
             </div>
           </motion.div>

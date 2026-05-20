@@ -8,7 +8,7 @@ export const VIDEOS = {
   featured:
     "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260402_054547_9875cfc5-155a-4229-8ec8-b7ba7125cbf8.mp4",
   philosophy:
-    "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260307_083826_e938b29f-a43a-41ec-a153-3d4730578ab8.mp4",
+    "https://olzhwrdlyvwwyjaupuec.supabase.co/storage/v1/object/sign/free/Generated%20video%201%20(8).mp4?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV82NjYzNWZiYS05ZWVmLTRhN2QtODljZi01N2NmZDFmZmVjOGMiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJmcmVlL0dlbmVyYXRlZCB2aWRlbyAxICg4KS5tcDQiLCJpYXQiOjE3NzkyNjc3ODgsImV4cCI6MTgxMDgwMzc4OH0.kNl0FvvsVSWei42wkcxepSmADg6Mhova5EY7S1bt43k",
   serviceStrategy:
     "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260314_131748_f2ca2a28-fed7-44c8-b9a9-bd9acdd5ec31.mp4",
   serviceCraft:

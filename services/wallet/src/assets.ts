@@ -75,8 +75,10 @@ export function aggregate(raw: PerChainRawBalances): AssetBreakdown[] {
     let total = 0;
 
     for (const t of instances) {
+      // RPC helpers now return RAW base units (wei / sun / sats / token-raw).
+      // Scale down by the token's decimals to get the human-facing amount.
       const amountStr = raw[t.chain]?.[t.symbol] ?? "0";
-      const amount = Number(amountStr);
+      const amount = Number(amountStr) / 10 ** t.decimals;
       total += amount;
       perChain.push({
         chain: t.chain,

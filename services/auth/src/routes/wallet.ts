@@ -120,18 +120,37 @@ export async function walletRoutes(app: FastifyInstance) {
 
     const body = (req.body ?? {}) as any;
     const { status, initialDepositCreditedUsd, initialDepositCompletedAt } = body;
-    
+
     const now = Date.now();
+    const creditedUsd =
+      initialDepositCreditedUsd ?? user.initial_deposit_credited_usd;
+
+    // Auto state-machine transition: once a user awaiting their activation
+    // deposit has cumulatively credited >= $1, flip them to 'active' and
+    // stamp the completion time. No manual admin step needed.
+    let nextStatus = status ?? user.wallet_status;
+    let completedAt =
+      initialDepositCompletedAt ?? user.initial_deposit_completed_at;
+
+    if (
+      (nextStatus === "pending_initial_deposit" ||
+        user.wallet_status === "pending_initial_deposit") &&
+      Number(creditedUsd) >= 1.0
+    ) {
+      nextStatus = "active";
+      if (!completedAt) completedAt = now;
+    }
+
     stmts.user.updateWalletStatus.run({
       id,
-      wallet_status: status ?? user.wallet_status,
+      wallet_status: nextStatus,
       wallet_status_changed_at: now,
-      initial_deposit_credited_usd: initialDepositCreditedUsd ?? user.initial_deposit_credited_usd,
-      initial_deposit_completed_at: initialDepositCompletedAt ?? user.initial_deposit_completed_at,
+      initial_deposit_credited_usd: creditedUsd,
+      initial_deposit_completed_at: completedAt,
       updated_at: now
     });
 
-    return reply.send({ ok: true });
+    return reply.send({ ok: true, walletStatus: nextStatus });
   });
 
   // POST /admin/users/:id/wallet-status

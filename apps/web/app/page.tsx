@@ -1,21 +1,65 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-context";
-import type { WalletStatus } from "@/lib/auth-client";
+import { authedFetch, type WalletStatus } from "@/lib/auth-client";
 
 const LANDING_URL =
   process.env.NEXT_PUBLIC_LANDING_URL || "http://localhost:3010";
+const WALLET_BASE =
+  process.env.NEXT_PUBLIC_WALLET_BASE || "http://localhost:4201";
+
+type AssetBreakdown = { asset: string; total: number; usd: number | null };
+type LedgerEntry = {
+  id: string;
+  chain: string | null;
+  symbol: string;
+  delta_raw: string;
+  kind: string;
+  ref_tx_hash?: string | null;
+  created_at: number | null;
+};
+
+const DECIMALS: Record<string, number> = {
+  ETH: 18, BNB: 18, TRX: 6, BTC: 8, USDT: 6, USDC: 6, PARTY: 6
+};
 
 /**
  * Home — the dashboard the user lands on after sign-in.
- *
- * Surfaces: identity card, wallet snapshot (placeholder until /wallet/balances
- * is wired), recent activity (placeholder). Wallet-not-active banner that
- * deep-links back to the landing onboarding flow.
+ * Live total balance (sum of /wallet/balances USD) + live activity feed
+ * (/wallet/history). Wallet-not-active banner deep-links to onboarding.
  */
 export default function HomePage() {
   const { user } = useAuth();
+  const [totalUsd, setTotalUsd] = useState<number | null>(null);
+  const [history, setHistory] = useState<LedgerEntry[] | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      try {
+        const [bRes, hRes] = await Promise.all([
+          authedFetch(`${WALLET_BASE}/wallet/balances`),
+          authedFetch(`${WALLET_BASE}/wallet/history`)
+        ]);
+        if (bRes.ok) {
+          const bal = (await bRes.json()) as AssetBreakdown[];
+          if (Array.isArray(bal)) {
+            setTotalUsd(bal.reduce((acc, a) => acc + (a.usd ?? 0), 0));
+          }
+        }
+        if (hRes.ok) {
+          const h = await hRes.json();
+          setHistory(Array.isArray(h) ? h : []);
+        }
+      } catch {
+        setTotalUsd(0);
+        setHistory([]);
+      }
+    })();
+  }, [user]);
+
   if (!user) return null;
 
   return (
@@ -50,10 +94,13 @@ export default function HomePage() {
           <p className="text-white/40 text-xs tracking-[0.3em] uppercase mb-3">
             Total balance
           </p>
-          <p className="text-5xl font-medium tracking-tight">$0.00</p>
+          <p className="text-5xl font-medium tracking-tight">
+            {totalUsd === null
+              ? "…"
+              : `$${totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          </p>
           <p className="text-white/40 text-sm mt-2">
-            Wallet balances populate once your addresses are allocated and a
-            deposit lands.{" "}
+            Fixed-price valuation across your funded assets.{" "}
             <span className="text-white/70 group-hover:text-white">
               Open wallet →
             </span>
@@ -65,12 +112,76 @@ export default function HomePage() {
         <p className="text-white/40 text-xs tracking-[0.3em] uppercase mb-4">
           Recent activity
         </p>
-        <div className="liquid-glass rounded-2xl p-6 text-white/40 text-sm">
-          No activity yet. Your sign-ins, deposits, votes and project
-          milestones will appear here.
-        </div>
+        {history === null ? (
+          <div className="liquid-glass rounded-2xl p-6 text-white/40 text-sm">
+            Loading activity…
+          </div>
+        ) : history.length === 0 ? (
+          <div className="liquid-glass rounded-2xl p-6 text-white/40 text-sm">
+            No activity yet. Your deposits, withdrawals, votes and project
+            milestones will appear here.
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {history.map((e) => (
+              <ActivityRow key={e.id} entry={e} />
+            ))}
+          </ul>
+        )}
       </section>
     </div>
+  );
+}
+
+function ActivityRow({ entry }: { entry: LedgerEntry }) {
+  const negative = entry.delta_raw.trim().startsWith("-");
+  const rawAbs = entry.delta_raw.replace("-", "");
+  const dec = DECIMALS[entry.symbol] ?? 18;
+  let human = rawAbs;
+  try {
+    const n = BigInt(rawAbs);
+    const d = BigInt(10) ** BigInt(dec);
+    const whole = n / d;
+    const frac = (n % d).toString().padStart(dec, "0").slice(0, 4).replace(/0+$/, "");
+    human = frac ? `${whole}.${frac}` : `${whole}`;
+  } catch {
+    /* keep raw */
+  }
+  const when = entry.created_at
+    ? new Date(entry.created_at).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      })
+    : "";
+  const label =
+    { deposit: "Deposit", withdrawal: "Withdrawal", swap_in: "Swap in", swap_out: "Swap out", fee: "Fee", admin_adjust: "Adjustment" }[
+      entry.kind
+    ] ?? entry.kind;
+  return (
+    <li className="liquid-glass rounded-2xl p-4 flex items-center justify-between gap-4">
+      <div className="flex items-center gap-3 min-w-0">
+        <span
+          className={`h-8 w-8 rounded-full flex items-center justify-center text-sm shrink-0 ${
+            negative ? "bg-white/10 text-white/70" : "bg-emerald-400 text-black"
+          }`}
+        >
+          {negative ? "↑" : "↓"}
+        </span>
+        <div className="min-w-0">
+          <p className="text-white text-sm">{label}</p>
+          <p className="text-white/40 text-xs">
+            {entry.chain ? `${entry.chain.toUpperCase()} · ` : ""}
+            {when}
+          </p>
+        </div>
+      </div>
+      <span className={`font-mono text-sm shrink-0 ${negative ? "text-white/70" : "text-emerald-300"}`}>
+        {negative ? "−" : "+"}
+        {human} {entry.symbol}
+      </span>
+    </li>
   );
 }
 

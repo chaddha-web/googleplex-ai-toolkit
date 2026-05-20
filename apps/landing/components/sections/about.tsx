@@ -28,13 +28,13 @@ export function AboutSection() {
           transition={{ duration: 0.8, delay: 0.1 }}
           className="text-white text-4xl md:text-6xl lg:text-7xl leading-[1.1] tracking-tight"
         >
-          <span>Pioneering </span>
-          <span className="font-serif-i text-white/60">ideas</span>
-          <span> for </span>
+          <span>Intelligence </span>
+          <span className="font-serif-i text-white/60">lives here.</span>
           <br className="hidden md:block" />
-          <span className="font-serif-i text-white/60">minds that</span>
-          <span> create, build, </span>
-          <span className="font-serif-i text-white/60">and inspire.</span>
+          <span> Building the unified infrastructure for </span>
+          <span className="font-serif-i text-white/60">every mind, every dream,</span>
+          <span> and </span>
+          <span className="font-serif-i text-white/60">every human.</span>
         </motion.h2>
       </div>
     </section>

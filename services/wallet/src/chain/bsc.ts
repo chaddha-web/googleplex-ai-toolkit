@@ -1,4 +1,4 @@
-import { createPublicClient, http, parseAbi, formatUnits } from "viem";
+import { createPublicClient, http, parseAbi } from "viem";
 import { bsc } from "viem/chains";
 
 const RPC = process.env.BSC_RPC_URL ?? "https://bsc-dataseed.binance.org";
@@ -14,13 +14,13 @@ const ERC20_ABI = parseAbi([
   "function symbol() view returns (string)"
 ]);
 
-/** Returns BNB balance as a decimal string. */
+/** Returns BNB balance as a RAW base-unit string (wei). */
 export async function getBnbBalance(address: string): Promise<string> {
   const wei = await bscClient.getBalance({ address: address as `0x${string}` });
-  return formatUnits(wei, 18);
+  return wei.toString();
 }
 
-/** Returns BEP20 balance as a decimal string. */
+/** Returns BEP20 balance as a RAW base-unit string (no decimal scaling). */
 export async function getBep20Balance(opts: {
   holder: string;
   token: string;
@@ -32,7 +32,7 @@ export async function getBep20Balance(opts: {
     functionName: "balanceOf",
     args: [opts.holder as `0x${string}`]
   })) as bigint;
-  return formatUnits(raw, opts.decimals);
+  return raw.toString();
 }
 
 export async function pingBsc(): Promise<bigint> {

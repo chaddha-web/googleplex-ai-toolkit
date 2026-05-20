@@ -8,11 +8,10 @@ import { getCookie, setCookie } from "@/lib/cookies";
 // Bumped any time the asset list changes — invalidates the warm-cache cookie
 // so visitors re-preload when we ship new videos.
 const WARM_COOKIE = "gplex.videos_warm";
-const WARM_VERSION = "1";
+const WARM_VERSION = "2"; // bumped: loader now also preloads images
 
-// Only videos actually used on the landing page — keeps the loader quick and
-// avoids prefetching auth/secondary assets here.
-const ASSETS = [
+// Videos actually used on the landing page.
+const VIDEO_ASSETS = [
   VIDEOS.hero,
   VIDEOS.featured,
   VIDEOS.philosophy,
@@ -20,6 +19,22 @@ const ASSETS = [
   VIDEOS.serviceCraft,
   VIDEOS.footer
 ];
+
+// Images the landing relies on — brand logo + partner marquee logos. The
+// loader holds until these resolve (loaded or errored) so the page never
+// pops in with half-loaded imagery.
+const IMAGE_ASSETS = [
+  "/logo.png",
+  "https://i.ibb.co/FGYbCDx/1.png",
+  "https://i.ibb.co/7JFb8tGY/2.png",
+  "https://i.ibb.co/JRH4Yw4m/3.png",
+  "https://i.ibb.co/nt3gG3w/4.png",
+  "https://i.ibb.co/0jvxfdrv/5.png",
+  "https://i.ibb.co/WWR8GsSZ/6.png",
+  "https://i.ibb.co/7J5jyrDQ/7.png"
+];
+
+const ASSETS = [...VIDEO_ASSETS, ...IMAGE_ASSETS];
 
 /**
  * Full-screen loader shown until every hero/background video is buffered
@@ -63,14 +78,15 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
 
     let done = 0;
     const total = ASSETS.length;
-    const tags: HTMLVideoElement[] = [];
+    const videoTags: HTMLVideoElement[] = [];
+    const imgTags: HTMLImageElement[] = [];
 
     const markOne = () => {
       done += 1;
       setLoaded(done);
       if (done >= total) {
         // Mark this browser as "warm" so the next visit skips the splash
-        // (the videos themselves stay in the browser HTTP cache).
+        // (the assets themselves stay in the browser HTTP cache).
         setCookie(WARM_COOKIE, WARM_VERSION, {
           maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
         });
@@ -79,7 +95,8 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
       }
     };
 
-    ASSETS.forEach((src) => {
+    // Videos — settle on canplaythrough / loadeddata / error.
+    VIDEO_ASSETS.forEach((src) => {
       const v = document.createElement("video");
       v.muted = true;
       v.playsInline = true;
@@ -94,16 +111,36 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
       v.addEventListener("canplaythrough", settle, { once: true });
       v.addEventListener("loadeddata", settle, { once: true });
       v.addEventListener("error", settle, { once: true });
-      // per-asset fallback so one slow video can't hold the loader forever
       window.setTimeout(settle, MAX_WAIT_MS - 500);
-      tags.push(v);
+      videoTags.push(v);
+    });
+
+    // Images — settle on load / error (errored remote logos shouldn't block).
+    IMAGE_ASSETS.forEach((src) => {
+      const img = new Image();
+      let settled = false;
+      const settle = () => {
+        if (settled) return;
+        settled = true;
+        markOne();
+      };
+      img.addEventListener("load", settle, { once: true });
+      img.addEventListener("error", settle, { once: true });
+      img.src = src;
+      // Already-cached images may resolve synchronously.
+      if (img.complete) settle();
+      window.setTimeout(settle, MAX_WAIT_MS - 500);
+      imgTags.push(img);
     });
 
     return () => {
       clearTimeout(hardTimer);
-      tags.forEach((v) => {
+      videoTags.forEach((v) => {
         v.removeAttribute("src");
         v.load();
+      });
+      imgTags.forEach((img) => {
+        img.src = "";
       });
     };
   }, []);
@@ -138,16 +175,14 @@ export function LandingShell({ children }: { children: React.ReactNode }) {
               transition={{ duration: 0.8, ease: "easeOut" }}
               className="flex items-center gap-3 text-white"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="28"
-                height="28"
-                viewBox="0 0 256 256"
-                fill="currentColor"
-                aria-hidden="true"
-              >
-                <path d="M 4.688 136 C 68.373 136 120 187.627 120 251.312 C 120 252.883 119.967 254.445 119.905 256 L 0 256 L 0 136.096 C 1.555 136.034 3.117 136 4.688 136 Z M 251.312 136 C 252.883 136 254.445 136.034 256 136.096 L 256 256 L 136.095 256 C 136.032 254.438 136.001 252.875 136 251.312 C 136 187.627 187.627 136 251.312 136 Z M 119.905 0 C 119.967 1.555 120 3.117 120 4.688 C 120 68.373 68.373 120 4.687 120 C 3.117 120 1.555 119.967 0 119.905 L 0 0 Z M 256 119.905 C 254.445 119.967 252.883 120 251.312 120 C 187.627 120 136 68.373 136 4.687 C 136 3.117 136.033 1.555 136.095 0 L 256 0 Z" />
-              </svg>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logo.png"
+                alt="GoogolPlex"
+                width={36}
+                height={36}
+                className="h-9 w-auto object-contain"
+              />
               <span className="font-serif-i text-3xl tracking-tight">
                 Googolplex
               </span>

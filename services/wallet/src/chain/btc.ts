@@ -17,7 +17,8 @@ export async function getBtcBalance(address: string): Promise<string> {
   const sats =
     ((c.funded_txo_sum ?? 0) - (c.spent_txo_sum ?? 0)) +
     ((m.funded_txo_sum ?? 0) - (m.spent_txo_sum ?? 0));
-  return (sats / 1e8).toString();
+  // RAW base-unit string (satoshis), no BTC division.
+  return BigInt(Math.trunc(sats)).toString();
 }
 
 export async function pingBtc(): Promise<number> {

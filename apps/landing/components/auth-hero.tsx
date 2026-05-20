@@ -76,7 +76,7 @@ export function AuthHero({ heading, tagline, steps }: AuthHeroProps) {
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/icon.png"
+            src="/logo.png"
             alt="GoogolPlex"
             className="h-6 w-auto object-contain"
           />

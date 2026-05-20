@@ -69,7 +69,7 @@ export function SiteFooterCard({ className = "" }: { className?: string }) {
           <div className="flex items-center gap-3 mb-4 text-white">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/icon.png"
+              src="/logo.png"
               alt="GoogolPlex"
               className="h-7 w-auto object-contain"
             />
