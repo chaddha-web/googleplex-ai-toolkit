@@ -16,6 +16,19 @@ type LogoutBody = { refreshToken?: unknown };
 
 export async function authRoutes(app: FastifyInstance) {
   // ────────────────────────────────────────────────────────────────────────
+  // GET /auth/exists?email=... — lightweight account-existence check (no OTP
+  // sent). Used by the landing hero to route to login (prefilled) vs signup.
+  // Note: leaks account existence (enumeration) — accepted trade-off for UX.
+  app.get("/auth/exists", async (req, reply) => {
+    const email = String((req.query as any)?.email ?? "").trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return reply.code(400).send({ error: "Valid email required." });
+    }
+    const user = stmts.user.byEmail.get(email);
+    return reply.send({ exists: !!user });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
   // POST /auth/refresh — rotate refresh, issue new access. Returns 401 on
   // any failure (unknown/expired/reused). On reuse, the entire family is
   // burned (handled inside consumeRefreshToken).

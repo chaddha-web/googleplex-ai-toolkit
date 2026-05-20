@@ -24,6 +24,12 @@ function FormRight() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Prefill from ?email= (handed over by the landing hero form).
+  useEffect(() => {
+    const e = new URLSearchParams(window.location.search).get("email");
+    if (e) setEmail(e);
+  }, []);
+
   // One idempotency key per "intended OTP request" — survives retries inside
   // fetchWithRetry so the server treats them as the same logical send.
   const requestKeyRef = useRef<string>(newIdempotencyKey());

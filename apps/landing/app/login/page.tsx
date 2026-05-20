@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { AuthHero } from "@/components/auth-hero";
 import { OtpCells } from "@/components/otp-cells";
@@ -17,6 +17,12 @@ function FormRight() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Prefill from ?email= (handed over by the landing hero form).
+  useEffect(() => {
+    const e = new URLSearchParams(window.location.search).get("email");
+    if (e) setEmail(e);
+  }, []);
 
   const requestKeyRef = useRef<string>(newIdempotencyKey());
 

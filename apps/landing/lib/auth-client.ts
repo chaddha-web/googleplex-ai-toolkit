@@ -128,6 +128,21 @@ function loadRefresh(): string | null {
 // Public API
 // ────────────────────────────────────────────────────────────────────────────
 
+/** Check whether an account exists for an email (no OTP sent). */
+export async function checkEmailExists(email: string): Promise<boolean> {
+  try {
+    const res = await fetch(
+      `${AUTH_BASE}/auth/exists?email=${encodeURIComponent(email)}`,
+      { cache: "no-store" }
+    );
+    if (!res.ok) return false;
+    const data = await res.json();
+    return !!data.exists;
+  } catch {
+    return false;
+  }
+}
+
 export async function requestOtp(opts: {
   email: string;
   mode: "signup" | "login";

@@ -1,10 +1,68 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowRight, Camera, Globe, Sparkles } from "@/components/icons";
 import { LoopVideo } from "@/components/video";
 import { SmartCta } from "@/components/smart-cta";
+import { checkEmailExists } from "@/lib/auth-client";
 import { VIDEOS } from "@/lib/assets";
+
+/**
+ * Hero email capture. Once a valid email is typed the round arrow button
+ * expands to a pill reading "Get Started →". On submit we check whether an
+ * account exists: if it does → /login (prefilled), else → /signup (prefilled).
+ */
+function HeroEmailForm() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!valid || busy) return;
+    setBusy(true);
+    const addr = email.trim();
+    try {
+      const exists = await checkEmailExists(addr);
+      const dest = exists ? "/login" : "/signup";
+      router.push(`${dest}?email=${encodeURIComponent(addr)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-8 w-full max-w-xl">
+      <div className="liquid-glass rounded-full pl-6 pr-2 py-2 flex items-center gap-3">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Enter your email"
+          className="flex-1 bg-transparent text-white placeholder:text-white/40 text-sm py-2 outline-none"
+        />
+        <button
+          type="submit"
+          disabled={!valid || busy}
+          aria-label={valid ? "Get started" : "Enter your email"}
+          className={`shrink-0 bg-white text-black hover:bg-white/90 transition-all duration-300 ease-out flex items-center justify-center gap-2 disabled:opacity-60 ${
+            valid ? "rounded-full pl-5 pr-4 py-3 text-sm font-medium" : "rounded-full p-3"
+          }`}
+        >
+          {valid && (
+            <span className="whitespace-nowrap">
+              {busy ? "Checking…" : "Get Started"}
+            </span>
+          )}
+          <ArrowRight size={20} />
+        </button>
+      </div>
+    </form>
+  );
+}
 
 export function Hero() {
   return (
@@ -74,25 +132,7 @@ export function Hero() {
           newsletter today and never miss out on exciting updates.
         </p>
 
-        <form
-          onSubmit={(e) => e.preventDefault()}
-          className="mt-8 w-full max-w-xl"
-        >
-          <div className="liquid-glass rounded-full pl-6 pr-2 py-2 flex items-center gap-3">
-            <input
-              type="email"
-              placeholder="Enter your email"
-              className="flex-1 bg-transparent text-white placeholder:text-white/40 text-sm py-2"
-            />
-            <button
-              type="submit"
-              className="bg-white rounded-full p-3 text-black hover:bg-white/90 transition"
-              aria-label="Subscribe"
-            >
-              <ArrowRight size={20} />
-            </button>
-          </div>
-        </form>
+        <HeroEmailForm />
       </div>
 
       {/* Bottom row: manifesto (left) — socials (right) */}
