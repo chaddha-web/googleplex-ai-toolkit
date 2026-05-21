@@ -62,6 +62,8 @@ services:
         NEXT_PUBLIC_WALLET_BASE: https://wallet.${DOMAIN}
         NEXT_PUBLIC_WEB_URL: https://app.${DOMAIN}
         NEXT_PUBLIC_SITE_URL: https://${DOMAIN}
+        NEXT_PUBLIC_LANDING_URL: https://${DOMAIN}
+        NEXT_PUBLIC_GOV_BASE: https://gov.${DOMAIN}
     image: gplex-monorepo:latest
     container_name: gplex-landing
     restart: unless-stopped

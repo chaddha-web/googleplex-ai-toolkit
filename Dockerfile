@@ -54,10 +54,14 @@ ARG NEXT_PUBLIC_AUTH_BASE=https://auth.ggakingclub.com
 ARG NEXT_PUBLIC_WALLET_BASE=https://wallet.ggakingclub.com
 ARG NEXT_PUBLIC_WEB_URL=https://app.ggakingclub.com
 ARG NEXT_PUBLIC_SITE_URL=https://ggakingclub.com
+ARG NEXT_PUBLIC_LANDING_URL=https://ggakingclub.com
+ARG NEXT_PUBLIC_GOV_BASE=https://gov.ggakingclub.com
 ENV NEXT_PUBLIC_AUTH_BASE=$NEXT_PUBLIC_AUTH_BASE \
     NEXT_PUBLIC_WALLET_BASE=$NEXT_PUBLIC_WALLET_BASE \
     NEXT_PUBLIC_WEB_URL=$NEXT_PUBLIC_WEB_URL \
-    NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
+    NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
+    NEXT_PUBLIC_LANDING_URL=$NEXT_PUBLIC_LANDING_URL \
+    NEXT_PUBLIC_GOV_BASE=$NEXT_PUBLIC_GOV_BASE
 
 # Build the three Next apps. Services run via tsx at runtime so no build
 # step needed for them.

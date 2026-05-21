@@ -16,6 +16,14 @@ import { ASSET_INSTANCES, aggregate, type LogicalAsset } from "./assets.js";
 import { deriveUserAddresses } from "./hd.js";
 import { TOKENS } from "./tokens.js";
 
+// Auth service base — in prod this is the internal container address
+// (http://auth:4200), set via AUTH_BASE_URL in docker-compose. Falls back to
+// localhost only for local dev where both services run on the host.
+const AUTH_BASE = (process.env.AUTH_BASE_URL || "http://localhost:4200").replace(
+  /\/$/,
+  ""
+);
+
 // TODO: fetch xpubs from ENV (should be passed to the service)
 const EVM_XPUB = process.env.EVM_XPUB || "xpub_placeholder";
 const BTC_XPUB = process.env.BTC_XPUB || "xpub_placeholder";
@@ -183,7 +191,7 @@ export async function walletRoutes(app: FastifyInstance) {
 
     if (initialDepositCreditedUsd > 0) {
       try {
-        const authResp = await fetch("http://localhost:4200/internal/users/" + user.sub + "/wallet-status", {
+        const authResp = await fetch(AUTH_BASE + "/internal/users/" + user.sub + "/wallet-status", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -229,7 +237,7 @@ export async function walletRoutes(app: FastifyInstance) {
     let otpSessionId = "stub-otp";
     try {
       // In reality, hit POST http://localhost:4200/auth/otp/request
-      const res = await fetch("http://localhost:4200/auth/otp/request", {
+      const res = await fetch(AUTH_BASE + "/auth/otp/request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: user.email, mode: "login" })
@@ -267,7 +275,7 @@ export async function walletRoutes(app: FastifyInstance) {
     // Validate code or wallet password
     if (walletPassword) {
       try {
-        const authResp = await fetch("http://localhost:4200/auth/wallet-password/verify", {
+        const authResp = await fetch(AUTH_BASE + "/auth/wallet-password/verify", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -282,7 +290,7 @@ export async function walletRoutes(app: FastifyInstance) {
       }
     } else {
       try {
-        const authResp = await fetch("http://localhost:4200/auth/otp/verify", {
+        const authResp = await fetch(AUTH_BASE + "/auth/otp/verify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email: user.email, code })
