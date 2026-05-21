@@ -64,6 +64,8 @@ export type User = {
   walletStatus?: WalletStatus;
   /** Cumulative USD credited toward the $1 activation threshold. */
   initialDepositCreditedUsd?: number;
+  /** Personalized tokens minted to this member at signup (tokenomics). */
+  tokensMinted?: number;
   createdAt?: number;
 };
 
@@ -300,6 +302,7 @@ export type AdminUserRow = {
   profileCompleted: boolean;
   walletStatus: WalletStatus;
   initialDepositCreditedUsd: number;
+  tokensMinted: number;
   notificationsOptIn: boolean;
   createdAt: number;
 };

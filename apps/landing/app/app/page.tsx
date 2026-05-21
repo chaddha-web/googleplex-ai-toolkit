@@ -42,6 +42,20 @@ export default function AppHome() {
           <Card label="Role" value={user.role} />
         </div>
 
+        {user.tokensMinted != null && user.tokensMinted > 0 && (
+          <div className="liquid-glass rounded-3xl mt-4 p-6 md:p-8">
+            <p className="text-white/40 text-xs tracking-[0.3em] uppercase mb-3">
+              Your tokens
+            </p>
+            <p className="text-4xl md:text-5xl font-medium tracking-tight">
+              {user.tokensMinted.toLocaleString()}
+            </p>
+            <p className="text-white/40 text-sm mt-2">
+              Personalized tokens minted in your name at signup.
+            </p>
+          </div>
+        )}
+
         {/* Wallet card — placeholder. Will pull from /wallet/balances next pass. */}
         <div className="liquid-glass rounded-3xl mt-10 p-6 md:p-8">
           <div className="flex items-center justify-between mb-4">

@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { motion, useInView } from "framer-motion";
 import { ArrowLeft, ArrowRight, ArrowUpRight } from "@/components/icons";
-import { LoopVideo } from "@/components/video";
 import { SERVICES, type Service } from "@/lib/services";
 
 const N = SERVICES.length;
@@ -40,10 +40,12 @@ function CardView({
       >
         <div className="relative aspect-video overflow-hidden">
           <div className="absolute inset-0 transition-transform duration-700 group-hover:scale-105">
-            <LoopVideo
-              src={c.video}
-              placeholderClass={c.placeholder}
-              className="w-full h-full object-cover"
+            <Image
+              src={c.image}
+              alt={c.title}
+              fill
+              sizes="(max-width: 768px) 100vw, 50vw"
+              className="object-cover"
             />
           </div>
           <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />

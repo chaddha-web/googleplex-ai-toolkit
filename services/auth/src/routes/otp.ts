@@ -177,6 +177,12 @@ export async function otpRoutes(app: FastifyInstance) {
       const role: "admin" | "user" = adminEmails.includes(normalisedEmail)
         ? "admin"
         : "user";
+      // Mint the member's personalized token allocation at signup
+      // (10 billion per the tokenomics — "10 billion personalized tokens
+      // minted in the user's name"). Recorded in the auth ledger here; the
+      // on-chain / community-pool split is handled by the wallet/governance
+      // services downstream.
+      const TOKENS_PER_MEMBER = 10_000_000_000;
       stmts.user.insert.run({
         id,
         email: normalisedEmail,
@@ -187,6 +193,8 @@ export async function otpRoutes(app: FastifyInstance) {
         wallet_status: "pending_password",
         wallet_status_changed_at: now,
         initial_deposit_credited_usd: 0,
+        tokens_minted: TOKENS_PER_MEMBER,
+        tokens_minted_at: now,
         created_at: now,
         updated_at: now
       });

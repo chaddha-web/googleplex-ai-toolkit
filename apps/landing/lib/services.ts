@@ -10,6 +10,8 @@ export type Service = {
   intro: string;
   /** Long-form sections of the detail page. Each gets a small label + paragraph. */
   sections: { label: string; body: string }[];
+  /** Cover + article hero image (used on the grid card and detail page). */
+  image: string;
   video: string;
   placeholder: string;
 };
@@ -39,6 +41,7 @@ export const SERVICES: Service[] = [
         body: "At the heart of this immense technological infrastructure is the visionary mandate of Dr. Narendra Singh Khurana and the Googolplex Smiles Party Billionaires Club. The Community Hub is where collaboration, opportunity, and love converge.\n\nOur mission is to empower citizens across 200 countries to grow together as One Global Family. We achieve this radical unity without ever asking anyone to change their culture, their faith, or their language. By providing real-time AI translation and respecting all traditions, we ensure that every member—whether an engineer in Singapore, a teacher in Kenya, or a farmer in rural India—has an equal starting point: one dollar, one community, and one shared future.\n\nBecause in the Googolplex ecosystem, every member is a brother or sister—their success is your success, and their peace is your peace."
       }
     ],
+    image: "https://i.ibb.co/nNqPpv1G/1.jpg",
     video: VIDEOS.serviceStrategy,
     placeholder: "placeholder-video-4"
   },
@@ -70,6 +73,7 @@ export const SERVICES: Service[] = [
         body: "True to our \"Mother First. By Design.\" philosophy, the wallet is engineered for the 1 billion people globally who lack official identification or banking access.\n\n• **Global Compliance**: The wallet utilizes AI-powered document verification and biometric recognition to provide frictionless KYC and AML compliance globally.\n• **Offline Capabilities**: Utilizing edge computing and Progressive Web App (PWA) architecture, core financial features remain functional even in rural environments with low-bandwidth or offline conditions.\n\nThe Googolplex Universal Smart Wallet is more than an application; it is a profound upgrade to human financial dignity, delivering a Web2 experience with Web3 trust."
       }
     ],
+    image: "https://i.ibb.co/G4QPWKJT/2.jpg",
     video: VIDEOS.serviceCraft,
     placeholder: "placeholder-video-5"
   },
@@ -93,6 +97,7 @@ export const SERVICES: Service[] = [
         body: "In the Googolplex ecosystem, success is never a zero-sum game. We utilize a mathematically proven Altruistic Reward Curve, which ensures that as transaction velocity increases, the collective wealth of the entire community grows exponentially.\n\nBecause 6 billion of every member's tokens circulate in the global pool, every individual's success creates a massive ripple effect. If a user's 1 billion tradeable tokens achieve a value of just $1 through community adoption, that creator effectively holds $1 billion in assets. However, because the global community holds 6 billion of those specific tokens, that single user's rise to success simultaneously distributes $6 billion in wealth across the wallets of the rest of the network.\n\nThis is the ultimate proof that one person's success does not require another's failure. In our unified ecosystem, a rising tide literally lifts every boat, proving that civilizational prosperity can be achieved purely through shared human collaboration."
       }
     ],
+    image: "https://i.ibb.co/n8r5J4mb/3.jpg",
     video: VIDEOS.philosophy,
     placeholder: "placeholder-video-3"
   },
@@ -120,6 +125,7 @@ export const SERVICES: Service[] = [
         body: "Ultimately, the City of Peace is the tangible embodiment of the \"Har Maidan Fateh\" vision—a mandate for universal victory, where prosperity is shared by all. Inspired by Dr. Khurana’s prayer visits and the historical teachings of inter-faith unity and compassion, these physical hubs will serve as a sanctuary for humanity. They will stand as physical proof that a world guided by spiritual peace, technological sovereignty, and shared abundance is not just a digital dream, but a living reality."
       }
     ],
+    image: "https://i.ibb.co/wFxq4f9H/4.jpg",
     video: VIDEOS.featured,
     placeholder: "placeholder-video-2"
   },
@@ -147,6 +153,7 @@ export const SERVICES: Service[] = [
         body: "The ultimate proof of our \"Community Capitalism\" model is the economic engine that drives shared success, highlighted by what we call the Billionaire Scenario.\n\n• **The Path to $1 Billion**: Of your 10 billion personalized tokens, you hold 1 billion that are freely tradeable. If your project gains traction, community adoption, and ecosystem growth driving the value of your personal token to just $1, you effectively hold assets worth **$1 billion**.\n• **The Ripple Effect**: Crucially, success in the Googolplex AI Power Box is never zero-sum. Because 6 billion of your tokens continuously circulate in the global community pool, your rise in value simultaneously benefits the wallets of all other community members holding those tokens.\n\nWhen one member succeeds, the entire network benefits. This creates a mathematical certainty of shared global wealth, proving that civilizational prosperity can be achieved through mutual collaboration rather than extraction. Through AI-Powered Ventures, we are not just helping users build businesses; we are helping humanity build a collective future."
       }
     ],
+    image: "https://i.ibb.co/whbv4z3j/5.jpg",
     video: VIDEOS.serviceCare,
     placeholder: "placeholder-video"
   }

@@ -111,6 +111,7 @@ export default function AdminHome() {
                   <Th>Role</Th>
                   <Th>Country</Th>
                   <Th>Age</Th>
+                  <Th>Tokens</Th>
                   <Th>Profile</Th>
                   <Th>Wallet</Th>
                   <Th>Joined</Th>
@@ -119,13 +120,13 @@ export default function AdminHome() {
               <tbody>
                 {users === null ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-12 text-center text-white/40">
+                    <td colSpan={10} className="px-4 py-12 text-center text-white/40">
                       Loading users…
                     </td>
                   </tr>
                 ) : users.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-12 text-center text-white/40">
+                    <td colSpan={10} className="px-4 py-12 text-center text-white/40">
                       No users registered yet.
                     </td>
                   </tr>
@@ -153,6 +154,11 @@ export default function AdminHome() {
                       </Td>
                       <Td>{u.country ?? "—"}</Td>
                       <Td>{u.age ?? "—"}</Td>
+                      <Td>
+                        <span className="font-mono text-xs text-white/70">
+                          {u.tokensMinted != null ? u.tokensMinted.toLocaleString() : "—"}
+                        </span>
+                      </Td>
                       <Td>
                         <Dot ok={u.profileCompleted} />
                       </Td>

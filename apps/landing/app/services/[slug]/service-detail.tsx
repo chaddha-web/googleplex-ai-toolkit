@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { motion } from "framer-motion";
 import { SiteNav } from "@/components/site-nav";
 import { SiteFooterCard } from "@/components/site-footer-card";
-import { LoopVideo } from "@/components/video";
 import { ArrowLeft, ArrowUpRight } from "@/components/icons";
 import { SERVICES, type Service } from "@/lib/services";
 
@@ -81,10 +81,13 @@ export function ServiceDetail({ service }: { service: Service }) {
             transition={{ duration: 0.9, delay: 0.35 }}
             className="mt-12 md:mt-16 relative rounded-3xl overflow-hidden aspect-video"
           >
-            <LoopVideo
-              src={service.video}
-              placeholderClass={service.placeholder}
-              className="w-full h-full object-cover"
+            <Image
+              src={service.image}
+              alt={service.title}
+              fill
+              priority
+              sizes="(max-width: 1024px) 100vw, 1024px"
+              className="object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
           </motion.div>

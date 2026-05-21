@@ -40,6 +40,8 @@ db.exec(`
     wallet_status_changed_at     INTEGER,
     initial_deposit_credited_usd REAL NOT NULL DEFAULT 0,
     initial_deposit_completed_at INTEGER,
+    tokens_minted                INTEGER NOT NULL DEFAULT 0,
+    tokens_minted_at             INTEGER,
     created_at                   INTEGER NOT NULL,
     updated_at                   INTEGER NOT NULL
   );
@@ -105,6 +107,8 @@ export type UserRow = {
   wallet_status_changed_at: number | null;
   initial_deposit_credited_usd: number;
   initial_deposit_completed_at: number | null;
+  tokens_minted: number;
+  tokens_minted_at: number | null;
   created_at: number;
   updated_at: number;
 };
@@ -129,6 +133,8 @@ try { db.exec(`ALTER TABLE users ADD COLUMN consented_privacy_at INTEGER`); } ca
 try { db.exec(`ALTER TABLE users ADD COLUMN notifications_opt_in INTEGER NOT NULL DEFAULT 0`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN notifications_opt_in_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN profile_completed_at INTEGER`); } catch {}
+try { db.exec(`ALTER TABLE users ADD COLUMN tokens_minted INTEGER NOT NULL DEFAULT 0`); } catch {}
+try { db.exec(`ALTER TABLE users ADD COLUMN tokens_minted_at INTEGER`); } catch {}
 
 export type OtpRow = {
   id: string;
@@ -166,8 +172,8 @@ export const stmts = {
     byCode:  db.prepare<[string], UserRow>(`SELECT * FROM users WHERE code11 = ?`),
     listAll: db.prepare<[], UserRow>(`SELECT * FROM users ORDER BY created_at DESC`),
     insert:  db.prepare(`
-      INSERT INTO users (id, email, code11, first_name, last_name, role, wallet_status, wallet_status_changed_at, initial_deposit_credited_usd, created_at, updated_at)
-      VALUES (@id, @email, @code11, @first_name, @last_name, @role, @wallet_status, @wallet_status_changed_at, @initial_deposit_credited_usd, @created_at, @updated_at)
+      INSERT INTO users (id, email, code11, first_name, last_name, role, wallet_status, wallet_status_changed_at, initial_deposit_credited_usd, tokens_minted, tokens_minted_at, created_at, updated_at)
+      VALUES (@id, @email, @code11, @first_name, @last_name, @role, @wallet_status, @wallet_status_changed_at, @initial_deposit_credited_usd, @tokens_minted, @tokens_minted_at, @created_at, @updated_at)
     `),
     updateWalletPassword: db.prepare(`
       UPDATE users SET 

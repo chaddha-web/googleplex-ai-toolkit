@@ -116,6 +116,7 @@ export async function authRoutes(app: FastifyInstance) {
         profileCompletedAt: user.profile_completed_at,
         walletStatus: user.wallet_status,
         initialDepositCreditedUsd: user.initial_deposit_credited_usd,
+        tokensMinted: user.tokens_minted,
         createdAt: user.created_at
       }
     });
@@ -205,6 +206,7 @@ export async function authRoutes(app: FastifyInstance) {
       profile_completed_at: number | null;
       wallet_status: string;
       initial_deposit_credited_usd: number;
+      tokens_minted: number;
       notifications_opt_in: number;
       created_at: number;
     }>;
@@ -225,6 +227,7 @@ export async function authRoutes(app: FastifyInstance) {
         profileCompleted: !!u.profile_completed_at,
         walletStatus: u.wallet_status,
         initialDepositCreditedUsd: u.initial_deposit_credited_usd,
+        tokensMinted: u.tokens_minted,
         notificationsOptIn: u.notifications_opt_in === 1,
         createdAt: u.created_at
       }))
