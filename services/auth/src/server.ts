@@ -1,5 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
+import rateLimit from "@fastify/rate-limit";
 import { otpRoutes } from "./routes/otp.js";
 import { authRoutes } from "./routes/auth.js";
 import { walletRoutes } from "./routes/wallet.js";
@@ -12,7 +14,31 @@ const ORIGINS = (process.env.CORS_ORIGINS ?? "http://localhost:3000,http://local
 
 const app = Fastify({
   logger: true,
-  trustProxy: true
+  trustProxy: true,
+  // Reject oversized bodies early (OTP/profile payloads are tiny).
+  bodyLimit: 64 * 1024
+});
+
+await app.register(helmet, { contentSecurityPolicy: false });
+
+// Global IP rate limit. Per-route overrides (stricter on OTP) live on the
+// individual routes via their `config.rateLimit`.
+await app.register(rateLimit, {
+  global: true,
+  max: 120,
+  timeWindow: "1 minute",
+  // Behind Traefik we trust X-Forwarded-For (trustProxy is on).
+  keyGenerator: (req) => req.ip
+});
+
+// Clean JSON errors — never leak stack traces / internals to clients.
+app.setErrorHandler((err, req, reply) => {
+  const status = err.statusCode ?? 500;
+  if (status >= 500) {
+    req.log.error({ err }, "unhandled error");
+    return reply.code(500).send({ error: "Internal server error." });
+  }
+  return reply.code(status).send({ error: err.message || "Request failed." });
 });
 
 await app.register(cors, {

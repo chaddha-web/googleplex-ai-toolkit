@@ -27,7 +27,10 @@ type VerifyBody = {
 };
 
 export async function otpRoutes(app: FastifyInstance) {
-  app.post("/auth/otp/request", async (req, reply) => {
+  app.post(
+    "/auth/otp/request",
+    { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
+    async (req, reply) => {
     const body = (req.body ?? {}) as RequestBody;
     const { email, mode, firstName, lastName } = body;
 
@@ -118,7 +121,10 @@ export async function otpRoutes(app: FastifyInstance) {
     return reply.send({ ok: true });
   });
 
-  app.post("/auth/otp/verify", async (req, reply) => {
+  app.post(
+    "/auth/otp/verify",
+    { config: { rateLimit: { max: 15, timeWindow: "1 minute" } } },
+    async (req, reply) => {
     const body = (req.body ?? {}) as VerifyBody;
     const { email, code } = body;
 

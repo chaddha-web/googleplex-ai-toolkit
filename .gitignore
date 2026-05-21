@@ -62,3 +62,9 @@ typechain-types/
 # ─── Backups / scratch directories created during development ────────────
 _landing.bak.*
 *.bak
+
+# Large static media served by the nginx media container (host-only, not in git)
+media/
+
+# Local-only Remotion video project (large, not part of the deploy)
+/video/
