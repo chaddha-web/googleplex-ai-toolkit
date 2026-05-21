@@ -25,9 +25,10 @@ const PLAN: Plan[] = [
   { file: "tron", chain: "tron", xpubVar: "TRON_MASTER_XPUB" }
 ];
 
-// Refuse to clobber existing ciphertexts.
+// Refuse to clobber existing ciphertexts. Must match kms.ts SEED_DIR.
+const SEED_DIR = process.env.WALLET_SEED_DIR || "./data/seeds";
 for (const p of PLAN) {
-  const path = resolve(`./data/seeds/${p.file}.bin`);
+  const path = resolve(`${SEED_DIR}/${p.file}.bin`);
   if (existsSync(path)) {
     console.error(
       `[init-seeds] Refusing to overwrite ${path}\n` +

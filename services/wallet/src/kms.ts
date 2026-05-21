@@ -50,8 +50,14 @@ export async function decryptSeed(ciphertext: Uint8Array): Promise<Uint8Array> {
 
 export type SeedFile = "evm" | "btc" | "tron";
 
+// Where the encrypted seed ciphertexts live. In prod this MUST point at the
+// persistent volume (WALLET_SEED_DIR=/data/seeds) so seeds survive container
+// recreates — losing them locks all custodial funds. Defaults to a local path
+// for dev.
+const SEED_DIR = process.env.WALLET_SEED_DIR || "./data/seeds";
+
 function seedPath(name: SeedFile): string {
-  return resolve(`./data/seeds/${name}.bin`);
+  return resolve(`${SEED_DIR}/${name}.bin`);
 }
 
 export async function saveCiphertext(name: SeedFile, ciphertext: Uint8Array) {

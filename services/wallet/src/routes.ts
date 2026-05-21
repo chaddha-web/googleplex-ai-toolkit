@@ -43,10 +43,14 @@ const AUTH_BASE = (process.env.AUTH_BASE_URL || "http://localhost:4200").replace
   ""
 );
 
-// TODO: fetch xpubs from ENV (should be passed to the service)
-const EVM_XPUB = process.env.EVM_XPUB || "xpub_placeholder";
-const BTC_XPUB = process.env.BTC_XPUB || "xpub_placeholder";
-const TRON_XPUB = process.env.TRON_XPUB || "xpub_placeholder";
+// Master xpubs (public — safe to hold in env). init-seeds prints these as
+// *_MASTER_XPUB; we keep the legacy *_XPUB names as a fallback.
+const EVM_XPUB =
+  process.env.EVM_MASTER_XPUB || process.env.EVM_XPUB || "xpub_placeholder";
+const BTC_XPUB =
+  process.env.BTC_MASTER_XPUB || process.env.BTC_XPUB || "xpub_placeholder";
+const TRON_XPUB =
+  process.env.TRON_MASTER_XPUB || process.env.TRON_XPUB || "xpub_placeholder";
 
 export async function walletRoutes(app: FastifyInstance) {
 

@@ -165,6 +165,7 @@ services:
     environment:
       - PORT=4201
       - WALLET_DB_PATH=/data/wallet.db
+      - WALLET_SEED_DIR=/data/seeds
       - AUTH_BASE_URL=http://auth:4200
       - CORS_ORIGINS=https://${DOMAIN},https://app.${DOMAIN},https://admin.${DOMAIN}
     command: ["npx", "tsx", "services/wallet/src/server.ts"]
