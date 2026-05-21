@@ -153,6 +153,32 @@ export async function walletRoutes(app: FastifyInstance) {
     return reply.send({ ok: true, walletStatus: nextStatus });
   });
 
+  // POST /internal/users/:id/studio-unlock
+  // Called by the wallet service after it has collected the $18 Studio fee.
+  // Idempotent: re-calling on an already-unlocked user is a no-op success.
+  app.post("/internal/users/:id/studio-unlock", async (req: any, reply) => {
+    if (!requireInternal(req, reply)) return;
+
+    const { id } = req.params;
+    const user = stmts.user.byId.get(id);
+    if (!user) return reply.code(404).send({ error: "User not found." });
+
+    const now = Date.now();
+    if (!user.studio_unlocked_at) {
+      stmts.user.unlockStudio.run({
+        id,
+        studio_unlocked_at: now,
+        updated_at: now
+      });
+    }
+
+    const updated = stmts.user.byId.get(id)!;
+    return reply.send({
+      ok: true,
+      studioUnlockedAt: updated.studio_unlocked_at
+    });
+  });
+
   // POST /admin/users/:id/wallet-status
   app.post("/admin/users/:id/wallet-status", async (req: any, reply) => {
     const user = await requireAuth(req, reply);

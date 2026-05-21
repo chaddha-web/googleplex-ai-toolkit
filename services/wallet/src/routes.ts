@@ -12,9 +12,28 @@ import { requireAuth, requireInternal, requireRole } from "./lib/guard.js";
 import { eq, and, desc } from "drizzle-orm";
 import { ulid } from "ulid";
 import { reconcile, type UserAddressMap } from "./reconcile.js";
-import { ASSET_INSTANCES, aggregate, type LogicalAsset } from "./assets.js";
+import {
+  ASSET_INSTANCES,
+  LOGICAL_ASSETS,
+  aggregate,
+  type LogicalAsset
+} from "./assets.js";
 import { deriveUserAddresses } from "./hd.js";
 import { TOKENS } from "./tokens.js";
+import { priceUsd, coinAmountForUsd } from "./prices.js";
+
+// One-time fee (USD) to unlock the AI Studio. Charged in any priced coin at
+// its live price; the platform keeps it (debited as a fee, not credited back).
+const STUDIO_FEE_USD = 18;
+
+// Convert a human coin amount to raw base units without Number overflow for
+// high-decimal tokens: keep up to 6 decimals of precision in Number math, then
+// scale the rest with BigInt.
+function toRawUnits(coinAmount: number, decimals: number): bigint {
+  const p = Math.min(decimals, 6);
+  const head = BigInt(Math.ceil(coinAmount * 10 ** p));
+  return head * 10n ** BigInt(Math.max(0, decimals - p));
+}
 
 // Auth service base — in prod this is the internal container address
 // (http://auth:4200), set via AUTH_BASE_URL in docker-compose. Falls back to
@@ -151,8 +170,8 @@ export async function walletRoutes(app: FastifyInstance) {
             symbol: t.symbol,
             amount_raw: delta.toString(),
             tx_hash: refTxHash,
-            confirmed_at: new Date(),
-            credited_at: new Date()
+            confirmed_at: Date.now(),
+            credited_at: Date.now()
           });
 
           await tx.insert(ledgerEntries).values({
@@ -168,7 +187,7 @@ export async function walletRoutes(app: FastifyInstance) {
 
           if (ledgerRow) {
             await tx.update(ledgerBalances)
-              .set({ raw: onChainRaw, updated_at: new Date() })
+              .set({ raw: onChainRaw, updated_at: Date.now() })
               .where(and(eq(ledgerBalances.user_id, user.sub), eq(ledgerBalances.chain, t.chain), eq(ledgerBalances.symbol, t.symbol)));
           } else {
             await tx.insert(ledgerBalances).values({
@@ -321,7 +340,7 @@ export async function walletRoutes(app: FastifyInstance) {
       }
 
       const newBal = (BigInt(balRow[0]!.raw) - BigInt(w.amount_raw)).toString();
-      await tx.update(ledgerBalances).set({ raw: newBal, updated_at: new Date() })
+      await tx.update(ledgerBalances).set({ raw: newBal, updated_at: Date.now() })
         .where(and(eq(ledgerBalances.user_id, user.sub), eq(ledgerBalances.chain, w.chain), eq(ledgerBalances.symbol, w.symbol)));
 
       await tx.insert(ledgerEntries).values({
@@ -341,7 +360,7 @@ export async function walletRoutes(app: FastifyInstance) {
     if (!success) return reply.code(400).send({ error: "Insufficient balance" });
 
     // Fake signing for J1, real KMS implementation would go here (or async queue).
-    await db.update(withdrawals).set({ status: "pending", signed_at: new Date(), broadcast_at: new Date(), tx_hash: "0xMockHash" }).where(eq(withdrawals.id, w.id));
+    await db.update(withdrawals).set({ status: "pending", signed_at: Date.now(), broadcast_at: Date.now(), tx_hash: "0xMockHash" }).where(eq(withdrawals.id, w.id));
 
     return reply.send({ ok: true, status: "pending", txHash: "0xMockHash" });
   });
@@ -357,6 +376,147 @@ export async function walletRoutes(app: FastifyInstance) {
       .limit(50);
 
     return reply.send(entries);
+  });
+
+  // GET /wallet/studio/quote
+  // Returns the $18-equivalent amount in every priced coin so the UI can show
+  // a coin picker. Unpriced coins (no live price) are omitted.
+  app.get("/wallet/studio/quote", async (req: any, reply) => {
+    if (!(await requireAuth(req, reply))) return;
+
+    const options = LOGICAL_ASSETS.flatMap((asset) => {
+      const price = priceUsd(asset);
+      const amount = coinAmountForUsd(STUDIO_FEE_USD, asset);
+      if (price === null || amount === null) return [];
+      return [{ asset, usd: STUDIO_FEE_USD, price, amount }];
+    });
+
+    return reply.send({ feeUsd: STUDIO_FEE_USD, options });
+  });
+
+  // POST /wallet/studio/unlock  { asset }
+  // Charges the $18 Studio fee in `asset` (any priced coin) from the user's
+  // ledger balance, records it as a fee (platform keeps it), then tells the
+  // auth service to flip studio_unlocked_at. Idempotent.
+  app.post("/wallet/studio/unlock", async (req: any, reply) => {
+    if (!(await requireAuth(req, reply))) return;
+    const user = req.user!;
+    const bearer = (req.headers.authorization as string) ?? "";
+
+    // Already unlocked? Don't charge twice.
+    try {
+      const meRes = await fetch(AUTH_BASE + "/auth/me", {
+        headers: { Authorization: bearer }
+      });
+      if (meRes.ok) {
+        const me = (await meRes.json()) as any;
+        if (me?.user?.studioUnlocked) {
+          return reply.send({ ok: true, alreadyUnlocked: true });
+        }
+      }
+    } catch (e) {
+      app.log.error(e);
+      // Non-fatal — fall through and let the charge proceed.
+    }
+
+    const asset = (req.body as any)?.asset as LogicalAsset | undefined;
+    if (!asset || !(LOGICAL_ASSETS as string[]).includes(asset)) {
+      return reply.code(400).send({ error: "Unknown or missing asset." });
+    }
+    const coinAmount = coinAmountForUsd(STUDIO_FEE_USD, asset);
+    if (coinAmount === null) {
+      return reply.code(400).send({ error: `${asset} is not priced right now.` });
+    }
+
+    // Find a chain instance of this asset whose ledger balance covers the fee.
+    const instances = ASSET_INSTANCES[asset] ?? [];
+    let charged: { chain: string; symbol: string; raw: string } | null = null;
+
+    try {
+      await db.transaction(async (tx) => {
+        for (const t of instances) {
+          const requiredRaw = toRawUnits(coinAmount, t.decimals);
+          const rows = await tx
+            .select()
+            .from(ledgerBalances)
+            .where(
+              and(
+                eq(ledgerBalances.user_id, user.sub),
+                eq(ledgerBalances.chain, t.chain),
+                eq(ledgerBalances.symbol, t.symbol)
+              )
+            )
+            .limit(1);
+          if (rows.length === 0) continue;
+          const have = BigInt(rows[0]!.raw);
+          if (have < requiredRaw) continue;
+
+          const newBal = (have - requiredRaw).toString();
+          await tx
+            .update(ledgerBalances)
+            .set({ raw: newBal, updated_at: Date.now() })
+            .where(
+              and(
+                eq(ledgerBalances.user_id, user.sub),
+                eq(ledgerBalances.chain, t.chain),
+                eq(ledgerBalances.symbol, t.symbol)
+              )
+            );
+          await tx.insert(ledgerEntries).values({
+            id: ulid(),
+            user_id: user.sub,
+            chain: t.chain,
+            symbol: t.symbol,
+            delta_raw: "-" + requiredRaw.toString(),
+            kind: "studio_fee",
+            ref_id: "studio-unlock"
+          });
+          charged = { chain: t.chain, symbol: t.symbol, raw: requiredRaw.toString() };
+          break;
+        }
+        if (!charged) {
+          throw new Error("INSUFFICIENT");
+        }
+      });
+    } catch (e) {
+      if ((e as Error).message === "INSUFFICIENT") {
+        return reply
+          .code(400)
+          .send({ error: `Insufficient ${asset} balance for the $${STUDIO_FEE_USD} fee.` });
+      }
+      app.log.error(e);
+      return reply.code(500).send({ error: "Failed to charge Studio fee." });
+    }
+
+    // Flip the studio flag in auth (idempotent there too).
+    try {
+      const unlockRes = await fetch(
+        AUTH_BASE + "/internal/users/" + user.sub + "/studio-unlock",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + process.env.INTERNAL_SERVICE_TOKEN
+          }
+        }
+      );
+      if (!unlockRes.ok) {
+        app.log.error(`studio-unlock auth call failed: ${unlockRes.status}`);
+        // The fee was charged; surface a soft error so support can reconcile.
+        return reply.code(502).send({
+          error: "Fee charged but Studio unlock failed — contact support.",
+          charged
+        });
+      }
+    } catch (e) {
+      app.log.error(e);
+      return reply.code(502).send({
+        error: "Fee charged but Studio unlock failed — contact support.",
+        charged
+      });
+    }
+
+    return reply.send({ ok: true, charged, studioUnlocked: true });
   });
 
   // POST /wallet/swaps

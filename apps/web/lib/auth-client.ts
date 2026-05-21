@@ -21,6 +21,10 @@ export const AUTH_BASE = (
   process.env.NEXT_PUBLIC_AUTH_BASE || "http://localhost:4200"
 ).replace(/\/$/, "");
 
+export const WALLET_BASE = (
+  process.env.NEXT_PUBLIC_WALLET_BASE || "http://localhost:4201"
+).replace(/\/$/, "");
+
 export type Role = "user" | "admin";
 export type WalletStatus =
   | "pending_password"
@@ -48,6 +52,8 @@ export type User = {
   walletStatus?: WalletStatus;
   /** Cumulative USD credited toward the $1 activation threshold. */
   initialDepositCreditedUsd?: number;
+  /** True once the user has paid the $18 fee to unlock the AI Studio. */
+  studioUnlocked?: boolean;
   createdAt?: number;
 };
 
@@ -287,6 +293,41 @@ export async function verifyWalletPassword(password: string): Promise<boolean> {
     body: JSON.stringify({ password })
   });
   return res.ok;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Studio access — $18 one-time fee, paid in any priced coin
+// ────────────────────────────────────────────────────────────────────────────
+
+export type StudioQuoteOption = {
+  asset: string;
+  usd: number;
+  price: number;
+  amount: number;
+};
+
+export async function studioQuote(): Promise<{
+  feeUsd: number;
+  options: StudioQuoteOption[];
+}> {
+  const res = await authedFetch(`${WALLET_BASE}/wallet/studio/quote`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not load Studio pricing.");
+  return data;
+}
+
+/** Charge the $18 Studio fee in `asset`, then refresh the session. */
+export async function unlockStudio(asset: string): Promise<User | null> {
+  const res = await authedFetch(`${WALLET_BASE}/wallet/studio/unlock`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ asset })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not unlock Studio.");
+  const me = await fetchMe();
+  if (me) emit(me);
+  return me;
 }
 
 export async function signOut(): Promise<void> {

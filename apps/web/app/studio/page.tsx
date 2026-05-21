@@ -1,17 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-context";
+import {
+  studioQuote,
+  unlockStudio,
+  type StudioQuoteOption
+} from "@/lib/auth-client";
 
 /**
- * Studio — AI brand kit + zero-click deploy. Publishing is gated behind an
- * active wallet (the deploy spends from the user balance and writes to the
- * shared user-sites volume per PRD §7.4).
+ * Studio — AI brand kit + zero-click deploy. Access is gated behind a one-time
+ * $18 fee (StudioPaywall). Once unlocked, publishing still requires an active
+ * wallet (the deploy spends from the user balance).
  */
 export default function StudioPage() {
   const { user } = useAuth();
-  const walletActive = user?.walletStatus === "active";
   const [prompt, setPrompt] = useState("");
+
+  if (!user) return null;
+
+  // Locked → show the $18 unlock paywall.
+  if (!user.studioUnlocked) {
+    return <StudioPaywall />;
+  }
+
+  const walletActive = user.walletStatus === "active";
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -74,6 +87,128 @@ export default function StudioPage() {
           ))}
         </div>
       </section>
+    </div>
+  );
+}
+
+function StudioPaywall() {
+  const [options, setOptions] = useState<StudioQuoteOption[] | null>(null);
+  const [feeUsd, setFeeUsd] = useState(18);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    studioQuote()
+      .then((q) => {
+        if (!live) return;
+        setFeeUsd(q.feeUsd);
+        setOptions(q.options);
+        if (q.options[0]) setSelected(q.options[0].asset);
+      })
+      .catch((e) => live && setError((e as Error).message));
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  async function pay() {
+    if (!selected) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await unlockStudio(selected);
+      // On success the auth context emits the updated user (studioUnlocked),
+      // which re-renders the parent into the real Studio.
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto">
+      <p className="text-white/40 text-xs tracking-[0.3em] uppercase">Studio</p>
+      <h1 className="font-serif text-5xl md:text-6xl tracking-tight mt-2">
+        Unlock the <em className="font-serif-i text-white/60">AI Studio</em>.
+      </h1>
+      <p className="text-white/70 text-base md:text-lg leading-relaxed mt-6">
+        A one-time{" "}
+        <span className="text-white font-medium">${feeUsd}</span> activation
+        unlocks AI brand generation and zero-click deploys. Pay in any coin you
+        hold — we convert at the live rate.
+      </p>
+
+      <div className="mt-10 liquid-glass rounded-3xl p-6 md:p-8">
+        <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase mb-4">
+          Choose a coin
+        </p>
+
+        {options === null && !error ? (
+          <p className="text-white/40 text-sm">Loading live prices…</p>
+        ) : options && options.length === 0 ? (
+          <p className="text-white/60 text-sm">
+            No priced coins available right now. Please try again shortly.
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {options?.map((o) => {
+              const active = o.asset === selected;
+              return (
+                <button
+                  key={o.asset}
+                  type="button"
+                  onClick={() => setSelected(o.asset)}
+                  className={`rounded-2xl p-4 text-left transition-colors ${
+                    active
+                      ? "bg-white text-black"
+                      : "liquid-glass text-white hover:bg-white/5"
+                  }`}
+                >
+                  <p className="font-medium">{o.asset}</p>
+                  <p
+                    className={`text-xs mt-1 ${
+                      active ? "text-black/60" : "text-white/50"
+                    }`}
+                  >
+                    {o.amount.toLocaleString(undefined, {
+                      maximumSignificantDigits: 6
+                    })}{" "}
+                    {o.asset}
+                  </p>
+                  <p
+                    className={`text-[10px] mt-0.5 ${
+                      active ? "text-black/40" : "text-white/30"
+                    }`}
+                  >
+                    @ ${o.price.toLocaleString()}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {error && <p className="mt-4 text-rose-300/90 text-sm">{error}</p>}
+
+        <button
+          type="button"
+          onClick={pay}
+          disabled={loading || !selected}
+          className="mt-6 w-full sm:w-auto rounded-full px-8 py-3 text-black text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{ background: "#d6ee4f" }}
+        >
+          {loading ? "Processing…" : `Pay $${feeUsd} & unlock Studio`}
+        </button>
+
+        <p className="text-white/30 text-xs mt-4 leading-relaxed">
+          The fee is deducted from your wallet balance in the selected coin.
+          You'll need that balance available; deposits go to your wallet
+          addresses.
+        </p>
+      </div>
     </div>
   );
 }

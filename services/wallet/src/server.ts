@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import { walletRoutes } from "./routes.js";
+import { startPriceRefresh } from "./prices.js";
 
 const PORT = Number(process.env.PORT ?? 4201);
 const ORIGINS = (process.env.CORS_ORIGINS ?? "http://localhost:3000,http://localhost:3001,http://localhost:3010")
@@ -42,6 +43,9 @@ await app.register(cors, {
 app.get("/health", async () => ({ ok: true, name: "@googolplex/wallet-service", ts: Date.now() }));
 
 await app.register(walletRoutes);
+
+// Start the live price refresh loop (CoinGecko, 60s, best-effort).
+startPriceRefresh();
 
 try {
   await app.listen({ port: PORT, host: "0.0.0.0" });

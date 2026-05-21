@@ -42,6 +42,7 @@ db.exec(`
     initial_deposit_completed_at INTEGER,
     tokens_minted                INTEGER NOT NULL DEFAULT 0,
     tokens_minted_at             INTEGER,
+    studio_unlocked_at           INTEGER,
     created_at                   INTEGER NOT NULL,
     updated_at                   INTEGER NOT NULL
   );
@@ -109,6 +110,7 @@ export type UserRow = {
   initial_deposit_completed_at: number | null;
   tokens_minted: number;
   tokens_minted_at: number | null;
+  studio_unlocked_at: number | null;
   created_at: number;
   updated_at: number;
 };
@@ -135,6 +137,7 @@ try { db.exec(`ALTER TABLE users ADD COLUMN notifications_opt_in_at INTEGER`); }
 try { db.exec(`ALTER TABLE users ADD COLUMN profile_completed_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN tokens_minted INTEGER NOT NULL DEFAULT 0`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN tokens_minted_at INTEGER`); } catch {}
+try { db.exec(`ALTER TABLE users ADD COLUMN studio_unlocked_at INTEGER`); } catch {}
 
 export type OtpRow = {
   id: string;
@@ -190,6 +193,12 @@ export const stmts = {
         wallet_status_changed_at = @wallet_status_changed_at,
         initial_deposit_credited_usd = @initial_deposit_credited_usd,
         initial_deposit_completed_at = @initial_deposit_completed_at,
+        updated_at = @updated_at
+      WHERE id = @id
+    `),
+    unlockStudio: db.prepare(`
+      UPDATE users SET
+        studio_unlocked_at = @studio_unlocked_at,
         updated_at = @updated_at
       WHERE id = @id
     `),
