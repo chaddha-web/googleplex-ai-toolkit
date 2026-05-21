@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-context";
@@ -19,7 +19,12 @@ export default function AdminHome() {
     if (user && user.role !== "admin") router.replace("/app");
   }, [user, router]);
 
+  const lastLoadRef = useRef(0);
   async function load() {
+    // Throttle manual refreshes to once per 3s.
+    const now = Date.now();
+    if (refreshing || now - lastLoadRef.current < 3000) return;
+    lastLoadRef.current = now;
     setRefreshing(true);
     setError(null);
     try {

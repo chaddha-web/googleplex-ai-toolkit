@@ -146,7 +146,7 @@ export async function walletRoutes(app: FastifyInstance) {
   });
 
   // POST /wallet/refresh
-  app.post("/wallet/refresh", async (req: any, reply) => {
+  app.post("/wallet/refresh", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (req: any, reply) => {
     if (!(await requireAuth(req, reply))) return;
     const user = req.user!;
 
@@ -243,12 +243,20 @@ export async function walletRoutes(app: FastifyInstance) {
   });
 
   // POST /wallet/withdrawals
-  app.post("/wallet/withdrawals", async (req: any, reply) => {
+  app.post("/wallet/withdrawals", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req: any, reply) => {
     if (!(await requireAuth(req, reply))) return;
     const user = req.user!;
 
     const { chain, symbol, amountRaw, destAddress } = req.body as any;
     if (!chain || !symbol || !amountRaw || !destAddress) return reply.code(400).send({ error: "Missing fields" });
+
+    // amountRaw must be a positive integer string (base units).
+    if (typeof amountRaw !== "string" || !/^\d+$/.test(amountRaw) || BigInt(amountRaw) <= 0n) {
+      return reply.code(400).send({ error: "amountRaw must be a positive integer string." });
+    }
+    if (typeof destAddress !== "string" || destAddress.length > 128) {
+      return reply.code(400).send({ error: "Invalid destination address." });
+    }
 
     // Validate the destination is a well-formed address for the chain.
     if (!isValidDestination(chain, destAddress)) {
@@ -333,7 +341,7 @@ export async function walletRoutes(app: FastifyInstance) {
   });
 
   // POST /wallet/withdrawals/:id/confirm
-  app.post("/wallet/withdrawals/:id/confirm", async (req: any, reply) => {
+  app.post("/wallet/withdrawals/:id/confirm", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req: any, reply) => {
     if (!(await requireAuth(req, reply))) return;
     const user = req.user!;
 
@@ -486,7 +494,7 @@ export async function walletRoutes(app: FastifyInstance) {
   // Charges the $18 Studio fee in `asset` (any priced coin) from the user's
   // ledger balance, records it as a fee (platform keeps it), then tells the
   // auth service to flip studio_unlocked_at. Idempotent.
-  app.post("/wallet/studio/unlock", async (req: any, reply) => {
+  app.post("/wallet/studio/unlock", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (req: any, reply) => {
     if (!(await requireAuth(req, reply))) return;
     const user = req.user!;
     const bearer = (req.headers.authorization as string) ?? "";

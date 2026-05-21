@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-context";
 import { authedFetch } from "@/lib/auth-client";
 import { QrCode } from "@/components/qr-code";
@@ -79,7 +79,13 @@ export default function WalletPage() {
     load();
   }, [load]);
 
+  const lastRefreshRef = useRef(0);
   async function refresh() {
+    // Throttle: ignore manual refreshes fired within 5s of the last one
+    // (server also caches reconcile for 30s + rate-limits the endpoint).
+    const now = Date.now();
+    if (refreshing || now - lastRefreshRef.current < 5000) return;
+    lastRefreshRef.current = now;
     setRefreshing(true);
     try {
       const res = await authedFetch(`${WALLET_BASE}/wallet/refresh`, { method: "POST" });

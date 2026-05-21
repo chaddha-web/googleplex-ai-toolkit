@@ -13,7 +13,18 @@ const ORIGINS = (process.env.CORS_ORIGINS ?? "http://localhost:3000,http://local
 
 const app = Fastify({
   logger: true,
-  trustProxy: true
+  trustProxy: true,
+  bodyLimit: 64 * 1024
+});
+
+// Clean JSON errors — never leak stack traces / internals to clients.
+app.setErrorHandler((err, req, reply) => {
+  const status = err.statusCode ?? 500;
+  if (status >= 500) {
+    req.log.error({ err }, "unhandled error");
+    return reply.code(500).send({ error: "Internal server error." });
+  }
+  return reply.code(status).send({ error: err.message || "Request failed." });
 });
 
 await app.register(helmet);
