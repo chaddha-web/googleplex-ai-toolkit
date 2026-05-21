@@ -47,6 +47,18 @@ FROM deps AS build
 
 COPY . .
 
+# NEXT_PUBLIC_* must be present at *build* time — Next.js inlines them into
+# the client bundle. Passed in via compose build.args; default to the prod
+# domain so a bare `docker build` still produces working URLs.
+ARG NEXT_PUBLIC_AUTH_BASE=https://auth.ggakingclub.com
+ARG NEXT_PUBLIC_WALLET_BASE=https://wallet.ggakingclub.com
+ARG NEXT_PUBLIC_WEB_URL=https://app.ggakingclub.com
+ARG NEXT_PUBLIC_SITE_URL=https://ggakingclub.com
+ENV NEXT_PUBLIC_AUTH_BASE=$NEXT_PUBLIC_AUTH_BASE \
+    NEXT_PUBLIC_WALLET_BASE=$NEXT_PUBLIC_WALLET_BASE \
+    NEXT_PUBLIC_WEB_URL=$NEXT_PUBLIC_WEB_URL \
+    NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
+
 # Build the three Next apps. Services run via tsx at runtime so no build
 # step needed for them.
 RUN npm run build --workspace @googolplex/landing && \
