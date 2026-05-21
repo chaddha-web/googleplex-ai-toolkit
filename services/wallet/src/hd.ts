@@ -13,6 +13,7 @@ import { HDKey } from "@scure/bip32";
 import { generateMnemonic, mnemonicToSeedSync } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
 import { secp256k1 } from "@noble/curves/secp256k1";
+import { keccak_256 } from "@noble/hashes/sha3";
 import { publicKeyToAddress } from "viem/utils";
 import bs58check from "bs58check";
 import { createHash } from "node:crypto";
@@ -96,10 +97,6 @@ export function evmAddressFromPubkey(compressedPubkey: Uint8Array): string {
  */
 export function tronAddressFromPubkey(compressedPubkey: Uint8Array): string {
   const uncompressed = uncompressedPubkey(compressedPubkey);
-  // Use viem's keccak via dynamic import path to avoid pulling extra deps.
-  // Easier: derive via @noble/hashes which @noble/curves already brings in.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { keccak_256 } = require("@noble/hashes/sha3");
   const hash: Uint8Array = keccak_256(uncompressed.slice(1));
   const last20 = hash.slice(-20);
   const tronBytes = new Uint8Array(21);
