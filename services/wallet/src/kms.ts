@@ -48,7 +48,14 @@ export async function decryptSeed(ciphertext: Uint8Array): Promise<Uint8Array> {
 // On-disk seed store (the ciphertext, not the seed itself)
 // ────────────────────────────────────────────────────────────────────────────
 
-export type SeedFile = "evm" | "btc" | "tron";
+export type SeedFile =
+  | "evm"
+  | "btc"
+  | "tron"
+  // Company hot-wallet (treasury) keys used to pay withdrawals.
+  | "treasury-evm"
+  | "treasury-tron"
+  | "treasury-btc";
 
 // Where the encrypted seed ciphertexts live. In prod this MUST point at the
 // persistent volume (WALLET_SEED_DIR=/data/seeds) so seeds survive container

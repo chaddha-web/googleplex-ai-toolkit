@@ -74,6 +74,14 @@ export const TOKENS: Token[] = [
     coingeckoId: "tether"
   },
   {
+    symbol: "USDC",
+    chain: "tron",
+    native: false,
+    address: "TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8",
+    decimals: 6,
+    coingeckoId: "usd-coin"
+  },
+  {
     // ⚠ Confirm decimals on tronscan before going live.
     symbol: "PARTY",
     chain: "tron",

@@ -19,8 +19,13 @@ import {
   type LogicalAsset
 } from "./assets.js";
 import { deriveUserAddresses } from "./hd.js";
-import { TOKENS } from "./tokens.js";
+import { TOKENS, findToken } from "./tokens.js";
 import { priceUsd, coinAmountForUsd } from "./prices.js";
+import { sendWithdrawal, isValidDestination } from "./withdraw.js";
+
+// Withdrawal safety caps (USD). Fully-automatic model still bounds blast radius.
+const MAX_WITHDRAW_PER_TX_USD = Number(process.env.MAX_WITHDRAW_PER_TX_USD ?? 1000);
+const MAX_WITHDRAW_DAILY_USD = Number(process.env.MAX_WITHDRAW_DAILY_USD ?? 5000);
 
 // One-time fee (USD) to unlock the AI Studio. Charged in any priced coin at
 // its live price; the platform keeps it (debited as a fee, not credited back).
@@ -245,6 +250,14 @@ export async function walletRoutes(app: FastifyInstance) {
     const { chain, symbol, amountRaw, destAddress } = req.body as any;
     if (!chain || !symbol || !amountRaw || !destAddress) return reply.code(400).send({ error: "Missing fields" });
 
+    // Validate the destination is a well-formed address for the chain.
+    if (!isValidDestination(chain, destAddress)) {
+      return reply.code(400).send({ error: "Invalid destination address for this chain." });
+    }
+
+    const token = findToken(chain, symbol);
+    if (!token) return reply.code(400).send({ error: `Unsupported asset ${symbol} on ${chain}.` });
+
     // Validate ledger
     const balance = await db.select().from(ledgerBalances)
       .where(and(eq(ledgerBalances.user_id, user.sub), eq(ledgerBalances.chain, chain), eq(ledgerBalances.symbol, symbol)))
@@ -252,6 +265,38 @@ export async function walletRoutes(app: FastifyInstance) {
 
     if (balance.length === 0 || BigInt(balance[0]!.raw) < BigInt(amountRaw)) {
       return reply.code(400).send({ error: "Insufficient balance" });
+    }
+
+    // ── Withdrawal caps (USD) ────────────────────────────────────────────
+    const usdPrice = priceUsd(symbol as any) ?? 0;
+    const human = Number(BigInt(amountRaw)) / 10 ** token.decimals;
+    const usdValue = human * usdPrice;
+
+    if (usdPrice > 0 && usdValue > MAX_WITHDRAW_PER_TX_USD) {
+      return reply.code(400).send({
+        error: `Withdrawal exceeds the per-transaction limit of $${MAX_WITHDRAW_PER_TX_USD}.`
+      });
+    }
+
+    // Daily cap: sum non-failed withdrawals in the last 24h (USD).
+    if (usdPrice > 0) {
+      const since = Date.now() - 24 * 60 * 60 * 1000;
+      const recent = await db.select().from(withdrawals)
+        .where(and(eq(withdrawals.user_id, user.sub)));
+      let dayUsd = 0;
+      for (const r of recent) {
+        if ((r.requested_at ?? 0) < since) continue;
+        if (r.status === "failed" || r.status === "rejected") continue;
+        const t = findToken(r.chain as any, r.symbol);
+        if (!t) continue;
+        const p = priceUsd(r.symbol as any) ?? 0;
+        dayUsd += (Number(BigInt(r.amount_raw)) / 10 ** t.decimals) * p;
+      }
+      if (dayUsd + usdValue > MAX_WITHDRAW_DAILY_USD) {
+        return reply.code(400).send({
+          error: `This would exceed your 24h withdrawal limit of $${MAX_WITHDRAW_DAILY_USD}.`
+        });
+      }
     }
 
     const wId = ulid();
@@ -280,7 +325,8 @@ export async function walletRoutes(app: FastifyInstance) {
       amount_raw: amountRaw,
       dest_address: destAddress,
       status: "pending_otp",
-      otp_session_id: otpSessionId
+      otp_session_id: otpSessionId,
+      requested_at: Date.now()
     });
 
     return reply.send({ withdrawalId: wId, otpSessionId });
@@ -363,10 +409,48 @@ export async function walletRoutes(app: FastifyInstance) {
 
     if (!success) return reply.code(400).send({ error: "Insufficient balance" });
 
-    // Fake signing for J1, real KMS implementation would go here (or async queue).
-    await db.update(withdrawals).set({ status: "pending", signed_at: Date.now(), broadcast_at: Date.now(), tx_hash: "0xMockHash" }).where(eq(withdrawals.id, w.id));
+    // Balance is debited and the row is in "signing". Pay out from the company
+    // treasury wallet. On any broadcast failure, REFUND the ledger so the user
+    // never loses funds to a failed send.
+    await db.update(withdrawals).set({ signed_at: Date.now() }).where(eq(withdrawals.id, w.id));
+    let txHash: string;
+    try {
+      txHash = await sendWithdrawal({
+        chain: w.chain,
+        symbol: w.symbol,
+        amountRaw: w.amount_raw,
+        destAddress: w.dest_address
+      });
+    } catch (e) {
+      app.log.error({ err: e, withdrawalId: w.id }, "withdrawal broadcast failed — refunding");
+      // Refund: re-credit the debited balance + reversing ledger entry.
+      await db.transaction(async (tx) => {
+        const balRow = await tx.select().from(ledgerBalances)
+          .where(and(eq(ledgerBalances.user_id, user.sub), eq(ledgerBalances.chain, w.chain), eq(ledgerBalances.symbol, w.symbol)))
+          .limit(1);
+        const cur = balRow.length ? BigInt(balRow[0]!.raw) : 0n;
+        await tx.update(ledgerBalances).set({ raw: (cur + BigInt(w.amount_raw)).toString(), updated_at: Date.now() })
+          .where(and(eq(ledgerBalances.user_id, user.sub), eq(ledgerBalances.chain, w.chain), eq(ledgerBalances.symbol, w.symbol)));
+        await tx.insert(ledgerEntries).values({
+          id: ulid(),
+          user_id: user.sub,
+          chain: w.chain,
+          symbol: w.symbol,
+          delta_raw: "+" + w.amount_raw,
+          kind: "withdrawal_refund",
+          ref_id: w.id
+        });
+        await tx.update(withdrawals).set({ status: "failed" }).where(eq(withdrawals.id, w.id));
+      });
+      return reply.code(502).send({
+        error: "Withdrawal could not be broadcast; your balance was refunded.",
+        detail: (e as Error).message
+      });
+    }
 
-    return reply.send({ ok: true, status: "pending", txHash: "0xMockHash" });
+    await db.update(withdrawals).set({ status: "broadcast", broadcast_at: Date.now(), tx_hash: txHash }).where(eq(withdrawals.id, w.id));
+
+    return reply.send({ ok: true, status: "broadcast", txHash });
   });
 
   // GET /wallet/history
