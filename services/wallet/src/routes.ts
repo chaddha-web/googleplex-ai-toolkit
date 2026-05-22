@@ -16,7 +16,8 @@ import {
   ASSET_INSTANCES,
   LOGICAL_ASSETS,
   aggregate,
-  type LogicalAsset
+  type LogicalAsset,
+  type PerChainRawBalances
 } from "./assets.js";
 import { deriveUserAddresses } from "./hd.js";
 import { TOKENS, findToken } from "./tokens.js";
@@ -676,6 +677,44 @@ export async function walletRoutes(app: FastifyInstance) {
   app.get("/wallet/admin/users", async (req: any, reply) => {
     if (!await requireRole(req, reply, "admin")) return;
     return reply.code(501).send({ error: "Not implemented" });
+  });
+
+  // GET /wallet/admin/balances — usable (ledger DB) USD totals per user. Cheap
+  // (no RPC). Returns { [userId]: usableUsd }.
+  app.get("/wallet/admin/balances", async (req: any, reply) => {
+    if (!(await requireRole(req, reply, "admin"))) return;
+    const rows = await db.select().from(ledgerBalances);
+    const byUser = new Map<string, PerChainRawBalances>();
+    for (const b of rows) {
+      let m = byUser.get(b.user_id);
+      if (!m) {
+        m = { eth: {}, bsc: {}, tron: {}, btc: {} };
+        byUser.set(b.user_id, m);
+      }
+      if (b.chain in m) (m as any)[b.chain][b.symbol] = b.raw;
+    }
+    const out: Record<string, number> = {};
+    for (const [uid, raw] of byUser) {
+      out[uid] = aggregate(raw).reduce((s, a) => s + (a.usd ?? 0), 0);
+    }
+    return reply.send(out);
+  });
+
+  // GET /wallet/admin/user/:id/onchain — ACTUAL on-chain USD for one user
+  // (live reconcile via RPC). On-demand only — too costly for the whole list.
+  app.get("/wallet/admin/user/:id/onchain", async (req: any, reply) => {
+    if (!(await requireRole(req, reply, "admin"))) return;
+    const { id } = req.params;
+    const addrs = await db
+      .select()
+      .from(userWalletAddresses)
+      .where(eq(userWalletAddresses.user_id, id))
+      .limit(1);
+    if (addrs.length === 0) return reply.send({ actualUsd: 0, note: "no wallet" });
+    const a = addrs[0]!;
+    const snap = await reconcile({ eth: a.eth, bsc: a.bsc, tron: a.tron, btc: a.btc });
+    const actualUsd = snap.byLogicalAsset.reduce((s, x) => s + (x.usd ?? 0), 0);
+    return reply.send({ actualUsd });
   });
 
   app.get("/wallet/admin/withdrawals", async (req: any, reply) => {

@@ -4,7 +4,24 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-context";
-import { listAllUsers, type AdminUserRow } from "@/lib/auth-client";
+import {
+  listAllUsers,
+  adminWalletBalances,
+  adminUserOnchain,
+  type AdminUserRow
+} from "@/lib/auth-client";
+
+function tierOf(u: AdminUserRow & { tokensMinted?: number }): {
+  label: string;
+  cls: string;
+} {
+  if ((u.tokensMinted ?? 0) > 0) return { label: "Built", cls: "bg-emerald-400 text-black" };
+  if (u.walletStatus === "active") return { label: "Activated", cls: "bg-white text-black" };
+  return { label: "New", cls: "bg-white/10 text-white/70" };
+}
+
+const usd = (n: number) =>
+  `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function AdminHome() {
   const { user, signOut } = useAuth();
@@ -13,6 +30,9 @@ export default function AdminHome() {
   const [total, setTotal] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // userId → usable (ledger) USD; userId → actual (on-chain) USD on demand.
+  const [usable, setUsable] = useState<Record<string, number>>({});
+  const [actual, setActual] = useState<Record<string, number | "loading">>({});
 
   // Role guard — non-admins get bounced to the user dashboard.
   useEffect(() => {
@@ -31,10 +51,26 @@ export default function AdminHome() {
       const r = await listAllUsers();
       setUsers(r.users);
       setTotal(r.total);
+      // Usable (ledger) balances are cheap — fetch in bulk.
+      adminWalletBalances().then(setUsable).catch(() => {});
     } catch (e) {
       setError((e as Error).message || "Could not load users.");
     } finally {
       setRefreshing(false);
+    }
+  }
+
+  async function loadActual(id: string) {
+    setActual((m) => ({ ...m, [id]: "loading" }));
+    try {
+      const v = await adminUserOnchain(id);
+      setActual((m) => ({ ...m, [id]: v }));
+    } catch {
+      setActual((m) => {
+        const n = { ...m };
+        delete n[id];
+        return n;
+      });
     }
   }
 
@@ -114,6 +150,9 @@ export default function AdminHome() {
                   <Th>Name</Th>
                   <Th>Email</Th>
                   <Th>Role</Th>
+                  <Th>Tier</Th>
+                  <Th>Usable</Th>
+                  <Th>Actual</Th>
                   <Th>Country</Th>
                   <Th>Age</Th>
                   <Th>Tokens</Th>
@@ -125,13 +164,13 @@ export default function AdminHome() {
               <tbody>
                 {users === null ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-12 text-center text-white/40">
+                    <td colSpan={13} className="px-4 py-12 text-center text-white/40">
                       Loading users…
                     </td>
                   </tr>
                 ) : users.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-12 text-center text-white/40">
+                    <td colSpan={13} className="px-4 py-12 text-center text-white/40">
                       No users registered yet.
                     </td>
                   </tr>
@@ -156,6 +195,38 @@ export default function AdminHome() {
                         >
                           {u.role}
                         </span>
+                      </Td>
+                      <Td>
+                        {(() => {
+                          const t = tierOf(u);
+                          return (
+                            <span className={`text-[10px] tracking-[0.15em] uppercase px-2 py-1 rounded-full ${t.cls}`}>
+                              {t.label}
+                            </span>
+                          );
+                        })()}
+                      </Td>
+                      <Td>
+                        <span className="font-mono text-xs text-white/80">
+                          {usable[u.id] != null ? usd(usable[u.id]!) : "—"}
+                        </span>
+                      </Td>
+                      <Td>
+                        {actual[u.id] === "loading" ? (
+                          <span className="text-white/40 text-xs">…</span>
+                        ) : typeof actual[u.id] === "number" ? (
+                          <span className="font-mono text-xs text-white/80">
+                            {usd(actual[u.id] as number)}
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => loadActual(u.id)}
+                            className="text-[10px] text-white/50 hover:text-white underline decoration-dotted"
+                          >
+                            check
+                          </button>
+                        )}
                       </Td>
                       <Td>{u.country ?? "—"}</Td>
                       <Td>{u.age ?? "—"}</Td>

@@ -348,6 +348,25 @@ export async function setAdminSetting(key: string, value: string): Promise<void>
   if (!res.ok) throw new Error(data.error || "Could not save setting.");
 }
 
+const WALLET_BASE = (
+  process.env.NEXT_PUBLIC_WALLET_BASE || "http://localhost:4201"
+).replace(/\/$/, "");
+
+/** Admin: usable (ledger DB) USD totals per user id. */
+export async function adminWalletBalances(): Promise<Record<string, number>> {
+  const res = await authedFetch(`${WALLET_BASE}/wallet/admin/balances`);
+  if (!res.ok) return {};
+  return (await res.json().catch(() => ({}))) as Record<string, number>;
+}
+
+/** Admin: live on-chain (actual) USD for one user (RPC, on-demand). */
+export async function adminUserOnchain(userId: string): Promise<number> {
+  const res = await authedFetch(`${WALLET_BASE}/wallet/admin/user/${userId}/onchain`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not read on-chain balance.");
+  return Number(data.actualUsd ?? 0);
+}
+
 export async function promoteAdmin(code11: string): Promise<string> {
   const res = await authedFetch(`${AUTH_BASE}/auth/admin/promote`, {
     method: "POST",
