@@ -6,6 +6,7 @@ import { otpRoutes } from "./routes/otp.js";
 import { authRoutes } from "./routes/auth.js";
 import { walletRoutes } from "./routes/wallet.js";
 import { settingsRoutes } from "./routes/settings.js";
+import { communityRoutes } from "./routes/community.js";
 import { notify } from "./notify.js";
 import { startTelegramBot } from "./telegram-bot.js";
 
@@ -67,6 +68,7 @@ await app.register(otpRoutes);
 await app.register(authRoutes);
 await app.register(walletRoutes);
 await app.register(settingsRoutes);
+await app.register(communityRoutes);
 
 // Interactive Telegram command bot (/usage, /count, /paid, /stats).
 startTelegramBot();

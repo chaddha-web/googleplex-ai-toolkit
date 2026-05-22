@@ -87,7 +87,63 @@ db.exec(`
     is_secret  INTEGER NOT NULL DEFAULT 0,
     updated_at INTEGER NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS community_proposals (
+    id          TEXT PRIMARY KEY,
+    title       TEXT NOT NULL,
+    description TEXT,
+    status      TEXT,
+    created_at  INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS community_votes (
+    proposal_id TEXT NOT NULL,
+    user_id     TEXT NOT NULL,
+    direction   TEXT NOT NULL,
+    created_at  INTEGER NOT NULL,
+    PRIMARY KEY (proposal_id, user_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS community_reactions (
+    proposal_id TEXT NOT NULL,
+    user_id     TEXT NOT NULL,
+    kind        TEXT NOT NULL,
+    created_at  INTEGER NOT NULL,
+    PRIMARY KEY (proposal_id, user_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS community_comments (
+    id          TEXT PRIMARY KEY,
+    proposal_id TEXT NOT NULL,
+    user_id     TEXT NOT NULL,
+    author      TEXT,
+    body        TEXT NOT NULL,
+    created_at  INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_ccomments_prop ON community_comments (proposal_id);
+
+  CREATE INDEX IF NOT EXISTS idx_cvotes_prop ON community_votes (proposal_id);
+  CREATE INDEX IF NOT EXISTS idx_creactions_prop ON community_reactions (proposal_id);
 `);
+
+// Seed a few starter proposals once.
+try {
+  const n = (db.prepare(`SELECT COUNT(*) c FROM community_proposals`).get() as { c: number }).c;
+  if (n === 0) {
+    const seed = db.prepare(
+      `INSERT INTO community_proposals (id, title, description, status, created_at) VALUES (@id,@title,@description,@status,@created_at)`
+    );
+    const now = Date.now();
+    const rows = [
+      { id: "p-treasury-usdc", title: "Treasury: diversify 50k USDT → USDC", description: "Reduce single-issuer risk by splitting stablecoin reserves.", status: "open", created_at: now },
+      { id: "p-hosting-cap", title: "Cap Q3 hosting subsidy at $12k/mo", description: "Keep platform infrastructure costs predictable for the quarter.", status: "open", created_at: now - 1 },
+      { id: "p-grants", title: "Open a community builder grants round", description: "Fund 5 member-led projects from the community pool.", status: "open", created_at: now - 2 }
+    ];
+    for (const r of rows) seed.run(r);
+  }
+} catch {
+  /* ignore seed errors */
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Types — kept colocated so the rest of the service only depends on this file.
