@@ -6,6 +6,7 @@ import { otpRoutes } from "./routes/otp.js";
 import { authRoutes } from "./routes/auth.js";
 import { walletRoutes } from "./routes/wallet.js";
 import { notify } from "./notify.js";
+import { startTelegramBot } from "./telegram-bot.js";
 
 const PORT = Number(process.env.PORT ?? 4200);
 const ORIGINS = (process.env.CORS_ORIGINS ?? "http://localhost:3000,http://localhost:3001,http://localhost:3010")
@@ -64,6 +65,9 @@ app.get("/health", async () => ({ ok: true, name: "@googolplex/auth", ts: Date.n
 await app.register(otpRoutes);
 await app.register(authRoutes);
 await app.register(walletRoutes);
+
+// Interactive Telegram command bot (/usage, /count, /paid, /stats).
+startTelegramBot();
 
 try {
   await app.listen({ port: PORT, host: "0.0.0.0" });
