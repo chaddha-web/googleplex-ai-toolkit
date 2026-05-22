@@ -209,28 +209,8 @@ export default function WalletPage() {
             )}
           </section>
 
-          {/* Deposit addresses */}
-          <section className="mt-12">
-            <p className="text-white/40 text-xs tracking-[0.3em] uppercase mb-3">
-              Deposit addresses
-            </p>
-            {addrs === null ? (
-              <p className="text-white/40 text-sm">Loading…</p>
-            ) : !addrs.eth && !addrs.bsc && !addrs.tron && !addrs.btc ? (
-              <p className="text-white/40 text-sm">
-                Addresses not yet allocated. Finish wallet setup from onboarding
-                to provision.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {(["tron", "eth", "bsc", "btc"] as const).map((k) =>
-                  addrs[k] ? (
-                    <AddressRow key={k} chain={CHAIN_LABEL[k]} address={addrs[k]!} />
-                  ) : null
-                )}
-              </div>
-            )}
-          </section>
+          {/* Deposit — asset first, then network */}
+          <DepositSection addrs={addrs} />
         </>
       )}
 
@@ -503,6 +483,103 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 /* ─────────────────────────── Deposit address row ──────────────────────── */
+
+/* ─────────────────────────── Deposit (asset → network) ────────────────── */
+
+type DepositAsset = {
+  sym: string;
+  chains: { label: string; key: Chain }[];
+};
+
+// Which networks each asset can be received on (maps to the user's per-chain
+// address). USDT/USDC are multi-chain; natives + PARTY are single-chain.
+const DEPOSIT_ASSETS: DepositAsset[] = [
+  {
+    sym: "USDT",
+    chains: [
+      { label: "Ethereum · ERC20", key: "eth" },
+      { label: "BNB Chain · BEP20", key: "bsc" },
+      { label: "Tron · TRC20", key: "tron" }
+    ]
+  },
+  {
+    sym: "USDC",
+    chains: [
+      { label: "Ethereum · ERC20", key: "eth" },
+      { label: "BNB Chain · BEP20", key: "bsc" },
+      { label: "Tron · TRC20", key: "tron" }
+    ]
+  },
+  { sym: "ETH", chains: [{ label: "Ethereum", key: "eth" }] },
+  { sym: "BNB", chains: [{ label: "BNB Chain", key: "bsc" }] },
+  { sym: "TRX", chains: [{ label: "Tron", key: "tron" }] },
+  { sym: "BTC", chains: [{ label: "Bitcoin", key: "btc" }] },
+  { sym: "PARTY", chains: [{ label: "Tron · TRC20", key: "tron" }] }
+];
+
+function DepositSection({ addrs }: { addrs: ChainAddrs | null }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const ready = addrs && (addrs.eth || addrs.bsc || addrs.tron || addrs.btc);
+
+  return (
+    <section className="mt-12">
+      <p className="text-white/40 text-xs tracking-[0.3em] uppercase mb-1">Deposit</p>
+      <p className="text-white/40 text-sm mb-4">
+        Pick a coin, then the network you&apos;re sending on.
+      </p>
+
+      {addrs === null ? (
+        <p className="text-white/40 text-sm">Loading…</p>
+      ) : !ready ? (
+        <p className="text-white/40 text-sm">
+          Addresses not yet allocated — finish wallet setup to provision them.
+        </p>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
+            {DEPOSIT_ASSETS.map((a) => {
+              const active = open === a.sym;
+              return (
+                <button
+                  key={a.sym}
+                  type="button"
+                  onClick={() => setOpen(active ? null : a.sym)}
+                  className={`rounded-2xl px-3 py-3 text-sm font-medium transition-colors ${
+                    active
+                      ? "bg-white text-black"
+                      : "liquid-glass text-white hover:bg-white/5"
+                  }`}
+                >
+                  {a.sym}
+                </button>
+              );
+            })}
+          </div>
+
+          {open && (
+            <div className="mt-4 space-y-2">
+              {DEPOSIT_ASSETS.find((a) => a.sym === open)!.chains.map((c) => {
+                const address = addrs[c.key];
+                if (!address) return null;
+                return (
+                  <AddressRow
+                    key={c.key}
+                    chain={`${open} · ${c.label}`}
+                    address={address}
+                  />
+                );
+              })}
+              <p className="text-white/30 text-xs mt-2">
+                Only send <span className="text-white/60">{open}</span> on the
+                selected network. Sending the wrong asset or network can lose funds.
+              </p>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
 
 function AddressRow({ chain, address }: { chain: string; address: string }) {
   const [copied, setCopied] = useState(false);

@@ -5,8 +5,6 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-context";
 import { authedFetch, type WalletStatus } from "@/lib/auth-client";
 
-const LANDING_URL =
-  process.env.NEXT_PUBLIC_LANDING_URL || "http://localhost:3010";
 const WALLET_BASE =
   process.env.NEXT_PUBLIC_WALLET_BASE || "http://localhost:4201";
 
@@ -213,10 +211,8 @@ function Card({
 function WalletBanner({ status }: { status?: WalletStatus }) {
   if (!status || status === "active" || status === "locked") return null;
   const isPasswordPending = status === "pending_password";
-  // Wallet onboarding lives on landing. Deep-link back there.
-  const href = isPasswordPending
-    ? `${LANDING_URL}/app/setup/wallet`
-    : `${LANDING_URL}/app/setup/deposit`;
+  // Wallet onboarding is same-origin (in this app) so the session carries over.
+  const href = isPasswordPending ? "/setup/password" : "/setup/deposit";
   const label = isPasswordPending
     ? "Finish wallet setup"
     : "Complete your $1 activation deposit";

@@ -6,6 +6,10 @@ import { authedFetch } from "@/lib/auth-client";
 
 const GOV_BASE =
   process.env.NEXT_PUBLIC_GOV_BASE || "http://localhost:4202";
+const AUTH_BASE =
+  process.env.NEXT_PUBLIC_AUTH_BASE || "http://localhost:4200";
+const WALLET_BASE =
+  process.env.NEXT_PUBLIC_WALLET_BASE || "http://localhost:4201";
 
 type Proposal = {
   id: string;
@@ -30,6 +34,28 @@ export default function CommunityPage() {
   const [proposals, setProposals] = useState<Proposal[] | null>(null);
   const [usingSeed, setUsingSeed] = useState(false);
   const [voting, setVoting] = useState<string | null>(null);
+  // PARTY-gated voting: members must hold >= the admin-set threshold.
+  const [minParty, setMinParty] = useState(0);
+  const [partyBal, setPartyBal] = useState<number | null>(null);
+
+  // Voting requirement: active wallet + enough PARTY.
+  const meetsParty = minParty <= 0 || (partyBal ?? 0) >= minParty;
+  const canVote = walletActive && meetsParty;
+
+  useEffect(() => {
+    // Threshold (public) + the member's PARTY balance (authed).
+    fetch(`${AUTH_BASE}/auth/public-config`)
+      .then((r) => r.json())
+      .then((d) => setMinParty(Number(d.communityVoteMinParty) || 0))
+      .catch(() => {});
+    authedFetch(`${WALLET_BASE}/wallet/balances`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((assets: Array<{ asset: string; total: number }>) => {
+        const party = (Array.isArray(assets) ? assets : []).find((a) => a.asset === "PARTY");
+        setPartyBal(party?.total ?? 0);
+      })
+      .catch(() => setPartyBal(0));
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -64,7 +90,7 @@ export default function CommunityPage() {
   }, [load]);
 
   async function vote(id: string, direction: "yes" | "no") {
-    if (!walletActive || usingSeed) return;
+    if (!canVote || usingSeed) return;
     setVoting(id);
     try {
       const res = await authedFetch(`${GOV_BASE}/governance/proposals/${id}/vote`, {
@@ -97,18 +123,26 @@ export default function CommunityPage() {
         The <em className="font-serif-i text-white/60">circle</em>.
       </h1>
       <p className="text-white/70 text-base md:text-lg leading-relaxed mt-6 max-w-2xl">
-        Browse proposals and shape the platform. Casting a vote requires an
-        active wallet.
+        Browse proposals and shape the platform. Voting requires an active
+        wallet{minParty > 0 ? ` and at least ${minParty.toLocaleString()} PARTY` : ""}.
       </p>
 
-      {!walletActive && (
+      {!walletActive ? (
         <div className="mt-10 liquid-glass rounded-2xl p-4 ring-1 ring-amber-300/20">
           <p className="text-white/80 text-sm">
             <span className="text-amber-200 font-medium">Read-only mode.</span>{" "}
             Activate your wallet to cast votes.
           </p>
         </div>
-      )}
+      ) : !meetsParty ? (
+        <div className="mt-10 liquid-glass rounded-2xl p-4 ring-1 ring-amber-300/20">
+          <p className="text-white/80 text-sm">
+            <span className="text-amber-200 font-medium">Voting locked.</span> You
+            hold {(partyBal ?? 0).toLocaleString()} PARTY — {minParty.toLocaleString()} is
+            required to vote. Earn or acquire more PARTY to participate.
+          </p>
+        </div>
+      ) : null}
 
       <section className="mt-12 space-y-3">
         {proposals === null ? (
@@ -152,7 +186,7 @@ export default function CommunityPage() {
                 <div className="mt-4 flex items-center gap-2">
                   <button
                     type="button"
-                    disabled={!walletActive || usingSeed || voting === p.id}
+                    disabled={!canVote || usingSeed || voting === p.id}
                     onClick={() => vote(p.id, "yes")}
                     className="text-xs px-4 py-2 rounded-full bg-emerald-400 text-black font-medium hover:bg-emerald-300 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                   >
@@ -160,7 +194,7 @@ export default function CommunityPage() {
                   </button>
                   <button
                     type="button"
-                    disabled={!walletActive || usingSeed || voting === p.id}
+                    disabled={!canVote || usingSeed || voting === p.id}
                     onClick={() => vote(p.id, "no")}
                     className="text-xs px-4 py-2 rounded-full ring-1 ring-white/15 text-white/80 hover:bg-white/5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                   >

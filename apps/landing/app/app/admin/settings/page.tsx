@@ -139,6 +139,20 @@ export default function AdminSettings() {
               ))}
             </Section>
 
+            {/* ── Community ─────────────────────────────────────── */}
+            <Section
+              title="Community"
+              subtitle="Governance voting requirements"
+            >
+              <Row label="Min PARTY to vote">
+                <TextSetting
+                  k="community.vote_min_party"
+                  placeholder="e.g. 1000000"
+                  initial={(settings["community.vote_min_party"] as string) || ""}
+                />
+              </Row>
+            </Section>
+
             {/* ── Promote admin (founder only) ──────────────────── */}
             {isFounder && <PromoteAdmin />}
             {!isFounder && (

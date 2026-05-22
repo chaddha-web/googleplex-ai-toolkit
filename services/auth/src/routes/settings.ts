@@ -26,7 +26,9 @@ const NONSECRET_KEYS = new Set([
   "wallet.eth.address",
   "wallet.bsc.address",
   "wallet.tron.address",
-  "wallet.btc.address"
+  "wallet.btc.address",
+  // Min PARTY tokens a member must hold to cast community votes.
+  "community.vote_min_party"
 ]);
 const SECRET_KEYS = new Set([
   "ai.key.anthropic",
@@ -157,6 +159,13 @@ export async function settingsRoutes(app: FastifyInstance) {
     stmts.user.promoteByCode.run({ code11, updated_at: Date.now() });
     notify(`👑 <b>New admin</b>\n${target.email}\nID: <code>${code11}</code> (by ${me.email})`);
     return reply.send({ ok: true, email: target.email });
+  });
+
+  // ── Public: non-sensitive client config (no auth) ──────────────────────
+  app.get("/auth/public-config", async (_req, reply) => {
+    return reply.send({
+      communityVoteMinParty: Number(readValue("community.vote_min_party") ?? 0) || 0
+    });
   });
 
   // ── Internal: AI config (decrypted) for the landing assistant ──────────
