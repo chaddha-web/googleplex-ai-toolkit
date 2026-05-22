@@ -9,6 +9,7 @@
  */
 
 import os from "node:os";
+import { statfsSync } from "node:fs";
 import { db } from "./db.js";
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -36,6 +37,20 @@ function gb(bytes: number): string {
   return (bytes / 1024 ** 3).toFixed(1);
 }
 
+/** Disk usage line for the filesystem holding the app/data. */
+function diskLine(): string {
+  try {
+    const s = statfsSync("/");
+    const total = s.blocks * s.bsize;
+    const free = s.bavail * s.bsize;
+    const used = total - free;
+    const pct = total > 0 ? ((used / total) * 100).toFixed(0) : "0";
+    return `💾 Disk: ${gb(used)} / ${gb(total)} GB (${pct}%)`;
+  } catch {
+    return "💾 Disk: n/a";
+  }
+}
+
 /** 🖥 Server uptime + resource usage (real host values via /proc). */
 function usageText(): string {
   const load = os.loadavg().map((n) => n.toFixed(2)).join(" ");
@@ -47,6 +62,7 @@ function usageText(): string {
     `⏱ Uptime: ${fmtUptime(os.uptime())}\n` +
     `📈 Load (1/5/15m): ${load}\n` +
     `🧠 Mem: ${memUsed} / ${memTotal} GB (${memPct}%)\n` +
+    `${diskLine()}\n` +
     `🧩 CPUs: ${os.cpus().length}`
   );
 }
