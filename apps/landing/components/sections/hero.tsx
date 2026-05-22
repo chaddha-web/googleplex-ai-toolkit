@@ -128,8 +128,8 @@ export function Hero() {
         </h1>
 
         <p className="mt-6 text-white text-sm leading-relaxed px-4 max-w-xl">
-          Stay updated with the latest news and insights. Subscribe to our
-          newsletter today and never miss out on exciting updates.
+          Redefine connectivity with the Googolplex ecosystem. It&rsquo;s never
+          too late to begin a new journey where community is everything.
         </p>
 
         <HeroEmailForm />
