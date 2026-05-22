@@ -150,17 +150,17 @@ export function Hero() {
         </div>
 
         <div className="flex md:justify-end justify-center gap-4">
-          {/* Camera — placeholder, tooltip on hover */}
+          {/* Camera — the film */}
           <div className="relative group">
-            <button
-              type="button"
-              aria-label="Capture module — coming soon"
-              className="liquid-glass rounded-full p-4 text-white/50 hover:text-white/80 hover:bg-white/5 transition-all cursor-default"
+            <Link
+              href="/video"
+              aria-label="Watch the GoogolPlex film"
+              className="liquid-glass rounded-full p-4 text-white/80 hover:text-white hover:bg-white/5 transition-all inline-flex"
             >
               <Camera size={20} strokeWidth={1.6} />
-            </button>
+            </Link>
             <span className="pointer-events-none absolute bottom-full mb-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-black/80 px-3 py-1 text-[11px] text-white/80 opacity-0 group-hover:opacity-100 transition-opacity">
-              Coming soon
+              The film
             </span>
           </div>
 
