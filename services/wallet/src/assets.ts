@@ -13,6 +13,10 @@
  */
 
 import { TOKENS, type Chain, type Token } from "./tokens.js";
+// prices.ts only imports our *type* (erased at runtime), so this is not a
+// real runtime cycle — a top-level import is safe (and `require` is undefined
+// in ESM, which previously 500'd /wallet/balances).
+import { priceUsd } from "./prices.js";
 
 export type LogicalAsset =
   | "ETH"
@@ -88,9 +92,6 @@ export function aggregate(raw: PerChainRawBalances): AssetBreakdown[] {
       });
     }
 
-    // Late import to avoid a hard cycle; prices.ts imports our LogicalAsset.
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { priceUsd } = require("./prices.js");
     const p = priceUsd(asset) as number | null;
 
     out.push({

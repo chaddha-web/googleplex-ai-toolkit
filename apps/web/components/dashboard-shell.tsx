@@ -71,7 +71,7 @@ function Sidebar({ pathname }: { pathname: string }) {
     <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-white/5 bg-black/40 backdrop-blur-sm">
       <Link href="/" className="flex items-center gap-2 px-6 py-6 text-white">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/icon.png" alt="GoogolPlex" className="h-7 w-auto object-contain" />
+        <img src="/logo.png" alt="GoogolPlex" className="h-7 w-auto object-contain" />
         <span className="text-lg font-medium tracking-tight">GoogolPlex</span>
       </Link>
       <nav className="px-3 mt-2 flex-1">
