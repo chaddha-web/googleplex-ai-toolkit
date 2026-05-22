@@ -118,9 +118,17 @@ db.exec(`
     user_id     TEXT NOT NULL,
     author      TEXT,
     body        TEXT NOT NULL,
+    parent_id   TEXT,
     created_at  INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_ccomments_prop ON community_comments (proposal_id);
+
+  CREATE TABLE IF NOT EXISTS community_comment_likes (
+    comment_id TEXT NOT NULL,
+    user_id    TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (comment_id, user_id)
+  );
 
   CREATE INDEX IF NOT EXISTS idx_cvotes_prop ON community_votes (proposal_id);
   CREATE INDEX IF NOT EXISTS idx_creactions_prop ON community_reactions (proposal_id);
@@ -201,6 +209,7 @@ try { db.exec(`ALTER TABLE users ADD COLUMN profile_completed_at INTEGER`); } ca
 try { db.exec(`ALTER TABLE users ADD COLUMN tokens_minted INTEGER NOT NULL DEFAULT 0`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN tokens_minted_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN studio_unlocked_at INTEGER`); } catch {}
+try { db.exec(`ALTER TABLE community_comments ADD COLUMN parent_id TEXT`); } catch {}
 
 export type OtpRow = {
   id: string;

@@ -36,12 +36,20 @@ const q = {
   deleteReaction: db.prepare(
     `DELETE FROM community_reactions WHERE proposal_id = ? AND user_id = ?`
   ),
+  // comments with like count + whether the caller liked it (param order: userId, proposalId)
   comments: db.prepare(
-    `SELECT id, author, body, created_at FROM community_comments WHERE proposal_id = ? ORDER BY created_at ASC LIMIT 200`
+    `SELECT c.id, c.author, c.body, c.created_at, c.parent_id AS parentId,
+       (SELECT COUNT(*) FROM community_comment_likes l WHERE l.comment_id = c.id) AS likes,
+       (SELECT COUNT(*) FROM community_comment_likes l WHERE l.comment_id = c.id AND l.user_id = ?) AS myLiked
+     FROM community_comments c WHERE c.proposal_id = ? ORDER BY c.created_at ASC LIMIT 400`
   ),
   insertComment: db.prepare(
-    `INSERT INTO community_comments (id,proposal_id,user_id,author,body,created_at) VALUES (@id,@proposal_id,@user_id,@author,@body,@created_at)`
-  )
+    `INSERT INTO community_comments (id,proposal_id,user_id,author,body,parent_id,created_at) VALUES (@id,@proposal_id,@user_id,@author,@body,@parent_id,@created_at)`
+  ),
+  commentById: db.prepare(`SELECT id, proposal_id FROM community_comments WHERE id = ?`),
+  getCommentLike: db.prepare(`SELECT 1 c FROM community_comment_likes WHERE comment_id = ? AND user_id = ?`),
+  addCommentLike: db.prepare(`INSERT OR IGNORE INTO community_comment_likes (comment_id,user_id,created_at) VALUES (?,?,?)`),
+  delCommentLike: db.prepare(`DELETE FROM community_comment_likes WHERE comment_id = ? AND user_id = ?`)
 };
 
 export async function communityRoutes(app: FastifyInstance) {
@@ -139,16 +147,34 @@ export async function communityRoutes(app: FastifyInstance) {
     return reply.send({ ok: true, myReaction: kind });
   });
 
-  // GET /community/proposals/:id/comments
+  // GET /community/proposals/:id/comments — flat list (with parentId + likes);
+  // the client builds the reply tree.
   app.get("/community/proposals/:id/comments", async (req: any, reply) => {
     const user = await requireUser(req, reply);
     if (!user) return;
     const { id } = req.params;
-    const comments = q.comments.all(id);
+    const rows = q.comments.all(user.id, id) as Array<{
+      id: string;
+      author: string;
+      body: string;
+      created_at: number;
+      parentId: string | null;
+      likes: number;
+      myLiked: number;
+    }>;
+    const comments = rows.map((c) => ({
+      id: c.id,
+      author: c.author,
+      body: c.body,
+      created_at: c.created_at,
+      parentId: c.parentId,
+      likes: c.likes,
+      myLiked: c.myLiked > 0
+    }));
     return reply.send({ comments });
   });
 
-  // POST /community/proposals/:id/comments { body }
+  // POST /community/proposals/:id/comments { body, parentId? }
   app.post("/community/proposals/:id/comments", async (req: any, reply) => {
     const user = await requireUser(req, reply);
     if (!user) return;
@@ -158,6 +184,16 @@ export async function communityRoutes(app: FastifyInstance) {
     if (!text || text.length > 1000) {
       return reply.code(400).send({ error: "Comment must be 1–1000 characters." });
     }
+    // Optional parent (reply). Must belong to the same proposal.
+    let parent_id: string | null = null;
+    const rawParent = (req.body as any)?.parentId;
+    if (typeof rawParent === "string" && rawParent) {
+      const parent = q.commentById.get(rawParent) as { id: string; proposal_id: string } | undefined;
+      if (!parent || parent.proposal_id !== id) {
+        return reply.code(400).send({ error: "Invalid parent comment." });
+      }
+      parent_id = parent.id;
+    }
     const author = `${user.first_name} ${user.last_name}`.trim() || "Member";
     const row = {
       id: crypto.randomUUID(),
@@ -165,12 +201,36 @@ export async function communityRoutes(app: FastifyInstance) {
       user_id: user.id,
       author,
       body: text,
+      parent_id,
       created_at: Date.now()
     };
     q.insertComment.run(row);
     return reply.send({
       ok: true,
-      comment: { id: row.id, author, body: text, created_at: row.created_at }
+      comment: {
+        id: row.id,
+        author,
+        body: text,
+        parentId: parent_id,
+        likes: 0,
+        myLiked: false,
+        created_at: row.created_at
+      }
     });
+  });
+
+  // POST /community/comments/:commentId/like — toggle a like on a comment.
+  app.post("/community/comments/:commentId/like", async (req: any, reply) => {
+    const user = await requireUser(req, reply);
+    if (!user) return;
+    const { commentId } = req.params;
+    if (!q.commentById.get(commentId)) return reply.code(404).send({ error: "No such comment." });
+    const existing = q.getCommentLike.get(commentId, user.id);
+    if (existing) {
+      q.delCommentLike.run(commentId, user.id);
+      return reply.send({ ok: true, liked: false });
+    }
+    q.addCommentLike.run(commentId, user.id, Date.now());
+    return reply.send({ ok: true, liked: true });
   });
 }
