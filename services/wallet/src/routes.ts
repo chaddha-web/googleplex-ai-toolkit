@@ -58,21 +58,28 @@ const BTC_XPUB =
 const TRON_XPUB =
   process.env.TRON_MASTER_XPUB || process.env.TRON_XPUB || "xpub_placeholder";
 
-export async function walletRoutes(app: FastifyInstance) {
+// Provision a user's HD deposit addresses + zero balances if they don't exist
+// yet. Idempotent and single-flighted per user (guards the React StrictMode
+// double-call + any concurrent first access). Derives from the master xpubs.
+const provisioning = new Map<string, Promise<void>>();
+async function ensureUserWallet(userId: string): Promise<void> {
+  const existing = await db
+    .select({ id: userWalletAddresses.user_id })
+    .from(userWalletAddresses)
+    .where(eq(userWalletAddresses.user_id, userId))
+    .limit(1);
+  if (existing.length > 0) return;
 
-  // POST /wallet/users (internal service-to-service)
-  app.post("/wallet/users", async (req: any, reply) => {
-    if (!requireInternal(req, reply)) return;
-    const body = req.body as { userId: string };
-    if (!body?.userId) return reply.code(400).send({ error: "Missing userId" });
+  const inflight = provisioning.get(userId);
+  if (inflight) return inflight;
 
-    // Idempotency: check if exists
-    const existing = await db.select().from(userWalletAddresses).where(eq(userWalletAddresses.user_id, body.userId)).limit(1);
-    if (existing.length > 0) return reply.send({ ok: true });
-
-    // Allocate next userIndex (just count rows for now, though it should be atomic sequence ideally)
-    const allRows = await db.select({ id: userWalletAddresses.user_id }).from(userWalletAddresses);
-    const userIndex = allRows.length + 1; // start from 1
+  const p = (async () => {
+    // Allocate the next derivation index. (Count-based; fine for a single
+    // wallet instance. A dedicated sequence is the long-term fix.)
+    const allRows = await db
+      .select({ id: userWalletAddresses.user_id })
+      .from(userWalletAddresses);
+    const userIndex = allRows.length + 1;
 
     const addrs = deriveUserAddresses({
       userIndex,
@@ -82,27 +89,46 @@ export async function walletRoutes(app: FastifyInstance) {
     });
 
     await db.transaction(async (tx) => {
+      // Re-check inside the tx to avoid a duplicate row on a race.
+      const again = await tx
+        .select({ id: userWalletAddresses.user_id })
+        .from(userWalletAddresses)
+        .where(eq(userWalletAddresses.user_id, userId))
+        .limit(1);
+      if (again.length > 0) return;
+
       await tx.insert(userWalletAddresses).values({
-        user_id: body.userId,
+        user_id: userId,
         user_index: userIndex,
         eth: addrs.eth,
         bsc: addrs.bsc,
         tron: addrs.tron,
-        btc: addrs.btc,
+        btc: addrs.btc
       });
-
-      // Insert zero balances for all ASSET_INSTANCES
       for (const t of TOKENS) {
         await tx.insert(ledgerBalances).values({
-          user_id: body.userId,
+          user_id: userId,
           chain: t.chain,
           symbol: t.symbol,
           raw: "0",
-          decimals: t.decimals,
+          decimals: t.decimals
         });
       }
     });
+  })().finally(() => provisioning.delete(userId));
 
+  provisioning.set(userId, p);
+  return p;
+}
+
+export async function walletRoutes(app: FastifyInstance) {
+
+  // POST /wallet/users (internal service-to-service)
+  app.post("/wallet/users", async (req: any, reply) => {
+    if (!requireInternal(req, reply)) return;
+    const body = req.body as { userId: string };
+    if (!body?.userId) return reply.code(400).send({ error: "Missing userId" });
+    await ensureUserWallet(body.userId);
     return reply.send({ ok: true });
   });
 
@@ -110,6 +136,9 @@ export async function walletRoutes(app: FastifyInstance) {
   app.get("/wallet/addresses", async (req: any, reply) => {
     if (!(await requireAuth(req, reply))) return;
     const user = req.user!;
+
+    // Auto-provision on first access — no separate signup hook needed.
+    await ensureUserWallet(user.sub);
 
     const addrs = await db.select().from(userWalletAddresses).where(eq(userWalletAddresses.user_id, user.sub)).limit(1);
     if (addrs.length === 0) return reply.code(404).send({ error: "No addresses found" });
@@ -127,6 +156,7 @@ export async function walletRoutes(app: FastifyInstance) {
     if (!(await requireAuth(req, reply))) return;
     const user = req.user!;
 
+    await ensureUserWallet(user.sub);
     const balances = await db.select().from(ledgerBalances).where(eq(ledgerBalances.user_id, user.sub));
     
     const rawBalances = {
@@ -151,6 +181,7 @@ export async function walletRoutes(app: FastifyInstance) {
     if (!(await requireAuth(req, reply))) return;
     const user = req.user!;
 
+    await ensureUserWallet(user.sub);
     const addrs = await db.select().from(userWalletAddresses).where(eq(userWalletAddresses.user_id, user.sub)).limit(1);
     if (addrs.length === 0) return reply.code(404).send({ error: "No addresses found" });
 
