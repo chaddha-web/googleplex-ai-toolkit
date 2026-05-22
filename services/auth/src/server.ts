@@ -5,6 +5,7 @@ import rateLimit from "@fastify/rate-limit";
 import { otpRoutes } from "./routes/otp.js";
 import { authRoutes } from "./routes/auth.js";
 import { walletRoutes } from "./routes/wallet.js";
+import { notify } from "./notify.js";
 
 const PORT = Number(process.env.PORT ?? 4200);
 const ORIGINS = (process.env.CORS_ORIGINS ?? "http://localhost:3000,http://localhost:3001,http://localhost:3010")
@@ -36,6 +37,7 @@ app.setErrorHandler((err, req, reply) => {
   const status = err.statusCode ?? 500;
   if (status >= 500) {
     req.log.error({ err }, "unhandled error");
+    notify(`❌ <b>Auth 5xx</b>\n${req.method} ${req.url}\n${err.message}`);
     return reply.code(500).send({ error: "Internal server error." });
   }
   return reply.code(status).send({ error: err.message || "Request failed." });

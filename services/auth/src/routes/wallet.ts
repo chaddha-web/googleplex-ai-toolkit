@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { stmts } from "../db.js";
 import { verifyAccessToken } from "../jwt.js";
+import { notify } from "../notify.js";
 import * as argon2 from "@node-rs/argon2";
 
 const INTERNAL_TOKEN = process.env.INTERNAL_SERVICE_TOKEN;
@@ -149,6 +150,14 @@ export async function walletRoutes(app: FastifyInstance) {
       initial_deposit_completed_at: completedAt,
       updated_at: now
     });
+
+    // Notify when a wallet just became active (the $1 activation cleared).
+    if (nextStatus === "active" && user.wallet_status !== "active") {
+      notify(
+        `✅ <b>Wallet activated</b>\n${user.email}\n` +
+          `ID: <code>${user.code11}</code> · credited $${Number(creditedUsd).toFixed(2)}`
+      );
+    }
 
     return reply.send({ ok: true, walletStatus: nextStatus });
   });

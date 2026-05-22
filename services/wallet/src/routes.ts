@@ -22,6 +22,7 @@ import { deriveUserAddresses } from "./hd.js";
 import { TOKENS, findToken } from "./tokens.js";
 import { priceUsd, coinAmountForUsd } from "./prices.js";
 import { sendWithdrawal, isValidDestination } from "./withdraw.js";
+import { notify } from "./notify.js";
 
 // Withdrawal safety caps (USD). Fully-automatic model still bounds blast radius.
 const MAX_WITHDRAW_PER_TX_USD = Number(process.env.MAX_WITHDRAW_PER_TX_USD ?? 1000);
@@ -450,6 +451,10 @@ export async function walletRoutes(app: FastifyInstance) {
         });
         await tx.update(withdrawals).set({ status: "failed" }).where(eq(withdrawals.id, w.id));
       });
+      notify(
+        `⚠️ <b>Withdrawal FAILED — refunded</b>\n${w.symbol} on ${w.chain}\n` +
+          `to <code>${w.dest_address}</code>\n${(e as Error).message}`
+      );
       return reply.code(502).send({
         error: "Withdrawal could not be broadcast; your balance was refunded.",
         detail: (e as Error).message
@@ -457,6 +462,11 @@ export async function walletRoutes(app: FastifyInstance) {
     }
 
     await db.update(withdrawals).set({ status: "broadcast", broadcast_at: Date.now(), tx_hash: txHash }).where(eq(withdrawals.id, w.id));
+
+    notify(
+      `💸 <b>Withdrawal sent</b>\n${w.symbol} on ${w.chain}\n` +
+        `to <code>${w.dest_address}</code>\ntx: <code>${txHash}</code>`
+    );
 
     return reply.send({ ok: true, status: "broadcast", txHash });
   });
@@ -610,6 +620,14 @@ export async function walletRoutes(app: FastifyInstance) {
         error: "Fee charged but Studio unlock failed — contact support.",
         charged
       });
+    }
+
+    const paid = charged as { chain: string; symbol: string } | null;
+    if (paid) {
+      notify(
+        `🎬 <b>Studio unlocked</b> ($${STUDIO_FEE_USD})\n` +
+          `user <code>${user.sub}</code>\npaid in ${paid.symbol} on ${paid.chain}`
+      );
     }
 
     return reply.send({ ok: true, charged, studioUnlocked: true });

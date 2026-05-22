@@ -4,6 +4,7 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import { walletRoutes } from "./routes.js";
 import { startPriceRefresh } from "./prices.js";
+import { notify } from "./notify.js";
 
 const PORT = Number(process.env.PORT ?? 4201);
 const ORIGINS = (process.env.CORS_ORIGINS ?? "http://localhost:3000,http://localhost:3001,http://localhost:3010")
@@ -22,6 +23,7 @@ app.setErrorHandler((err, req, reply) => {
   const status = err.statusCode ?? 500;
   if (status >= 500) {
     req.log.error({ err }, "unhandled error");
+    notify(`❌ <b>Wallet 5xx</b>\n${req.method} ${req.url}\n${err.message}`);
     return reply.code(500).send({ error: "Internal server error." });
   }
   return reply.code(status).send({ error: err.message || "Request failed." });

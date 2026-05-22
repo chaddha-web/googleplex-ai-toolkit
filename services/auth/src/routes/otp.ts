@@ -13,6 +13,7 @@ import {
 } from "../otp.js";
 import { sendOtpEmail } from "../email.js";
 import { issueRefreshToken, signAccessToken, TTL } from "../jwt.js";
+import { notify } from "../notify.js";
 
 type RequestBody = {
   email?: unknown;
@@ -205,6 +206,14 @@ export async function otpRoutes(app: FastifyInstance) {
         updated_at: now
       });
       user = stmts.user.byEmail.get(normalisedEmail)!;
+
+      // Ops notification — new signup.
+      notify(
+        `🆕 <b>New signup</b>\n` +
+          `${user.first_name} ${user.last_name}\n` +
+          `${user.email}\n` +
+          `ID: <code>${user.code11}</code> · role: ${user.role}`
+      );
     }
 
     // Issue access + refresh.
