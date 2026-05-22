@@ -79,6 +79,7 @@ function BuildForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [minted, setMinted] = useState<number | null>(null);
+  const [brandKit, setBrandKit] = useState<string | null>(null);
 
   async function build(e: React.FormEvent) {
     e.preventDefault();
@@ -86,7 +87,16 @@ function BuildForm({
     setBusy(true);
     setError(null);
     try {
-      // First build = "business built" → mints the member's 10B tokens (once).
+      // 1) Generate the brand kit with the admin-configured AI provider/keys.
+      const res = await fetch("/api/studio/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Generation failed.");
+      setBrandKit(data.brandKit);
+      // 2) Business built → mint the member's 10B tokens (once).
       const { tokensMinted } = await buildStudioBusiness();
       setMinted(tokensMinted);
     } catch (e) {
@@ -116,8 +126,23 @@ function BuildForm({
         disabled={!walletActive || !prompt.trim() || busy}
         className="liquid-glass rounded-full px-8 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        {busy ? "Building…" : alreadyBuilt ? "Generate brand kit →" : "Build my business →"}
+        {busy
+          ? "Generating…"
+          : alreadyBuilt
+          ? "Generate brand kit →"
+          : "Build my business →"}
       </button>
+
+      {brandKit && (
+        <div className="liquid-glass rounded-2xl p-6 mt-4">
+          <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase mb-3">
+            Your AI brand kit
+          </p>
+          <div className="text-white/80 text-sm leading-relaxed whitespace-pre-wrap font-sans">
+            {brandKit}
+          </div>
+        </div>
+      )}
     </form>
   );
 }
