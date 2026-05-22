@@ -13,7 +13,7 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { mainnet, bsc } from "viem/chains";
-import { loadTreasuryPriv } from "../treasury.js";
+import { privKeyForChain } from "../treasury.js";
 
 const ERC20_ABI = parseAbi([
   "function transfer(address to, uint256 amount) returns (bool)"
@@ -36,7 +36,7 @@ function chainConfig(chain: EvmChain): { viemChain: ViemChain; rpc: string } {
 
 async function clients(chain: EvmChain) {
   const { viemChain, rpc } = chainConfig(chain);
-  const priv = await loadTreasuryPriv("evm");
+  const priv = await privKeyForChain(chain);
   const account = privateKeyToAccount(`0x${priv.replace(/^0x/, "")}`);
   const wallet = createWalletClient({ account, chain: viemChain, transport: http(rpc) });
   const pub = createPublicClient({ chain: viemChain, transport: http(rpc) });

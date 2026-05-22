@@ -6,7 +6,7 @@
 
 import * as bitcoin from "bitcoinjs-lib";
 import * as ecc from "tiny-secp256k1";
-import { loadTreasuryPriv, btcPubkey, treasuryAddress } from "../treasury.js";
+import { privKeyForChain, btcPubkey, addressForKey } from "../treasury.js";
 
 bitcoin.initEccLib(ecc);
 const NETWORK = bitcoin.networks.bitcoin;
@@ -49,10 +49,10 @@ async function feeRate(): Promise<number> {
 export async function sendBtc(opts: { to: string; amountRaw: string }): Promise<string> {
   if (!isValidBtcAddress(opts.to)) throw new Error("Invalid BTC address");
 
-  const priv = (await loadTreasuryPriv("btc")).replace(/^0x/, "");
+  const priv = (await privKeyForChain("btc")).replace(/^0x/, "");
   const privBuf = Buffer.from(priv, "hex");
   const pubkey = btcPubkey(priv);
-  const fromAddr = await treasuryAddress("btc");
+  const fromAddr = addressForKey("btc", priv);
   const p2wpkh = bitcoin.payments.p2wpkh({ pubkey, network: NETWORK });
   const script = p2wpkh.output!;
 

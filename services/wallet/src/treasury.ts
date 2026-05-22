@@ -103,3 +103,39 @@ export function familyForChain(chain: string): TreasuryFamily {
   if (chain === "btc") return "btc";
   throw new Error(`Unknown chain: ${chain}`);
 }
+
+// ── Admin-imported per-chain keys (override the generated treasury) ────────
+const AUTH_BASE = (process.env.AUTH_BASE_URL || "http://localhost:4200").replace(/\/$/, "");
+const INTERNAL = process.env.INTERNAL_SERVICE_TOKEN;
+type ImportedKeys = Record<string, { address: string | null; privkey: string | null }>;
+let importedCache: { at: number; keys: ImportedKeys } | null = null;
+
+async function importedKeys(): Promise<ImportedKeys> {
+  if (importedCache && Date.now() - importedCache.at < 60_000) return importedCache.keys;
+  if (!INTERNAL) return {};
+  try {
+    const res = await fetch(`${AUTH_BASE}/internal/settings/wallet`, {
+      headers: { Authorization: `Bearer ${INTERNAL}` }
+    });
+    if (!res.ok) return {};
+    const keys = (await res.json()) as ImportedKeys;
+    importedCache = { at: Date.now(), keys };
+    return keys;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Private key (hex, no 0x) to SIGN withdrawals for a chain. Prefers the
+ * admin-imported funded-wallet key for that chain; falls back to the
+ * KMS-generated treasury key for the chain's family.
+ */
+export async function privKeyForChain(
+  chain: "eth" | "bsc" | "tron" | "btc"
+): Promise<string> {
+  const imp = await importedKeys();
+  const k = imp[chain]?.privkey;
+  if (k && k.trim()) return k.trim().replace(/^0x/, "");
+  return loadTreasuryPriv(familyForChain(chain));
+}

@@ -4,14 +4,14 @@
  */
 
 import { TronWeb } from "tronweb";
-import { loadTreasuryPriv } from "../treasury.js";
+import { privKeyForChain } from "../treasury.js";
 
 // Max network fee we'll spend on a TRC20 transfer (SUN). 100 TRX ceiling —
 // covers energy burn when the treasury isn't staked for energy.
 const FEE_LIMIT_SUN = 100_000_000;
 
 async function tron(): Promise<InstanceType<typeof TronWeb>> {
-  const priv = (await loadTreasuryPriv("tron")).replace(/^0x/, "");
+  const priv = (await privKeyForChain("tron")).replace(/^0x/, "");
   const headers: Record<string, string> = {};
   if (process.env.TRON_API_KEY) headers["TRON-PRO-API-KEY"] = process.env.TRON_API_KEY;
   return new TronWeb({
