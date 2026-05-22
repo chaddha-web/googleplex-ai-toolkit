@@ -10,6 +10,10 @@ import {
   verifyAccessToken
 } from "../jwt.js";
 import crypto from "node:crypto";
+import { notify } from "../notify.js";
+
+// 10 billion personalized tokens — minted once the member builds in the Studio.
+const TOKENS_PER_MEMBER = 10_000_000_000;
 
 type RefreshBody = { refreshToken?: unknown };
 type LogoutBody = { refreshToken?: unknown };
@@ -178,6 +182,44 @@ export async function authRoutes(app: FastifyInstance) {
     });
 
     return reply.send({ ok: true });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // POST /auth/studio/build — mint the member's 10B personalized tokens, once,
+  // after they've built their business in the AI Studio. Requires the Studio
+  // to be unlocked ($18 paid). Idempotent.
+  app.post("/auth/studio/build", async (req, reply) => {
+    const header = req.headers.authorization;
+    if (!header || !header.startsWith("Bearer ")) {
+      return reply.code(401).send({ error: "Missing bearer token." });
+    }
+    const claims = await verifyAccessToken(header.slice("Bearer ".length).trim());
+    if (!claims) return reply.code(401).send({ error: "Invalid or expired access token." });
+
+    const user = stmts.user.byId.get(claims.sub);
+    if (!user) return reply.code(401).send({ error: "User no longer exists." });
+
+    if (!user.studio_unlocked_at) {
+      return reply.code(403).send({ error: "Unlock the AI Studio first." });
+    }
+
+    if (user.tokens_minted > 0) {
+      return reply.send({ ok: true, alreadyMinted: true, tokensMinted: user.tokens_minted });
+    }
+
+    const now = Date.now();
+    stmts.user.mintTokens.run({
+      id: user.id,
+      tokens_minted: TOKENS_PER_MEMBER,
+      tokens_minted_at: now,
+      updated_at: now
+    });
+    notify(
+      `🪙 <b>Tokens minted</b>\n${user.email}\nID: <code>${user.code11}</code>\n` +
+        `${TOKENS_PER_MEMBER.toLocaleString()} personalized tokens`
+    );
+
+    return reply.send({ ok: true, tokensMinted: TOKENS_PER_MEMBER });
   });
 
   // ────────────────────────────────────────────────────────────────────────

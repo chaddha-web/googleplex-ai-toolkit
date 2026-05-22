@@ -5,6 +5,7 @@ import { useAuth } from "@/components/auth-context";
 import {
   studioQuote,
   unlockStudio,
+  buildStudioBusiness,
   type StudioQuoteOption
 } from "@/lib/auth-client";
 
@@ -25,6 +26,7 @@ export default function StudioPage() {
   }
 
   const walletActive = user.walletStatus === "active";
+  const tokensMinted = user.tokensMinted ?? 0;
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -47,47 +49,76 @@ export default function StudioPage() {
         </div>
       )}
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          // TODO: POST to ai-orchestrator once wallet is active
-        }}
-        className="mt-10 space-y-4"
-      >
-        <textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          rows={4}
-          placeholder="A community-owned coffee roaster co-op. Warm, earthy, slightly playful. Trades on Tron."
-          className="bg-[#1A1A1A] border-none rounded-xl w-full px-4 py-3 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20 resize-none"
-        />
-        <button
-          type="submit"
-          disabled={!walletActive || !prompt.trim()}
-          className="liquid-glass rounded-full px-8 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          Generate brand kit →
-        </button>
-      </form>
-
-      <section className="mt-16">
-        <p className="text-white/40 text-xs tracking-[0.3em] uppercase mb-4">
-          Recent showcase
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-          {[
-            { name: "Lumen Studios", sub: "Photo collective · TRC20" },
-            { name: "Field & Foundry", sub: "Tools co-op · ERC20" },
-            { name: "Riverline DAO", sub: "Watershed restoration · BEP20" }
-          ].map((p) => (
-            <div key={p.name} className="liquid-glass rounded-2xl p-5">
-              <p className="text-white text-base font-medium">{p.name}</p>
-              <p className="text-white/40 text-xs mt-1">{p.sub}</p>
-            </div>
-          ))}
+      {tokensMinted > 0 && (
+        <div className="mt-8 liquid-glass rounded-2xl p-5">
+          <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase mb-1">
+            Your personalized tokens
+          </p>
+          <p className="text-3xl font-medium tracking-tight">
+            {tokensMinted.toLocaleString()}
+          </p>
+          <p className="text-white/40 text-xs mt-1">
+            Minted when you built your business in the Studio.
+          </p>
         </div>
-      </section>
+      )}
+
+      <BuildForm walletActive={walletActive} alreadyBuilt={tokensMinted > 0} />
     </div>
+  );
+}
+
+function BuildForm({
+  walletActive,
+  alreadyBuilt
+}: {
+  walletActive: boolean;
+  alreadyBuilt: boolean;
+}) {
+  const [prompt, setPrompt] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [minted, setMinted] = useState<number | null>(null);
+
+  async function build(e: React.FormEvent) {
+    e.preventDefault();
+    if (!walletActive || !prompt.trim() || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      // First build = "business built" → mints the member's 10B tokens (once).
+      const { tokensMinted } = await buildStudioBusiness();
+      setMinted(tokensMinted);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={build} className="mt-10 space-y-4">
+      <textarea
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        rows={4}
+        placeholder="A community-owned coffee roaster co-op. Warm, earthy, slightly playful. Trades on Tron."
+        className="bg-[#1A1A1A] border-none rounded-xl w-full px-4 py-3 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20 resize-none"
+      />
+      {error && <p className="text-rose-300/90 text-sm">{error}</p>}
+      {minted !== null && (
+        <p className="text-emerald-300/90 text-sm">
+          🎉 Business built — {minted.toLocaleString()} personalized tokens minted in your name.
+        </p>
+      )}
+      <button
+        type="submit"
+        disabled={!walletActive || !prompt.trim() || busy}
+        className="liquid-glass rounded-full px-8 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        {busy ? "Building…" : alreadyBuilt ? "Generate brand kit →" : "Build my business →"}
+      </button>
+    </form>
   );
 }
 

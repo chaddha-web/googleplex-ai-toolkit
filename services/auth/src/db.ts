@@ -203,6 +203,9 @@ export const stmts = {
         updated_at = @updated_at
       WHERE id = @id
     `),
+    mintTokens: db.prepare(`
+      UPDATE users SET tokens_minted = @tokens_minted, tokens_minted_at = @tokens_minted_at, updated_at = @updated_at WHERE id = @id
+    `),
     promoteByCode: db.prepare(`
       UPDATE users SET role = 'admin', updated_at = @updated_at WHERE code11 = @code11
     `),

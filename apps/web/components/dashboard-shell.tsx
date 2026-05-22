@@ -69,11 +69,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 function Sidebar({ pathname }: { pathname: string }) {
   return (
     <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-white/5 bg-black/40 backdrop-blur-sm">
-      <Link href="/" className="flex items-center gap-2 px-6 py-6 text-white">
+      <a href={LANDING_URL} className="flex items-center gap-2 px-6 py-6 text-white">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo.png" alt="GoogolPlex" className="h-7 w-auto object-contain" />
         <span className="text-lg font-medium tracking-tight">GoogolPlex</span>
-      </Link>
+      </a>
       <nav className="px-3 mt-2 flex-1">
         <ul className="space-y-1">
           {NAV_ITEMS.map((item) => {

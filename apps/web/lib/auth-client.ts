@@ -54,6 +54,8 @@ export type User = {
   initialDepositCreditedUsd?: number;
   /** True once the user has paid the $18 fee to unlock the AI Studio. */
   studioUnlocked?: boolean;
+  /** Personalized tokens minted (0 until the member builds in the Studio). */
+  tokensMinted?: number;
   createdAt?: number;
 };
 
@@ -314,6 +316,22 @@ export async function studioQuote(): Promise<{
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Could not load Studio pricing.");
   return data;
+}
+
+/**
+ * Mark the member's business as built in the Studio → mints their 10B
+ * personalized tokens (once). Requires the Studio to be unlocked.
+ */
+export async function buildStudioBusiness(): Promise<{
+  tokensMinted: number;
+  alreadyMinted?: boolean;
+}> {
+  const res = await authedFetch(`${AUTH_BASE}/auth/studio/build`, { method: "POST" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not complete the build.");
+  const me = await fetchMe();
+  if (me) emit(me);
+  return { tokensMinted: data.tokensMinted, alreadyMinted: data.alreadyMinted };
 }
 
 /** Charge the $18 Studio fee in `asset`, then refresh the session. */
