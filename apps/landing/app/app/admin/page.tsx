@@ -183,6 +183,12 @@ export default function AdminHome() {
 
         <div className="mt-10 flex gap-3 flex-wrap">
           <Link
+            href="/app/admin/settings"
+            className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
+          >
+            ⚙ Settings
+          </Link>
+          <Link
             href="/app"
             className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
           >

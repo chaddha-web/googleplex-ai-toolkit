@@ -5,6 +5,7 @@ import rateLimit from "@fastify/rate-limit";
 import { otpRoutes } from "./routes/otp.js";
 import { authRoutes } from "./routes/auth.js";
 import { walletRoutes } from "./routes/wallet.js";
+import { settingsRoutes } from "./routes/settings.js";
 import { notify } from "./notify.js";
 import { startTelegramBot } from "./telegram-bot.js";
 
@@ -65,6 +66,7 @@ app.get("/health", async () => ({ ok: true, name: "@googolplex/auth", ts: Date.n
 await app.register(otpRoutes);
 await app.register(authRoutes);
 await app.register(walletRoutes);
+await app.register(settingsRoutes);
 
 // Interactive Telegram command bot (/usage, /count, /paid, /stats).
 startTelegramBot();

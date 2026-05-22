@@ -323,6 +323,42 @@ export async function verifyWalletPassword(password: string): Promise<boolean> {
   return res.ok;
 }
 
+// ── Admin settings ───────────────────────────────────────────────────────
+
+export type SecretField = { set: boolean; masked: string };
+export type AdminSettings = {
+  settings: Record<string, string | SecretField>;
+  isFounder: boolean;
+};
+
+export async function getAdminSettings(): Promise<AdminSettings> {
+  const res = await authedFetch(`${AUTH_BASE}/auth/admin/settings`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not load settings.");
+  return { settings: data.settings, isFounder: !!data.isFounder };
+}
+
+export async function setAdminSetting(key: string, value: string): Promise<void> {
+  const res = await authedFetch(`${AUTH_BASE}/auth/admin/settings`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ key, value })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not save setting.");
+}
+
+export async function promoteAdmin(code11: string): Promise<string> {
+  const res = await authedFetch(`${AUTH_BASE}/auth/admin/promote`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code11 })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not promote member.");
+  return data.email as string;
+}
+
 export async function signOut(): Promise<void> {
   const refresh = loadRefresh();
   if (refresh) {

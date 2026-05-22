@@ -80,6 +80,13 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_refresh_user   ON refresh_tokens (user_id);
   CREATE INDEX IF NOT EXISTS idx_refresh_family ON refresh_tokens (family_id);
+
+  CREATE TABLE IF NOT EXISTS settings (
+    key        TEXT PRIMARY KEY,
+    value      TEXT,
+    is_secret  INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL
+  );
 `);
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -196,6 +203,9 @@ export const stmts = {
         updated_at = @updated_at
       WHERE id = @id
     `),
+    promoteByCode: db.prepare(`
+      UPDATE users SET role = 'admin', updated_at = @updated_at WHERE code11 = @code11
+    `),
     unlockStudio: db.prepare(`
       UPDATE users SET
         studio_unlocked_at = @studio_unlocked_at,
@@ -236,6 +246,23 @@ export const stmts = {
     bumpAttempts: db.prepare(`UPDATE otp_sessions SET attempts = attempts + 1 WHERE id = ?`),
     delete: db.prepare(`DELETE FROM otp_sessions WHERE id = ?`),
     deleteExpired: db.prepare(`DELETE FROM otp_sessions WHERE expires_at < ?`)
+  },
+  settings: {
+    get: db.prepare<[string], { key: string; value: string | null; is_secret: number }>(
+      `SELECT key, value, is_secret FROM settings WHERE key = ?`
+    ),
+    all: db.prepare<[], { key: string; value: string | null; is_secret: number }>(
+      `SELECT key, value, is_secret FROM settings`
+    ),
+    upsert: db.prepare(`
+      INSERT INTO settings (key, value, is_secret, updated_at)
+      VALUES (@key, @value, @is_secret, @updated_at)
+      ON CONFLICT(key) DO UPDATE SET
+        value = excluded.value,
+        is_secret = excluded.is_secret,
+        updated_at = excluded.updated_at
+    `),
+    delete: db.prepare(`DELETE FROM settings WHERE key = ?`)
   },
   refresh: {
     insert: db.prepare(`
