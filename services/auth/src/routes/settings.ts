@@ -134,9 +134,14 @@ export async function settingsRoutes(app: FastifyInstance) {
     // Empty value clears the setting (lets you wipe a key).
     if (value === "") {
       stmts.settings.delete.run(key);
+      notify(`⚙️ <b>Setting cleared</b>\n<code>${key}</code>\nby ${me.email}`);
       return reply.send({ ok: true, cleared: true });
     }
     setValue(key, value);
+    // Audit alert. NEVER include the raw value of a secret — only the masked
+    // form (e.g. "sk-…abcd"). Non-secrets show the literal value.
+    const shown = isSecret(key) ? maskSecret(value) : value;
+    notify(`⚙️ <b>Setting updated</b>\n<code>${key}</code> = ${shown}\nby ${me.email}`);
     return reply.send({ ok: true });
   });
 

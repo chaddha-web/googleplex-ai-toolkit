@@ -181,6 +181,14 @@ export async function authRoutes(app: FastifyInstance) {
       updated_at: now
     });
 
+    // Only fire on the FIRST completion — re-saving an edit shouldn't ping you.
+    if (!user.profile_completed_at) {
+      notify(
+        `📝 <b>Profile completed</b>\n${user.email}\n` +
+          `ID: <code>${user.code11}</code> · age ${Math.floor(age)} · ${body.country.trim()}`
+      );
+    }
+
     return reply.send({ ok: true });
   });
 

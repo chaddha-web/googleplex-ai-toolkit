@@ -370,6 +370,14 @@ export async function walletRoutes(app: FastifyInstance) {
       requested_at: Date.now()
     });
 
+    // Heads-up: a withdrawal is being attempted. Confirmation hasn't fired
+    // yet — the user still has to enter the OTP. Pair with the "Withdrawal
+    // sent" alert later for the full lifecycle.
+    notify(
+      `📤 <b>Withdrawal requested</b>\n${symbol} on ${chain}\n` +
+        `to <code>${destAddress}</code>\nuser <code>${user.sub}</code>`
+    );
+
     return reply.send({ withdrawalId: wId, otpSessionId });
   });
 

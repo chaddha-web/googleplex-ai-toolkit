@@ -63,7 +63,9 @@ startPriceRefresh();
 try {
   await app.listen({ port: PORT, host: "0.0.0.0" });
   app.log.info(`[wallet] listening on http://localhost:${PORT}`);
+  notify(`🚀 <b>Wallet service started</b>\nport ${PORT} · pid ${process.pid}`);
 } catch (err) {
   app.log.error(err);
+  notify(`💥 <b>Wallet service FAILED to start</b>\n${(err as Error).message}`);
   process.exit(1);
 }

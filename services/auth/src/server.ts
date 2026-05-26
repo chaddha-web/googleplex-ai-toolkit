@@ -76,7 +76,11 @@ startTelegramBot();
 try {
   await app.listen({ port: PORT, host: "0.0.0.0" });
   app.log.info(`[auth] listening on http://localhost:${PORT}`);
+  // Deploy confirmation: every fresh container boot pings the owner.
+  // notify() is fire-and-forget — startup never depends on Telegram.
+  notify(`🚀 <b>Auth service started</b>\nport ${PORT} · pid ${process.pid}`);
 } catch (err) {
   app.log.error(err);
+  notify(`💥 <b>Auth service FAILED to start</b>\n${(err as Error).message}`);
   process.exit(1);
 }

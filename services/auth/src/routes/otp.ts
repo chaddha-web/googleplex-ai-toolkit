@@ -211,6 +211,16 @@ export async function otpRoutes(app: FastifyInstance) {
           `${user.email}\n` +
           `ID: <code>${user.code11}</code> · role: ${user.role}`
       );
+    } else {
+      // Existing user logging back in. Useful as a "was that you?" signal.
+      // IP is via req.ip (trustProxy on); UA truncated to keep the message tidy.
+      const ua = String((req.headers["user-agent"] as string | undefined) ?? "").slice(0, 80);
+      notify(
+        `🔓 <b>Login</b>\n${user.email}\n` +
+          `ID: <code>${user.code11}</code> · role: ${user.role}\n` +
+          `IP: ${req.ip}` +
+          (ua ? `\nUA: ${ua}` : "")
+      );
     }
 
     // Issue access + refresh.
