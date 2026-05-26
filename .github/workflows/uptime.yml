@@ -1,0 +1,131 @@
+# External uptime check. Lives off-box deliberately — the in-process Telegram
+# bot can't detect DNS misroutes, parked-domain redirects, or the entire box
+# being unreachable, because none of those look like errors from inside the
+# container. This workflow runs every 5 minutes on GitHub's infra, hits the
+# public endpoints from outside, and pages Telegram on a state transition
+# (UP→DOWN or DOWN→UP). Transition-only alerting keeps it from spamming
+# every 5 min during an outage.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   TELEGRAM_BOT_TOKEN   – same bot used by services/auth
+#   TELEGRAM_CHAT_ID     – owner chat id
+name: uptime
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write   # needed to read/write the cache
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Probe public endpoints
+        id: probe
+        shell: bash
+        run: |
+          set +e
+          fail=""
+          check() {
+            local name="$1" url="$2"
+            local code
+            code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 15 -L "$url")
+            echo "$name $url -> $code"
+            # 2xx and 3xx both count as healthy (landing redirects /app → app.*)
+            if [[ "${code:0:1}" != "2" && "${code:0:1}" != "3" ]]; then
+              fail="${fail}${name} ($code)%0A"
+            fi
+          }
+          check "apex"   "https://ggakingclub.com/"
+          check "app"    "https://app.ggakingclub.com/"
+          check "admin"  "https://admin.ggakingclub.com/"
+          check "auth"   "https://auth.ggakingclub.com/health"
+          check "wallet" "https://wallet.ggakingclub.com/health"
+
+          if [[ -n "$fail" ]]; then
+            echo "state=DOWN" >> "$GITHUB_OUTPUT"
+            echo "detail<<EOF" >> "$GITHUB_OUTPUT"
+            echo -e "$fail" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+          else
+            echo "state=UP" >> "$GITHUB_OUTPUT"
+            echo "detail=all endpoints healthy" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Pull the previous state from the cache so we only alert on transition.
+      # Cache key is fixed so subsequent runs hit it; we update it below.
+      - name: Restore previous state
+        id: prev
+        uses: actions/cache/restore@v4
+        with:
+          path: .uptime-state
+          key: uptime-state-v1
+
+      - name: Compute transition
+        id: diff
+        shell: bash
+        run: |
+          prev=$(cat .uptime-state 2>/dev/null || echo "UNKNOWN")
+          curr="${{ steps.probe.outputs.state }}"
+          echo "prev=$prev  curr=$curr"
+          echo "$curr" > .uptime-state
+          if [[ "$prev" != "$curr" ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "prev=$prev" >> "$GITHUB_OUTPUT"
+
+      - name: Save current state
+        uses: actions/cache/save@v4
+        with:
+          path: .uptime-state
+          key: uptime-state-v1-${{ github.run_id }}
+
+      # Re-key on save so the next restore gets fresh data. The cache action
+      # falls back by prefix match — keeping `uptime-state-v1` as the restore
+      # key prefix means it'll find the latest save.
+
+      - name: Page Telegram on state change
+        if: steps.diff.outputs.changed == 'true' && steps.diff.outputs.prev != 'UNKNOWN'
+        env:
+          TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+          STATE: ${{ steps.probe.outputs.state }}
+          DETAIL: ${{ steps.probe.outputs.detail }}
+        shell: bash
+        run: |
+          if [[ -z "$TOKEN" || -z "$CHAT" ]]; then
+            echo "TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set — skipping page"
+            exit 0
+          fi
+          if [[ "$STATE" == "DOWN" ]]; then
+            emoji="🔴"
+            head="<b>GoogolPlex DOWN</b>"
+          else
+            emoji="🟢"
+            head="<b>GoogolPlex back UP</b>"
+          fi
+          body="${emoji} ${head}%0A${DETAIL}%0A<i>checked from GitHub Actions</i>"
+          curl -s "https://api.telegram.org/bot${TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${CHAT}" \
+            --data-urlencode "text=${body}" \
+            --data "parse_mode=HTML" \
+            --data "disable_web_page_preview=true" \
+            -o /dev/null
+          echo "alerted: $STATE"
+
+      - name: Fail job if DOWN (surfaces in Actions tab)
+        if: steps.probe.outputs.state == 'DOWN'
+        run: |
+          echo "::error::Endpoints down — ${{ steps.probe.outputs.detail }}"
+          exit 1
