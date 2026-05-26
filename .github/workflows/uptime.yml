@@ -95,8 +95,14 @@ jobs:
       # falls back by prefix match — keeping `uptime-state-v1` as the restore
       # key prefix means it'll find the latest save.
 
+      # Page on any real state change, AND on a first-run that finds the site
+      # already DOWN (otherwise an outage that pre-dates the cron stays silent
+      # forever — the bug we hit on the very first deploy of this workflow).
+      # First-run UP is still silent (no point alerting that things are fine).
       - name: Page Telegram on state change
-        if: steps.diff.outputs.changed == 'true' && steps.diff.outputs.prev != 'UNKNOWN'
+        if: |
+          (steps.diff.outputs.changed == 'true' && steps.diff.outputs.prev != 'UNKNOWN')
+          || (steps.diff.outputs.prev == 'UNKNOWN' && steps.probe.outputs.state == 'DOWN')
         env:
           TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
