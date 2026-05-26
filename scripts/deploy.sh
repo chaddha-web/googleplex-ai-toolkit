@@ -20,5 +20,11 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --remove-or
 echo "=== Pruning dangling images"
 docker image prune -f
 
+# BuildKit layer cache grows unbounded (~1.8 GB / deploy). Without this,
+# /var/lib/docker hits 100+ GB inside a week of 2-min auto-deploys. Keep ~8 GB
+# of warm layers so subsequent builds stay fast, drop everything older.
+echo "=== Pruning build cache (keep 8 GB)"
+docker builder prune -f --keep-storage 8gb
+
 echo "=== Done. Container status:"
 docker compose --env-file .env.prod -f docker-compose.prod.yml ps

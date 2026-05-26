@@ -9,8 +9,32 @@
  */
 
 import os from "node:os";
-import { statfsSync } from "node:fs";
+import { statfsSync, readFileSync } from "node:fs";
 import { db } from "./db.js";
+
+/**
+ * Real memory pressure via /proc/meminfo. We do NOT use os.freemem(): on
+ * Linux that returns MemFree, which excludes the page cache — the kernel
+ * happily fills "unused" RAM with cache, so MemFree often looks like 200 MB
+ * on a perfectly idle box. MemAvailable is what `free` and every monitoring
+ * tool report as actually-usable. Returns null if /proc isn't readable
+ * (e.g. macOS dev box) so the caller falls back to the os module.
+ */
+function readMemAvailable(): { total: number; available: number } | null {
+  try {
+    const meminfo = readFileSync("/proc/meminfo", "utf8");
+    const grab = (key: string): number | null => {
+      const m = meminfo.match(new RegExp(`^${key}:\\s+(\\d+)\\s+kB`, "m"));
+      return m ? Number(m[1]) * 1024 : null;
+    };
+    const total = grab("MemTotal");
+    const available = grab("MemAvailable");
+    if (total == null || available == null) return null;
+    return { total, available };
+  } catch {
+    return null;
+  }
+}
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const CHAT = process.env.TELEGRAM_CHAT_ID;
@@ -54,14 +78,16 @@ function diskLine(): string {
 /** 🖥 Server uptime + resource usage (real host values via /proc). */
 function usageText(): string {
   const load = os.loadavg().map((n) => n.toFixed(2)).join(" ");
-  const memUsed = gb(os.totalmem() - os.freemem());
-  const memTotal = gb(os.totalmem());
-  const memPct = ((1 - os.freemem() / os.totalmem()) * 100).toFixed(0);
+  // Prefer /proc/meminfo MemAvailable (matches `free -h`); fall back to os.* on non-Linux.
+  const m = readMemAvailable();
+  const total = m?.total ?? os.totalmem();
+  const used = m ? total - m.available : total - os.freemem();
+  const memPct = total > 0 ? ((used / total) * 100).toFixed(0) : "0";
   return (
     `🖥 <b>Server usage</b>\n` +
     `⏱ Uptime: ${fmtUptime(os.uptime())}\n` +
     `📈 Load (1/5/15m): ${load}\n` +
-    `🧠 Mem: ${memUsed} / ${memTotal} GB (${memPct}%)\n` +
+    `🧠 Mem: ${gb(used)} / ${gb(total)} GB (${memPct}%)\n` +
     `${diskLine()}\n` +
     `🧩 CPUs: ${os.cpus().length}`
   );
