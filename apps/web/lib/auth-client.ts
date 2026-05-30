@@ -84,9 +84,13 @@ type Tokens = {
   /** ms epoch when the access token expires (server-issued ttl + now). */
   accessExpiresAt: number;
   refreshToken: string;
+  /** Refresh-row id of the current session — tagged on every API call as
+   *  X-Current-Session so the sessions endpoint knows which row is "us". */
+  sessionId: string | null;
 };
 
 const REFRESH_KEY = "gplex.refresh";
+const SESSION_ID_KEY = "gplex.session.id";
 
 // ────────────────────────────────────────────────────────────────────────────
 // In-memory access token + listeners for cross-component refresh
@@ -348,6 +352,38 @@ export async function unlockStudio(asset: string): Promise<User | null> {
   return me;
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Sessions — the user's own (admin uses the landing app's surface)
+// ────────────────────────────────────────────────────────────────────────────
+
+export type MySessionRow = {
+  id: string;
+  family_id: string;
+  user_agent: string | null;
+  ip: string | null;
+  created_at: number;
+  expires_at: number;
+  current?: boolean;
+};
+
+async function authedJsonWeb<T>(input: string, init: RequestInit = {}): Promise<T> {
+  const res = await authedFetch(input, init);
+  const data = await res.json().catch(() => ({} as any));
+  if (!res.ok) throw new Error((data as any)?.error || `HTTP ${res.status}`);
+  return data as T;
+}
+
+export const mySessions = {
+  list: () =>
+    authedJsonWeb<{ sessions: MySessionRow[] }>(`${AUTH_BASE}/auth/sessions`).then((r) => r.sessions),
+  revoke: (id: string) =>
+    authedJsonWeb<{ ok: true }>(`${AUTH_BASE}/auth/sessions/${id}/revoke`, { method: "POST" }),
+  revokeOthers: () =>
+    authedJsonWeb<{ ok: true; killed: number }>(`${AUTH_BASE}/auth/sessions/revoke-others`, {
+      method: "POST"
+    })
+};
+
 export async function signOut(): Promise<void> {
   const refresh = loadRefresh();
   if (refresh) {
@@ -363,6 +399,7 @@ export async function signOut(): Promise<void> {
   }
   memTokens = null;
   persistRefresh(null);
+  persistSessionId(null);
   emit(null);
 }
 
@@ -377,6 +414,8 @@ export async function authedFetch(
   const access = await ensureAccess();
   const headers = new Headers(init.headers);
   if (access) headers.set("Authorization", `Bearer ${access}`);
+  const sid = currentSessionId();
+  if (sid) headers.set("X-Current-Session", sid);
   const res = await fetch(input, { ...init, headers });
 
   if (res.status !== 401) return res;
@@ -386,6 +425,8 @@ export async function authedFetch(
   if (!refreshed) return res;
   const headers2 = new Headers(init.headers);
   headers2.set("Authorization", `Bearer ${refreshed}`);
+  const sid2 = currentSessionId();
+  if (sid2) headers2.set("X-Current-Session", sid2);
   return fetch(input, { ...init, headers: headers2 });
 }
 
@@ -422,11 +463,34 @@ function acceptTokens(data: {
   accessToken: string;
   accessTokenExpiresIn: number;
   refreshToken: string;
+  sessionId?: string | null;
 }) {
+  // Carry forward an existing sessionId if the server didn't include one
+  // (older clients during a rolling deploy might not). Refresh rotation
+  // does always include the new id, so within a session it stays fresh.
+  const sid = data.sessionId ?? memTokens?.sessionId ?? loadSessionId();
   memTokens = {
     accessToken: data.accessToken,
     accessExpiresAt: Date.now() + data.accessTokenExpiresIn * 1000,
-    refreshToken: data.refreshToken
+    refreshToken: data.refreshToken,
+    sessionId: sid ?? null
   };
   persistRefresh(data.refreshToken);
+  if (sid) persistSessionId(sid);
+}
+
+function persistSessionId(id: string | null) {
+  if (typeof window === "undefined") return;
+  if (id) localStorage.setItem(SESSION_ID_KEY, id);
+  else localStorage.removeItem(SESSION_ID_KEY);
+}
+function loadSessionId(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(SESSION_ID_KEY);
+}
+
+/** The current device's session id (refresh-row id). UI uses this for the
+ *  "this device" badge and to pass via X-Current-Session header. */
+export function currentSessionId(): string | null {
+  return memTokens?.sessionId ?? loadSessionId();
 }

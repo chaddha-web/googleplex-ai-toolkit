@@ -73,7 +73,9 @@ export async function authRoutes(app: FastifyInstance) {
       accessToken,
       accessTokenExpiresIn: TTL.access,
       refreshToken: refresh.token,
-      refreshTokenExpiresAt: refresh.expiresAt
+      refreshTokenExpiresAt: refresh.expiresAt,
+      // New session id after rotation — UI must update its pinned value.
+      sessionId: refresh.id
     });
   });
 

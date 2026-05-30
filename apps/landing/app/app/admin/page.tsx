@@ -266,6 +266,12 @@ export default function AdminHome() {
             Inbox
           </Link>
           <Link
+            href="/app/admin/logs"
+            className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
+          >
+            Logs
+          </Link>
+          <Link
             href="/app/admin/settings"
             className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
           >

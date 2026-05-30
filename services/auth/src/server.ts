@@ -8,6 +8,7 @@ import { walletRoutes } from "./routes/wallet.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { communityRoutes } from "./routes/community.js";
 import { emailRoutes } from "./routes/email.js";
+import { sessionsRoutes } from "./routes/sessions.js";
 import { notify } from "./notify.js";
 import { startTelegramBot } from "./telegram-bot.js";
 
@@ -60,7 +61,10 @@ await app.register(cors, {
     "Content-Type",
     "Authorization",
     "Idempotency-Key",
-    "X-Idempotency-Key"
+    "X-Idempotency-Key",
+    // Session UI sends the caller's own session id so we can mark it as
+    // "this device" and protect it from "revoke others".
+    "X-Current-Session"
   ]
 });
 
@@ -72,6 +76,7 @@ await app.register(walletRoutes);
 await app.register(settingsRoutes);
 await app.register(communityRoutes);
 await app.register(emailRoutes);
+await app.register(sessionsRoutes);
 
 // Interactive Telegram command bot (/usage, /count, /paid, /stats).
 startTelegramBot();

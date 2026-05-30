@@ -237,6 +237,9 @@ export async function otpRoutes(app: FastifyInstance) {
       accessTokenExpiresIn: TTL.access,
       refreshToken: refresh.token,
       refreshTokenExpiresAt: refresh.expiresAt,
+      // The session id is the refresh row id. UIs pin it so they can mark
+      // "this device" on the sessions list and protect it from revoke-others.
+      sessionId: refresh.id,
       user: {
         id: user.id,
         email: user.email,

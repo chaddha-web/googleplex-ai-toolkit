@@ -400,8 +400,35 @@ export const stmts = {
         (@id, @user_id, @token_hash, @family_id, @expires_at, NULL, NULL, @user_agent, @ip, @created_at)
     `),
     byHash:  db.prepare<[string], RefreshRow>(`SELECT * FROM refresh_tokens WHERE token_hash = ?`),
+    byId:    db.prepare<[string], RefreshRow>(`SELECT * FROM refresh_tokens WHERE id = ?`),
     revoke:  db.prepare(`UPDATE refresh_tokens SET revoked_at = ?, replaced_by_id = ? WHERE id = ?`),
-    revokeFamily: db.prepare(`UPDATE refresh_tokens SET revoked_at = COALESCE(revoked_at, ?) WHERE family_id = ?`)
+    revokeFamily: db.prepare(`UPDATE refresh_tokens SET revoked_at = COALESCE(revoked_at, ?) WHERE family_id = ?`),
+    // Used by /auth/sessions — only return rows that still represent a usable
+    // session (not revoked, not expired). Order newest first.
+    listForUser: db.prepare<[string, number], RefreshRow>(`
+      SELECT * FROM refresh_tokens
+       WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?
+       ORDER BY created_at DESC LIMIT 200
+    `),
+    // Admin: every session in the system, active by default, with email
+    // pulled via JOIN. We expose this with optional includeRevoked.
+    listAllActive: db.prepare<[number], any>(`
+      SELECT rt.id, rt.user_id, rt.family_id, rt.user_agent, rt.ip,
+             rt.created_at, rt.expires_at, rt.revoked_at,
+             u.email, u.first_name, u.last_name, u.code11, u.role
+        FROM refresh_tokens rt
+        JOIN users u ON u.id = rt.user_id
+       WHERE rt.revoked_at IS NULL AND rt.expires_at > ?
+       ORDER BY rt.created_at DESC LIMIT 500
+    `),
+    listAllRecent: db.prepare<[], any>(`
+      SELECT rt.id, rt.user_id, rt.family_id, rt.user_agent, rt.ip,
+             rt.created_at, rt.expires_at, rt.revoked_at,
+             u.email, u.first_name, u.last_name, u.code11, u.role
+        FROM refresh_tokens rt
+        JOIN users u ON u.id = rt.user_id
+       ORDER BY rt.created_at DESC LIMIT 500
+    `)
   },
   email: {
     // Campaigns

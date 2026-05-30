@@ -13,6 +13,7 @@ const NAV_ITEMS: { href: string; label: string }[] = [
   { href: "/wallet", label: "Wallet" },
   { href: "/community", label: "Community" },
   { href: "/studio", label: "Studio" },
+  { href: "/account/security", label: "Security" },
   { href: "/settings", label: "Settings" }
 ];
 
@@ -36,8 +37,15 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       // Send the user to landing's login. Landing knows how to hand the
       // session back via #h=<refresh> after a successful verify.
       window.location.href = `${LANDING_URL}/login`;
+      return;
     }
-  }, [status]);
+    // Hard rule: admins have NO presence on the user dashboard. Any admin
+    // who lands here is bounced to the admin surface on landing. This runs
+    // on every page transition so they can't deep-link past it either.
+    if (status === "authenticated" && user?.role === "admin") {
+      window.location.href = `${LANDING_URL}/app/admin`;
+    }
+  }, [status, user?.role]);
 
   if (status === "loading") {
     return (
@@ -47,6 +55,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     );
   }
   if (status === "anonymous") return null;
+  // While the bouncer is flushing the admin offsite, render nothing so
+  // they never see a flash of the user dashboard frame.
+  if (user?.role === "admin") return null;
 
   return (
     <div className="flex min-h-screen w-full">

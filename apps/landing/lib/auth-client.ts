@@ -94,9 +94,12 @@ type Tokens = {
   /** ms epoch when the access token expires (server-issued ttl + now). */
   accessExpiresAt: number;
   refreshToken: string;
+  /** Refresh-row id of this device's session (sent as X-Current-Session). */
+  sessionId: string | null;
 };
 
 const REFRESH_KEY = "gplex.refresh";
+const SESSION_ID_KEY = "gplex.session.id";
 
 // ────────────────────────────────────────────────────────────────────────────
 // In-memory access token + listeners for cross-component refresh
@@ -485,6 +488,46 @@ export const email = {
     authedJson<{ ok: true }>(`${AUTH_BASE}/auth/admin/inbox/${id}/archive`, { method: "POST" })
 };
 
+// ────────────────────────────────────────────────────────────────────────────
+// Sessions — admin (all) and user (own)
+// ────────────────────────────────────────────────────────────────────────────
+
+export type SessionRow = {
+  id: string;
+  user_id: string;
+  family_id: string;
+  user_agent: string | null;
+  ip: string | null;
+  created_at: number;
+  expires_at: number;
+  revoked_at: number | null;
+  current?: boolean;
+};
+export type AdminSessionRow = SessionRow & {
+  email: string;
+  first_name: string;
+  last_name: string;
+  code11: string;
+  role: "user" | "admin";
+};
+
+export const sessions = {
+  // User's own
+  listMine: () =>
+    authedJson<{ sessions: SessionRow[] }>(`${AUTH_BASE}/auth/sessions`).then((r) => r.sessions),
+  revokeMine: (id: string) =>
+    authedJson<{ ok: true }>(`${AUTH_BASE}/auth/sessions/${id}/revoke`, { method: "POST" }),
+  revokeOthers: () =>
+    authedJson<{ ok: true; killed: number }>(`${AUTH_BASE}/auth/sessions/revoke-others`, { method: "POST" }),
+  // Admin
+  listAll: (scope: "active" | "recent" = "active", q = "") =>
+    authedJson<{ sessions: AdminSessionRow[]; scope: string }>(
+      `${AUTH_BASE}/auth/admin/sessions?scope=${scope}${q ? "&q=" + encodeURIComponent(q) : ""}`
+    ).then((r) => r.sessions),
+  adminRevoke: (id: string) =>
+    authedJson<{ ok: true }>(`${AUTH_BASE}/auth/admin/sessions/${id}/revoke`, { method: "POST" })
+};
+
 export async function signOut(): Promise<void> {
   const refresh = loadRefresh();
   if (refresh) {
@@ -500,6 +543,7 @@ export async function signOut(): Promise<void> {
   }
   memTokens = null;
   persistRefresh(null);
+  persistSessionId(null);
   emit(null);
 }
 
@@ -514,6 +558,8 @@ export async function authedFetch(
   const access = await ensureAccess();
   const headers = new Headers(init.headers);
   if (access) headers.set("Authorization", `Bearer ${access}`);
+  const sid = currentSessionId();
+  if (sid) headers.set("X-Current-Session", sid);
   const res = await fetch(input, { ...init, headers });
 
   if (res.status !== 401) return res;
@@ -523,6 +569,8 @@ export async function authedFetch(
   if (!refreshed) return res;
   const headers2 = new Headers(init.headers);
   headers2.set("Authorization", `Bearer ${refreshed}`);
+  const sid2 = currentSessionId();
+  if (sid2) headers2.set("X-Current-Session", sid2);
   return fetch(input, { ...init, headers: headers2 });
 }
 
@@ -559,11 +607,28 @@ function acceptTokens(data: {
   accessToken: string;
   accessTokenExpiresIn: number;
   refreshToken: string;
+  sessionId?: string | null;
 }) {
+  const sid = data.sessionId ?? memTokens?.sessionId ?? loadSessionId();
   memTokens = {
     accessToken: data.accessToken,
     accessExpiresAt: Date.now() + data.accessTokenExpiresIn * 1000,
-    refreshToken: data.refreshToken
+    refreshToken: data.refreshToken,
+    sessionId: sid ?? null
   };
   persistRefresh(data.refreshToken);
+  if (sid) persistSessionId(sid);
+}
+
+function persistSessionId(id: string | null) {
+  if (typeof window === "undefined") return;
+  if (id) localStorage.setItem(SESSION_ID_KEY, id);
+  else localStorage.removeItem(SESSION_ID_KEY);
+}
+function loadSessionId(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(SESSION_ID_KEY);
+}
+export function currentSessionId(): string | null {
+  return memTokens?.sessionId ?? loadSessionId();
 }
