@@ -60,3 +60,38 @@ export async function sendOtpEmail({
 
   await resend.emails.send({ from, to, subject, text, html });
 }
+
+/**
+ * Generic Resend send — used by campaigns + ad-hoc admin sends. Returns the
+ * Resend message id on success, or throws. In dev (no RESEND_API_KEY) it
+ * logs and returns a fake id so the rest of the pipeline still flows.
+ */
+export async function sendRawEmail(opts: {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+  replyTo?: string;
+}): Promise<string> {
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.RESEND_FROM || "GoogolPlex <onboarding@resend.dev>";
+  if (!apiKey) {
+    // eslint-disable-next-line no-console
+    console.log(`[dev] email → ${opts.to} · ${opts.subject}`);
+    return "dev-" + Math.random().toString(36).slice(2, 10);
+  }
+  const resend = new Resend(apiKey);
+  const res = await resend.emails.send({
+    from,
+    to: opts.to,
+    subject: opts.subject,
+    text: opts.text,
+    html: opts.html,
+    ...(opts.replyTo ? { replyTo: opts.replyTo } : {})
+  });
+  // Resend SDK returns { data: { id }, error } — surface whichever is set.
+  if ((res as any)?.error) {
+    throw new Error((res as any).error.message || "Resend error");
+  }
+  return (res as any)?.data?.id || "";
+}

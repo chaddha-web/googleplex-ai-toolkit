@@ -132,6 +132,66 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_cvotes_prop ON community_votes (proposal_id);
   CREATE INDEX IF NOT EXISTS idx_creactions_prop ON community_reactions (proposal_id);
+
+  -- ── Email marketing (admin campaigns) ─────────────────────────────────
+  -- A campaign is the editable draft + the eventual send record. We keep
+  -- the markdown source as the source of truth and re-render HTML at send
+  -- time so we can always tweak the template without rewriting old drafts.
+  CREATE TABLE IF NOT EXISTS email_campaigns (
+    id              TEXT PRIMARY KEY,
+    subject         TEXT NOT NULL,
+    body_md         TEXT NOT NULL,
+    audience_json   TEXT NOT NULL,        -- {tiers, requireOptIn, from, to, countries}
+    status          TEXT NOT NULL,        -- draft|sending|sent|failed
+    created_by      TEXT NOT NULL,        -- admin user id
+    created_at      INTEGER NOT NULL,
+    updated_at      INTEGER NOT NULL,
+    sent_at         INTEGER,
+    recipient_count INTEGER,
+    sent_count      INTEGER NOT NULL DEFAULT 0,
+    fail_count      INTEGER NOT NULL DEFAULT 0,
+    error           TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_email_campaigns_created ON email_campaigns (created_at);
+
+  -- One row per recipient per campaign — full audit trail for who got
+  -- what, and a hook to gate re-tries if a send fails partway through.
+  CREATE TABLE IF NOT EXISTS email_sends (
+    id          TEXT PRIMARY KEY,
+    campaign_id TEXT NOT NULL,
+    user_id     TEXT NOT NULL,
+    email       TEXT NOT NULL,
+    status      TEXT NOT NULL,            -- queued|sent|failed|skipped_unsubscribed
+    resend_id   TEXT,                     -- id Resend returned
+    error       TEXT,
+    sent_at     INTEGER
+  );
+  CREATE INDEX IF NOT EXISTS idx_email_sends_campaign ON email_sends (campaign_id);
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_email_sends_camp_user ON email_sends (campaign_id, user_id);
+
+  -- Persistent unsubscribe list. Survives user deletion and is consulted
+  -- before every send so we never re-email an unsubscriber.
+  CREATE TABLE IF NOT EXISTS email_unsubscribes (
+    email           TEXT PRIMARY KEY,
+    unsubscribed_at INTEGER NOT NULL,
+    reason          TEXT
+  );
+
+  -- Inbound emails routed through Resend → our webhook.
+  CREATE TABLE IF NOT EXISTS email_inbound (
+    id           TEXT PRIMARY KEY,
+    from_email   TEXT NOT NULL,
+    from_name    TEXT,
+    to_email     TEXT NOT NULL,
+    subject      TEXT,
+    body_text    TEXT,
+    body_html    TEXT,
+    resend_id    TEXT,
+    received_at  INTEGER NOT NULL,
+    read_at      INTEGER,
+    archived_at  INTEGER
+  );
+  CREATE INDEX IF NOT EXISTS idx_email_inbound_received ON email_inbound (received_at);
 `);
 
 // Seed a few starter proposals once.
@@ -342,6 +402,49 @@ export const stmts = {
     byHash:  db.prepare<[string], RefreshRow>(`SELECT * FROM refresh_tokens WHERE token_hash = ?`),
     revoke:  db.prepare(`UPDATE refresh_tokens SET revoked_at = ?, replaced_by_id = ? WHERE id = ?`),
     revokeFamily: db.prepare(`UPDATE refresh_tokens SET revoked_at = COALESCE(revoked_at, ?) WHERE family_id = ?`)
+  },
+  email: {
+    // Campaigns
+    campaignList: db.prepare(`SELECT id, subject, status, created_at, sent_at, recipient_count, sent_count, fail_count FROM email_campaigns ORDER BY created_at DESC LIMIT 200`),
+    campaignById: db.prepare(`SELECT * FROM email_campaigns WHERE id = ?`),
+    campaignInsert: db.prepare(`
+      INSERT INTO email_campaigns
+        (id, subject, body_md, audience_json, status, created_by, created_at, updated_at)
+      VALUES
+        (@id, @subject, @body_md, @audience_json, 'draft', @created_by, @created_at, @updated_at)
+    `),
+    campaignUpdate: db.prepare(`
+      UPDATE email_campaigns
+         SET subject = @subject, body_md = @body_md, audience_json = @audience_json, updated_at = @updated_at
+       WHERE id = @id
+    `),
+    campaignStatus: db.prepare(`
+      UPDATE email_campaigns
+         SET status = @status, recipient_count = @recipient_count, sent_count = @sent_count, fail_count = @fail_count,
+             sent_at = @sent_at, error = @error, updated_at = @updated_at
+       WHERE id = @id
+    `),
+    campaignDelete: db.prepare(`DELETE FROM email_campaigns WHERE id = ?`),
+    // Per-recipient sends
+    sendInsert: db.prepare(`
+      INSERT OR IGNORE INTO email_sends (id, campaign_id, user_id, email, status) VALUES (@id, @campaign_id, @user_id, @email, 'queued')
+    `),
+    sendMark: db.prepare(`
+      UPDATE email_sends SET status = @status, resend_id = @resend_id, error = @error, sent_at = @sent_at WHERE id = @id
+    `),
+    sendsForCampaign: db.prepare(`SELECT id, user_id, email, status, resend_id, error, sent_at FROM email_sends WHERE campaign_id = ? ORDER BY sent_at DESC LIMIT 500`),
+    // Unsubscribes
+    unsubGet: db.prepare(`SELECT email FROM email_unsubscribes WHERE email = ?`),
+    unsubAdd: db.prepare(`INSERT OR IGNORE INTO email_unsubscribes (email, unsubscribed_at, reason) VALUES (?, ?, ?)`),
+    // Inbox
+    inboxInsert: db.prepare(`
+      INSERT INTO email_inbound (id, from_email, from_name, to_email, subject, body_text, body_html, resend_id, received_at)
+      VALUES (@id, @from_email, @from_name, @to_email, @subject, @body_text, @body_html, @resend_id, @received_at)
+    `),
+    inboxList: db.prepare(`SELECT id, from_email, from_name, to_email, subject, received_at, read_at, archived_at FROM email_inbound WHERE archived_at IS NULL ORDER BY received_at DESC LIMIT 200`),
+    inboxById: db.prepare(`SELECT * FROM email_inbound WHERE id = ?`),
+    inboxMarkRead: db.prepare(`UPDATE email_inbound SET read_at = ? WHERE id = ? AND read_at IS NULL`),
+    inboxArchive: db.prepare(`UPDATE email_inbound SET archived_at = ? WHERE id = ?`)
   }
 };
 

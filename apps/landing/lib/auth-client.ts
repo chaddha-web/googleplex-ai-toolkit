@@ -378,6 +378,113 @@ export async function promoteAdmin(code11: string): Promise<string> {
   return data.email as string;
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Email marketing (admin-only) + inbox helpers
+// ────────────────────────────────────────────────────────────────────────────
+
+export type EmailAudience = {
+  tiers?: Array<"new" | "activated" | "built">;
+  requireOptIn?: boolean;
+  from?: number | null;
+  to?: number | null;
+  countries?: string[];
+};
+
+export type CampaignRow = {
+  id: string;
+  subject: string;
+  status: "draft" | "sending" | "sent" | "failed";
+  created_at: number;
+  sent_at: number | null;
+  recipient_count: number | null;
+  sent_count: number;
+  fail_count: number;
+};
+
+export type CampaignDetail = CampaignRow & {
+  body_md: string;
+  audience: EmailAudience;
+  error: string | null;
+};
+
+export type InboxRow = {
+  id: string;
+  from_email: string;
+  from_name: string | null;
+  to_email: string;
+  subject: string | null;
+  received_at: number;
+  read_at: number | null;
+  archived_at: number | null;
+};
+
+export type InboxMessage = InboxRow & {
+  body_text: string | null;
+  body_html: string | null;
+};
+
+async function authedJson<T>(input: string, init: RequestInit = {}): Promise<T> {
+  const res = await authedFetch(input, init);
+  const data = await res.json().catch(() => ({} as any));
+  if (!res.ok) throw new Error((data as any)?.error || `HTTP ${res.status}`);
+  return data as T;
+}
+
+export const email = {
+  listCampaigns: () =>
+    authedJson<{ campaigns: CampaignRow[] }>(`${AUTH_BASE}/auth/admin/campaigns`).then((r) => r.campaigns),
+  getCampaign: (id: string) =>
+    authedJson<{ campaign: CampaignDetail; sends: Array<{ email: string; status: string; error: string | null; sent_at: number | null }> }>(
+      `${AUTH_BASE}/auth/admin/campaigns/${id}`
+    ),
+  createCampaign: (body: { subject: string; body_md: string; audience: EmailAudience }) =>
+    authedJson<{ id: string }>(`${AUTH_BASE}/auth/admin/campaigns`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    }),
+  updateCampaign: (id: string, body: { subject?: string; body_md?: string; audience?: EmailAudience }) =>
+    authedJson<{ ok: true }>(`${AUTH_BASE}/auth/admin/campaigns/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    }),
+  deleteCampaign: (id: string) =>
+    authedJson<{ ok: true }>(`${AUTH_BASE}/auth/admin/campaigns/${id}`, { method: "DELETE" }),
+  preview: (body_md: string, subject = "") =>
+    authedJson<{ html: string; text: string; subject: string }>(
+      `${AUTH_BASE}/auth/admin/email/preview`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body_md, subject })
+      }
+    ),
+  audienceCount: (audience: EmailAudience) =>
+    authedJson<{ total: number; effective: number }>(`${AUTH_BASE}/auth/admin/email/audience-count`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(audience)
+    }),
+  sendTest: (id: string, to?: string) =>
+    authedJson<{ ok: true; resend_id: string }>(`${AUTH_BASE}/auth/admin/campaigns/${id}/test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to: to || "" })
+    }),
+  sendCampaign: (id: string) =>
+    authedJson<{ ok: true; status: string; recipient_count: number }>(
+      `${AUTH_BASE}/auth/admin/campaigns/${id}/send`,
+      { method: "POST" }
+    ),
+  // Inbox
+  listInbox: () => authedJson<{ messages: InboxRow[] }>(`${AUTH_BASE}/auth/admin/inbox`).then((r) => r.messages),
+  getInbox: (id: string) =>
+    authedJson<{ message: InboxMessage }>(`${AUTH_BASE}/auth/admin/inbox/${id}`).then((r) => r.message),
+  archiveInbox: (id: string) =>
+    authedJson<{ ok: true }>(`${AUTH_BASE}/auth/admin/inbox/${id}/archive`, { method: "POST" })
+};
+
 export async function signOut(): Promise<void> {
   const refresh = loadRefresh();
   if (refresh) {

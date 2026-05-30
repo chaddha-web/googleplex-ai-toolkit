@@ -254,10 +254,22 @@ export default function AdminHome() {
 
         <div className="mt-10 flex gap-3 flex-wrap">
           <Link
+            href="/app/admin/campaigns"
+            className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
+          >
+            Email campaigns
+          </Link>
+          <Link
+            href="/app/admin/inbox"
+            className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
+          >
+            Inbox
+          </Link>
+          <Link
             href="/app/admin/settings"
             className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
           >
-            ⚙ Settings
+            Settings
           </Link>
           <Link
             href="/app"

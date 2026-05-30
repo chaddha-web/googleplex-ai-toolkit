@@ -7,6 +7,7 @@ import { authRoutes } from "./routes/auth.js";
 import { walletRoutes } from "./routes/wallet.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { communityRoutes } from "./routes/community.js";
+import { emailRoutes } from "./routes/email.js";
 import { notify } from "./notify.js";
 import { startTelegramBot } from "./telegram-bot.js";
 
@@ -53,7 +54,8 @@ await app.register(cors, {
     cb(new Error("Not allowed by CORS"), false);
   },
   credentials: true,
-  methods: ["GET", "POST", "OPTIONS"],
+  // PATCH + DELETE are used by /auth/admin/campaigns/:id (edit drafts / wipe).
+  methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: [
     "Content-Type",
     "Authorization",
@@ -69,6 +71,7 @@ await app.register(authRoutes);
 await app.register(walletRoutes);
 await app.register(settingsRoutes);
 await app.register(communityRoutes);
+await app.register(emailRoutes);
 
 // Interactive Telegram command bot (/usage, /count, /paid, /stats).
 startTelegramBot();
