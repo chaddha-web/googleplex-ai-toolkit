@@ -49,7 +49,13 @@ await app.register(cors, {
     "Content-Type",
     "Authorization",
     "Idempotency-Key",
-    "X-Idempotency-Key"
+    "X-Idempotency-Key",
+    // apps/web injects this on every authedFetch (incl. wallet calls) so the
+    // auth service can identify the caller's session. The wallet service
+    // ignores it, but the browser still sends it on wallet requests — so it
+    // MUST be allow-listed here or the CORS preflight fails and every wallet
+    // call dies with "WALLET SERVICE OFFLINE".
+    "X-Current-Session"
   ]
 });
 
