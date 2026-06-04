@@ -124,11 +124,13 @@ function TopBar({
     <header className="sticky top-0 z-20 flex items-center justify-between gap-4 px-6 md:px-10 py-4 border-b border-white/5 bg-black/60 backdrop-blur">
       {/* Branding — moved here from the sidebar into the prominent top bar. */}
       <div className="flex items-center gap-4 min-w-0">
-        <a href={LANDING_URL} className="flex items-center gap-2.5 shrink-0">
+        {/* Brand stays inside the dashboard — links to the dashboard home,
+            NOT the public landing site. */}
+        <Link href="/" className="flex items-center gap-2.5 shrink-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png" alt="GoogolPlex" className="h-9 w-auto object-contain" />
           <span className="text-xl font-medium tracking-tight hidden sm:inline">GoogolPlex</span>
-        </a>
+        </Link>
         {/* Mobile: inline nav alongside the brand */}
         <MobileNav />
       </div>
