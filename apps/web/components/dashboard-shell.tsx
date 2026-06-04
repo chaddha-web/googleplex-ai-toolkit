@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-context";
 
 const LANDING_URL =
@@ -20,9 +20,9 @@ const NAV_ITEMS: { href: string; label: string }[] = [
 /**
  * Outer shell used by every page in apps/web.
  *
- * Layout: fixed-width sidebar on md+, full-width topbar otherwise.
- * Design language is pulled from apps/landing (dark, liquid-glass, font-serif
- * italics for emphasis).
+ * Layout: fixed-width sidebar on md+. On mobile the same sidebar becomes a
+ * slide-in drawer toggled by a hamburger in the top bar, dismissed by tapping
+ * the backdrop or any nav item.
  *
  * Auth: if the user isn't signed in after the auth context resolves, we
  * redirect to landing's /login (single source of truth for sign-in).
@@ -31,6 +31,21 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const { status, user, signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Close the mobile drawer whenever the route changes (a nav item was tapped).
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+
+  // Lock body scroll while the drawer is open so the page behind doesn't move.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.body.style.overflow = menuOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [menuOpen]);
 
   useEffect(() => {
     if (status === "anonymous") {
@@ -61,11 +76,32 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen w-full">
-      <Sidebar pathname={pathname} />
+      {/* Desktop sidebar (static) */}
+      <Sidebar pathname={pathname} className="hidden md:flex" />
+
+      {/* Mobile drawer + backdrop */}
+      {menuOpen && (
+        <>
+          {/* Backdrop — tap anywhere off the menu to dismiss. */}
+          <div
+            className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm md:hidden"
+            onClick={() => setMenuOpen(false)}
+            aria-hidden="true"
+          />
+          <Sidebar
+            pathname={pathname}
+            className="fixed inset-y-0 left-0 z-40 flex md:hidden animate-[slideIn_0.18s_ease-out]"
+            onNavigate={() => setMenuOpen(false)}
+          />
+        </>
+      )}
+
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar
           firstName={user?.firstName ?? ""}
           email={user?.email ?? ""}
+          menuOpen={menuOpen}
+          onToggleMenu={() => setMenuOpen((v) => !v)}
           onSignOut={async () => {
             await signOut();
             router.refresh();
@@ -73,13 +109,35 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         />
         <main className="flex-1 px-6 md:px-10 py-10">{children}</main>
       </div>
+
+      {/* Drawer slide-in keyframe (scoped, no global CSS needed). */}
+      <style jsx global>{`
+        @keyframes slideIn {
+          from {
+            transform: translateX(-100%);
+          }
+          to {
+            transform: translateX(0);
+          }
+        }
+      `}</style>
     </div>
   );
 }
 
-function Sidebar({ pathname }: { pathname: string }) {
+function Sidebar({
+  pathname,
+  className = "",
+  onNavigate
+}: {
+  pathname: string;
+  className?: string;
+  onNavigate?: () => void;
+}) {
   return (
-    <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-white/5 bg-black/40 backdrop-blur-sm">
+    <aside
+      className={`w-60 shrink-0 flex-col border-r border-white/5 bg-black/90 md:bg-black/40 backdrop-blur-sm ${className}`}
+    >
       <nav className="px-3 pt-6 flex-1">
         <ul className="space-y-1">
           {NAV_ITEMS.map((item) => {
@@ -91,6 +149,7 @@ function Sidebar({ pathname }: { pathname: string }) {
               <li key={item.href}>
                 <Link
                   href={item.href}
+                  onClick={onNavigate}
                   className={`block rounded-xl px-4 py-2.5 text-sm transition-colors ${
                     active
                       ? "bg-white text-black font-medium"
@@ -114,16 +173,41 @@ function Sidebar({ pathname }: { pathname: string }) {
 function TopBar({
   firstName,
   email,
+  menuOpen,
+  onToggleMenu,
   onSignOut
 }: {
   firstName: string;
   email: string;
+  menuOpen: boolean;
+  onToggleMenu: () => void;
   onSignOut: () => void;
 }) {
   return (
     <header className="sticky top-0 z-20 flex items-center justify-between gap-4 px-6 md:px-10 py-4 border-b border-white/5 bg-black/60 backdrop-blur">
-      {/* Branding — moved here from the sidebar into the prominent top bar. */}
-      <div className="flex items-center gap-4 min-w-0">
+      <div className="flex items-center gap-3 min-w-0">
+        {/* Hamburger — mobile only. Toggles the drawer. */}
+        <button
+          type="button"
+          onClick={onToggleMenu}
+          aria-label={menuOpen ? "Close menu" : "Open menu"}
+          aria-expanded={menuOpen}
+          className="md:hidden -ml-1 p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/5 transition-colors"
+        >
+          {menuOpen ? (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          ) : (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          )}
+        </button>
+
         {/* Brand stays inside the dashboard — links to the dashboard home,
             NOT the public landing site. */}
         <Link href="/" className="flex items-center gap-2.5 shrink-0">
@@ -131,8 +215,6 @@ function TopBar({
           <img src="/logo.png" alt="GoogolPlex" className="h-9 w-auto object-contain" />
           <span className="text-xl font-medium tracking-tight hidden sm:inline">GoogolPlex</span>
         </Link>
-        {/* Mobile: inline nav alongside the brand */}
-        <MobileNav />
       </div>
       <div className="ml-auto flex items-center gap-3">
         <div className="text-right hidden sm:block">
@@ -150,32 +232,5 @@ function TopBar({
         </button>
       </div>
     </header>
-  );
-}
-
-function MobileNav() {
-  const pathname = usePathname();
-  return (
-    <nav className="md:hidden flex items-center gap-2 overflow-x-auto">
-      {NAV_ITEMS.map((item) => {
-        const active =
-          item.href === "/"
-            ? pathname === "/"
-            : pathname.startsWith(item.href);
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`text-xs rounded-full px-3 py-1.5 whitespace-nowrap transition-colors ${
-              active
-                ? "bg-white text-black"
-                : "text-white/60 ring-1 ring-white/10 hover:text-white"
-            }`}
-          >
-            {item.label}
-          </Link>
-        );
-      })}
-    </nav>
   );
 }
