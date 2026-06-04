@@ -66,10 +66,30 @@ export async function pingTron(): Promise<number> {
 // Local helpers
 // ────────────────────────────────────────────────────────────────────────────
 
+// Pure-JS base58check decode for TRON addresses. We deliberately avoid
+// require("bs58check") here: this module runs under ESM (tsx/Node ESM), where
+// `require` is undefined — so the old code threw "require is not defined" on
+// EVERY TRC20 balance read, silently zeroing all Tron deposits. This decoder
+// returns the 21-byte payload (0x41 version + 20 address bytes), checksum
+// stripped — matching the previous bs58check.decode() output shape.
+const B58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 function base58ToHex(b58: string): string {
-  // Minimal in-line decoder so we don't import bs58 here too.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const bs58check = require("bs58check");
-  const bytes: Buffer = bs58check.decode(b58);
-  return "0x" + bytes.toString("hex");
+  let num = 0n;
+  for (const ch of b58) {
+    const idx = B58_ALPHABET.indexOf(ch);
+    if (idx < 0) throw new Error(`Invalid base58 char '${ch}'`);
+    num = num * 58n + BigInt(idx);
+  }
+  // Count leading '1's → leading zero bytes.
+  let leadingZeros = 0;
+  for (const ch of b58) {
+    if (ch === "1") leadingZeros++;
+    else break;
+  }
+  let hex = num.toString(16);
+  if (hex.length % 2) hex = "0" + hex;
+  hex = "00".repeat(leadingZeros) + hex;
+  const full = Buffer.from(hex, "hex"); // version(1) + payload(20) + checksum(4) = 25
+  const payload = full.subarray(0, full.length - 4); // strip 4-byte checksum → 21 bytes
+  return "0x" + payload.toString("hex");
 }
