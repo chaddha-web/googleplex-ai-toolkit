@@ -50,9 +50,20 @@ app.setErrorHandler((err, req, reply) => {
 
 await app.register(cors, {
   origin: (origin, cb) => {
-    // Allow same-origin / curl (no Origin header) and any whitelisted origin.
-    if (!origin || ORIGINS.includes(origin)) return cb(null, true);
-    cb(new Error("Not allowed by CORS"), false);
+    // Allow same-origin / curl (no Origin header), any whitelisted origin, and
+    // the apex domain + ANY *.ggakingclub.com subdomain (www, app, admin,
+    // wallet, auth …). The explicit CORS_ORIGINS list was missing `www`, which
+    // is what triggered the 5xx CORS spam. We also return `false` rather than
+    // throwing for disallowed origins, so a foreign origin (scanner) yields a
+    // clean blocked preflight instead of a 500 that pages Telegram.
+    if (
+      !origin ||
+      ORIGINS.includes(origin) ||
+      /^https?:\/\/(.+\.)?ggakingclub\.com$/i.test(origin)
+    ) {
+      return cb(null, true);
+    }
+    cb(null, false);
   },
   credentials: true,
   // PATCH + DELETE are used by /auth/admin/campaigns/:id (edit drafts / wipe).
