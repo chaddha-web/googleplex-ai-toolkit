@@ -80,12 +80,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 function Sidebar({ pathname }: { pathname: string }) {
   return (
     <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-white/5 bg-black/40 backdrop-blur-sm">
-      <a href={LANDING_URL} className="flex items-center gap-2 px-6 py-6 text-white">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo.png" alt="GoogolPlex" className="h-7 w-auto object-contain" />
-        <span className="text-lg font-medium tracking-tight">GoogolPlex</span>
-      </a>
-      <nav className="px-3 mt-2 flex-1">
+      <nav className="px-3 pt-6 flex-1">
         <ul className="space-y-1">
           {NAV_ITEMS.map((item) => {
             const active =
@@ -127,8 +122,16 @@ function TopBar({
 }) {
   return (
     <header className="sticky top-0 z-20 flex items-center justify-between gap-4 px-6 md:px-10 py-4 border-b border-white/5 bg-black/60 backdrop-blur">
-      {/* Mobile: also show inline nav */}
-      <MobileNav />
+      {/* Branding — moved here from the sidebar into the prominent top bar. */}
+      <div className="flex items-center gap-4 min-w-0">
+        <a href={LANDING_URL} className="flex items-center gap-2.5 shrink-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="GoogolPlex" className="h-9 w-auto object-contain" />
+          <span className="text-xl font-medium tracking-tight hidden sm:inline">GoogolPlex</span>
+        </a>
+        {/* Mobile: inline nav alongside the brand */}
+        <MobileNav />
+      </div>
       <div className="ml-auto flex items-center gap-3">
         <div className="text-right hidden sm:block">
           <p className="text-white text-sm leading-tight">
