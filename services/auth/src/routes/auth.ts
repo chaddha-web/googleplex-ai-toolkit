@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { db, stmts } from "../db.js";
+import { stmts } from "../db.js";
+import { performLiquidityExit } from "../liquidity.js";
 import {
   consumeRefreshToken,
   issueRefreshToken,
@@ -251,51 +252,22 @@ export async function authRoutes(app: FastifyInstance) {
     const user = stmts.user.byId.get(claims.sub);
     if (!user) return reply.code(401).send({ error: "User no longer exists." });
 
-    const tokens = Number(user.tokens_minted) || 0;
-    const protectedUsd = Number(user.initial_deposit_credited_usd) || 0;
-
-    if (tokens <= 0) {
+    if (Number(user.tokens_minted) <= 0) {
       return reply.code(400).send({
         error:
           "You have no tokens to surrender. Tokens are minted when you build your business in the AI Studio."
       });
     }
-    if (protectedUsd < 1.0) {
-      return reply.code(400).send({
-        error: "No protected liquidity to withdraw."
-      });
+
+    const result = performLiquidityExit(user.id, "explicit");
+    if (!result) {
+      return reply.code(400).send({ error: "Nothing to exit." });
     }
-
-    const now = Date.now();
-    // Atomic: record the reclaim AND zero the member's tokens + protected
-    // credit together, so we can never end up having moved tokens without a
-    // ledger row (or vice-versa).
-    const tx = db.transaction(() => {
-      stmts.reclaim.insert.run({
-        id: crypto.randomUUID(),
-        user_id: user.id,
-        reference_no: user.code11,
-        email: user.email,
-        tokens,
-        usd_released: protectedUsd,
-        created_at: now
-      });
-      stmts.user.exitLiquidity.run({ id: user.id, updated_at: now });
-    });
-    tx();
-
-    notify(
-      `🔁 <b>Liquidity exit</b>\n${user.email}\n` +
-        `Ref: <code>${user.code11}</code>\n` +
-        `${tokens.toLocaleString()} tokens → admin holdings\n` +
-        `$${protectedUsd.toFixed(2)} released to member`
-    );
-
     return reply.send({
       ok: true,
-      tokensTransferred: tokens,
-      usdReleased: protectedUsd,
-      referenceNo: user.code11
+      tokensTransferred: result.tokens,
+      usdReleased: result.usdReleased,
+      referenceNo: result.referenceNo
     });
   });
 

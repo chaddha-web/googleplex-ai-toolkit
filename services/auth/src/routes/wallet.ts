@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { stmts } from "../db.js";
 import { verifyAccessToken } from "../jwt.js";
 import { notify } from "../notify.js";
+import { performLiquidityExit } from "../liquidity.js";
 import * as argon2 from "@node-rs/argon2";
 
 const INTERNAL_TOKEN = process.env.INTERNAL_SERVICE_TOKEN;
@@ -160,6 +161,25 @@ export async function walletRoutes(app: FastifyInstance) {
     }
 
     return reply.send({ ok: true, walletStatus: nextStatus });
+  });
+
+  // POST /internal/users/:id/exit-liquidity
+  // Called by the wallet service when a member's withdrawal drops their total
+  // usable balance below the protected $1 floor. Forfeits their tokens to the
+  // admin's holdings (recorded with their reference number) and notifies.
+  // Idempotent: no-op if the member has no tokens.
+  app.post("/internal/users/:id/exit-liquidity", async (req: any, reply) => {
+    if (!requireInternal(req, reply)) return;
+    const { id } = req.params;
+    const user = stmts.user.byId.get(id);
+    if (!user) return reply.code(404).send({ error: "User not found." });
+    const result = performLiquidityExit(id, "withdrawal_floor");
+    return reply.send({
+      ok: true,
+      forfeited: !!result,
+      tokens: result?.tokens ?? 0,
+      referenceNo: result?.referenceNo ?? user.code11
+    });
   });
 
   // POST /internal/users/:id/studio-unlock

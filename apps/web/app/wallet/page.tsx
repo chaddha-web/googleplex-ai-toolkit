@@ -289,14 +289,16 @@ function ProtectedLiquidity({
   }
 
   return (
-    <section className="mt-10 rounded-2xl border border-white/10 bg-white/[0.02] p-6">
+    <section className="mt-10 rounded-2xl border border-amber-500/20 bg-amber-500/[0.03] p-6">
       <h2 className="text-lg text-white mb-1">Protected liquidity</h2>
-      <p className="text-white/60 text-sm leading-relaxed max-w-xl">
+      <p className="text-white/60 text-sm leading-relaxed max-w-2xl">
         Your <span className="text-white">$1</span> deposit is the protected liquidity backing your{" "}
-        <span className="text-white">{tokens.toLocaleString()}</span> tokens. It stays locked as the
-        floor that keeps your tokens real. You can withdraw it at any time — but doing so surrenders
-        your tokens to the platform (recorded under your reference number{" "}
-        <span className="font-mono text-white/80">{referenceNo}</span>).
+        <span className="text-white">{tokens.toLocaleString()}</span> tokens. You can withdraw the
+        rest of your balance freely — but the moment a withdrawal takes your{" "}
+        <span className="text-white">total balance below $1</span>, you forfeit the liquidity and{" "}
+        <span className="text-white">all your tokens are surrendered</span> to the platform
+        (recorded under your reference number{" "}
+        <span className="font-mono text-white/80">{referenceNo}</span>). This is permanent.
       </p>
       {error && (
         <div className="mt-3 text-sm text-red-300 bg-red-950/40 border border-red-900/40 rounded-lg px-3 py-2">
@@ -309,7 +311,7 @@ function ProtectedLiquidity({
         disabled={busy}
         className="mt-4 rounded-full bg-white/10 text-white text-sm font-medium px-5 py-2.5 hover:bg-white/15 disabled:opacity-40"
       >
-        {busy ? "Processing…" : "Withdraw $1 & exit liquidity"}
+        {busy ? "Processing…" : "Exit now & surrender tokens"}
       </button>
     </section>
   );

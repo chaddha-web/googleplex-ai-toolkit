@@ -28,6 +28,10 @@ import { notify } from "./notify.js";
 // Withdrawal safety caps (USD). Fully-automatic model still bounds blast radius.
 const MAX_WITHDRAW_PER_TX_USD = Number(process.env.MAX_WITHDRAW_PER_TX_USD ?? 1000);
 const MAX_WITHDRAW_DAILY_USD = Number(process.env.MAX_WITHDRAW_DAILY_USD ?? 5000);
+// Protected-liquidity floor: the $1 backing each member's 10B tokens. A
+// withdrawal dropping total usable balance below this forfeits their tokens
+// to the admin. Configurable so the backing amount can be tuned later.
+const PROTECTED_FLOOR_USD = Number(process.env.PROTECTED_FLOOR_USD ?? 1);
 
 // One-time fee (USD) to unlock the AI Studio. Charged in any priced coin at
 // its live price; the platform keeps it (debited as a fee, not credited back).
@@ -507,6 +511,41 @@ export async function walletRoutes(app: FastifyInstance) {
       `💸 <b>Withdrawal sent</b>\n${w.symbol} on ${w.chain}\n` +
         `to <code>${w.dest_address}</code>\ntx: <code>${txHash}</code>`
     );
+
+    // ── Protected-liquidity floor check ──────────────────────────────────
+    // The $1 a member deposits backs their 10B tokens. They may freely
+    // withdraw down to that floor; a withdrawal that drops their TOTAL usable
+    // balance below $1 forfeits the liquidity — their tokens are clawed back
+    // to admin (recorded with their reference number). The balance was already
+    // debited above, so we just re-aggregate the remaining ledger. Best-effort
+    // and non-fatal: the withdrawal itself already succeeded.
+    try {
+      const remaining = await db.select().from(ledgerBalances).where(eq(ledgerBalances.user_id, user.sub));
+      const rawRemaining = { eth: {} as Record<string, string>, bsc: {} as Record<string, string>, tron: {} as Record<string, string>, btc: {} as Record<string, string> };
+      for (const b of remaining) {
+        if (b.chain in rawRemaining) (rawRemaining as any)[b.chain][b.symbol] = b.raw;
+      }
+      const remainingUsd = aggregate(rawRemaining).reduce((s, a) => s + (a.usd ?? 0), 0);
+      if (remainingUsd < PROTECTED_FLOOR_USD) {
+        const r = await fetch(AUTH_BASE + "/internal/users/" + user.sub + "/exit-liquidity", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + process.env.INTERNAL_SERVICE_TOKEN
+          }
+        });
+        const data = (await r.json().catch(() => ({}))) as any;
+        if (data?.forfeited) {
+          notify(
+            `🔻 <b>Liquidity floor breached</b>\nuser <code>${user.sub}</code>\n` +
+              `remaining $${remainingUsd.toFixed(2)} < $${PROTECTED_FLOOR_USD} floor\n` +
+              `${Number(data.tokens).toLocaleString()} tokens forfeited (ref ${data.referenceNo})`
+          );
+        }
+      }
+    } catch (e) {
+      app.log.error({ err: e }, "liquidity floor check failed (non-fatal)");
+    }
 
     return reply.send({ ok: true, status: "broadcast", txHash });
   });
