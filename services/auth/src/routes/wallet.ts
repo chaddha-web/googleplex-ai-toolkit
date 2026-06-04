@@ -7,11 +7,6 @@ import * as argon2 from "@node-rs/argon2";
 
 const INTERNAL_TOKEN = process.env.INTERNAL_SERVICE_TOKEN;
 
-// GoogolPlex Seva Credit — each member's personalized allocation, issued
-// immediately the moment their $1 activation deposit clears (not at Studio
-// build). 10 billion credits per member.
-const SEVA_CREDIT_AMOUNT = 10_000_000_000;
-
 // Route types
 type WalletPasswordBody = { password?: string };
 type WalletStatusBody = { status?: string };
@@ -157,30 +152,14 @@ export async function walletRoutes(app: FastifyInstance) {
       updated_at: now
     });
 
-    // Wallet just became active (the $1 activation cleared).
+    // Wallet just became active (the $1 activation cleared). The member can
+    // now GENERATE their Seva Credit on demand from the dashboard — see
+    // POST /auth/seva/generate. We don't auto-mint here.
     if (nextStatus === "active" && user.wallet_status !== "active") {
       notify(
         `✅ <b>Wallet activated</b>\n${user.email}\n` +
           `ID: <code>${user.code11}</code> · credited $${Number(creditedUsd).toFixed(2)}`
       );
-
-      // Issue the 10B GoogolPlex Seva Credit immediately, once. (Previously
-      // these were minted only at AI Studio build — now they land the moment
-      // the member's $1 clears.)
-      if (Number(user.tokens_minted) <= 0) {
-        const mintAt = Date.now();
-        stmts.user.mintTokens.run({
-          id,
-          tokens_minted: SEVA_CREDIT_AMOUNT,
-          tokens_minted_at: mintAt,
-          updated_at: mintAt
-        });
-        notify(
-          `🪙 <b>GoogolPlex Seva Credit issued</b>\n${user.email}\n` +
-            `ID: <code>${user.code11}</code>\n` +
-            `${SEVA_CREDIT_AMOUNT.toLocaleString()} credits`
-        );
-      }
     }
 
     return reply.send({ ok: true, walletStatus: nextStatus });

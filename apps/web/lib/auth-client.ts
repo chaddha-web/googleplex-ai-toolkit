@@ -374,6 +374,20 @@ async function authedJsonWeb<T>(input: string, init: RequestInit = {}): Promise<
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// Seva Credit — active members generate their 10B against the deposited $1
+// ────────────────────────────────────────────────────────────────────────────
+
+export async function generateSevaCredits(): Promise<{
+  sevaCredit: number;
+  alreadyGenerated?: boolean;
+}> {
+  const res = await authedFetch(`${AUTH_BASE}/auth/seva/generate`, { method: "POST" });
+  const data = await res.json().catch(() => ({} as any));
+  if (!res.ok) throw new Error((data as any)?.error || "Could not generate Seva Credit.");
+  return data;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Liquidity exit — withdraw the protected $1; surrenders all tokens to admin
 // ────────────────────────────────────────────────────────────────────────────
 

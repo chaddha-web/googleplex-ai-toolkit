@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-context";
-import { authedFetch, type WalletStatus } from "@/lib/auth-client";
+import { authedFetch, generateSevaCredits, type WalletStatus } from "@/lib/auth-client";
 
 const WALLET_BASE =
   process.env.NEXT_PUBLIC_WALLET_BASE || "http://localhost:4201";
@@ -29,7 +29,7 @@ const DECIMALS: Record<string, number> = {
  * (/wallet/history). Wallet-not-active banner deep-links to onboarding.
  */
 export default function HomePage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [totalUsd, setTotalUsd] = useState<number | null>(null);
   const [history, setHistory] = useState<LedgerEntry[] | null>(null);
 
@@ -63,6 +63,12 @@ export default function HomePage() {
   return (
     <div className="max-w-5xl mx-auto">
       <WalletBanner status={user.walletStatus} />
+
+      {/* Active members generate their 10B GoogolPlex Seva Credit against the
+          $1 they deposited. Shown only while active and not yet generated. */}
+      {user.walletStatus === "active" && (user.tokensMinted ?? 0) <= 0 && (
+        <GenerateSevaCard onGenerated={refreshUser} />
+      )}
 
       <p className="text-white/40 text-xs tracking-[0.3em] uppercase">
         Signed in as
@@ -235,5 +241,102 @@ function WalletBanner({ status }: { status?: WalletStatus }) {
         <span className="text-white/60 text-xl shrink-0">→</span>
       </div>
     </a>
+  );
+}
+
+const SEVA_TARGET = 10_000_000_000;
+
+/**
+ * Active members generate their 10B GoogolPlex Seva Credit on demand against
+ * the $1 they deposited. The generation plays a minting process (count-up
+ * 0 → 10B) right here, then the credit lives in the wallet.
+ */
+function GenerateSevaCard({ onGenerated }: { onGenerated: () => Promise<unknown> }) {
+  const [phase, setPhase] = useState<"idle" | "minting" | "done">("idle");
+  const [shown, setShown] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const rafRef = useRef(0);
+
+  async function generate() {
+    setError(null);
+    setPhase("minting");
+    try {
+      await generateSevaCredits();
+    } catch (e) {
+      setPhase("idle");
+      setError((e as Error).message);
+      return;
+    }
+    // Play the count-up, then refresh the user so the card retires and the
+    // credit shows in the wallet.
+    const duration = 2400;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setShown(Math.floor(eased * SEVA_TARGET));
+      if (t < 1) {
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        setShown(SEVA_TARGET);
+        setPhase("done");
+        setTimeout(() => {
+          onGenerated();
+        }, 1200);
+      }
+    };
+    rafRef.current = requestAnimationFrame(tick);
+  }
+
+  useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
+
+  if (phase === "minting" || phase === "done") {
+    return (
+      <div className="liquid-glass rounded-2xl p-5 mb-10 ring-1 ring-amber-300/40 shadow-[0_0_40px_-12px_rgba(252,211,77,0.4)]">
+        <div className="flex items-center gap-2 mb-2">
+          <p className="text-amber-200 text-[10px] tracking-[0.3em] uppercase">
+            GoogolPlex Seva Credit
+          </p>
+          {phase === "minting" && (
+            <span className="inline-block w-3 h-3 rounded-full border-2 border-amber-300/40 border-t-amber-300 animate-spin" />
+          )}
+        </div>
+        <p className="text-4xl font-medium tracking-tight tabular-nums">
+          {shown.toLocaleString()}
+        </p>
+        <p className="text-white/50 text-sm mt-1">
+          {phase === "minting"
+            ? "Generating your Seva Credit against your $1…"
+            : "Generated. Find it in your wallet."}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="liquid-glass rounded-2xl p-5 mb-10 ring-1 ring-amber-300/25">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-amber-200 text-[10px] tracking-[0.3em] uppercase mb-1.5">
+            Wallet active
+          </p>
+          <p className="text-white text-base font-medium">
+            Generate your GoogolPlex Seva Credit
+          </p>
+          <p className="text-white/60 text-sm mt-1 leading-relaxed">
+            Claim your {SEVA_TARGET.toLocaleString()} Seva Credit against the $1 you deposited.
+            One-time.
+          </p>
+          {error && <p className="text-red-300 text-sm mt-2">{error}</p>}
+        </div>
+        <button
+          type="button"
+          onClick={generate}
+          className="shrink-0 rounded-full bg-amber-300 text-black text-sm font-medium px-5 py-2.5 hover:bg-amber-200 transition-colors"
+        >
+          Generate
+        </button>
+      </div>
+    </div>
   );
 }

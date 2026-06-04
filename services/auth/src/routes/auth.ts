@@ -13,8 +13,10 @@ import {
 import crypto from "node:crypto";
 import { notify } from "../notify.js";
 
-// 10 billion personalized tokens — minted once the member builds in the Studio.
+// 10 billion GoogolPlex Seva Credit — generated once, on demand, by an active
+// member against their deposited $1 (see POST /auth/seva/generate).
 const TOKENS_PER_MEMBER = 10_000_000_000;
+const SEVA_CREDIT_AMOUNT = TOKENS_PER_MEMBER;
 
 type RefreshBody = { refreshToken?: unknown };
 type LogoutBody = { refreshToken?: unknown };
@@ -231,6 +233,46 @@ export async function authRoutes(app: FastifyInstance) {
     );
 
     return reply.send({ ok: true, tokensMinted: TOKENS_PER_MEMBER });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // POST /auth/seva/generate — member generates their 10B GoogolPlex Seva
+  // Credit against the $1 they deposited. Requires an ACTIVE wallet (the $1
+  // has cleared). Deliberate, one-time, idempotent.
+  app.post("/auth/seva/generate", async (req, reply) => {
+    const header = req.headers.authorization;
+    if (!header || !header.startsWith("Bearer ")) {
+      return reply.code(401).send({ error: "Missing bearer token." });
+    }
+    const claims = await verifyAccessToken(header.slice("Bearer ".length).trim());
+    if (!claims) return reply.code(401).send({ error: "Invalid or expired access token." });
+
+    const user = stmts.user.byId.get(claims.sub);
+    if (!user) return reply.code(401).send({ error: "User no longer exists." });
+
+    if (user.wallet_status !== "active") {
+      return reply.code(403).send({
+        error: "Deposit $1 to activate your wallet before generating Seva Credit."
+      });
+    }
+    if (Number(user.tokens_minted) > 0) {
+      return reply.send({ ok: true, alreadyGenerated: true, sevaCredit: user.tokens_minted });
+    }
+
+    const now = Date.now();
+    stmts.user.mintTokens.run({
+      id: user.id,
+      tokens_minted: SEVA_CREDIT_AMOUNT,
+      tokens_minted_at: now,
+      updated_at: now
+    });
+    notify(
+      `🪙 <b>GoogolPlex Seva Credit generated</b>\n${user.email}\n` +
+        `ID: <code>${user.code11}</code>\n` +
+        `${SEVA_CREDIT_AMOUNT.toLocaleString()} credits`
+    );
+
+    return reply.send({ ok: true, sevaCredit: SEVA_CREDIT_AMOUNT });
   });
 
   // ────────────────────────────────────────────────────────────────────────
