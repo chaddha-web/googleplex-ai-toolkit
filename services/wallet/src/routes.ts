@@ -93,31 +93,37 @@ async function ensureUserWallet(userId: string): Promise<void> {
       tronXpub: TRON_XPUB
     });
 
-    await db.transaction(async (tx) => {
+    // better-sqlite3 transactions are SYNCHRONOUS — the callback must not be
+    // async / return a promise, and queries inside use sync terminals
+    // (.run()/.all()/.get()), never await. (Async-callback transactions throw
+    // "Transaction function cannot return a promise" and silently block
+    // provisioning — which is what stopped deposits from ever crediting.)
+    db.transaction((tx) => {
       // Re-check inside the tx to avoid a duplicate row on a race.
-      const again = await tx
+      const again = tx
         .select({ id: userWalletAddresses.user_id })
         .from(userWalletAddresses)
         .where(eq(userWalletAddresses.user_id, userId))
-        .limit(1);
+        .limit(1)
+        .all();
       if (again.length > 0) return;
 
-      await tx.insert(userWalletAddresses).values({
+      tx.insert(userWalletAddresses).values({
         user_id: userId,
         user_index: userIndex,
         eth: addrs.eth,
         bsc: addrs.bsc,
         tron: addrs.tron,
         btc: addrs.btc
-      });
+      }).run();
       for (const t of TOKENS) {
-        await tx.insert(ledgerBalances).values({
+        tx.insert(ledgerBalances).values({
           user_id: userId,
           chain: t.chain,
           symbol: t.symbol,
           raw: "0",
           decimals: t.decimals
-        });
+        }).run();
       }
     });
   })().finally(() => provisioning.delete(userId));
@@ -196,9 +202,11 @@ export async function walletRoutes(app: FastifyInstance) {
     // Diff against ledger and update
     let initialDepositCreditedUsd = 0;
     
-    await db.transaction(async (tx) => {
-      const existingBalances = await tx.select().from(ledgerBalances).where(eq(ledgerBalances.user_id, user.sub));
-      
+    // Synchronous transaction (better-sqlite3). The async RPC reconcile()
+    // already ran above; here we only do sync ledger writes.
+    db.transaction((tx) => {
+      const existingBalances = tx.select().from(ledgerBalances).where(eq(ledgerBalances.user_id, user.sub)).all();
+
       for (const t of TOKENS) {
         const onChainRaw = snap.perChain[t.chain as keyof typeof snap.perChain]?.[t.symbol] || "0";
         const ledgerRow = existingBalances.find(b => b.chain === t.chain && b.symbol === t.symbol);
@@ -209,7 +217,7 @@ export async function walletRoutes(app: FastifyInstance) {
           const refTxHash = "sync-" + Date.now() + "-" + t.chain + "-" + t.symbol; // simplified tx hash logic
           const dId = ulid();
 
-          await tx.insert(deposits).values({
+          tx.insert(deposits).values({
             id: dId,
             user_id: user.sub,
             chain: t.chain,
@@ -218,9 +226,9 @@ export async function walletRoutes(app: FastifyInstance) {
             tx_hash: refTxHash,
             confirmed_at: Date.now(),
             credited_at: Date.now()
-          });
+          }).run();
 
-          await tx.insert(ledgerEntries).values({
+          tx.insert(ledgerEntries).values({
             id: ulid(),
             user_id: user.sub,
             chain: t.chain,
@@ -229,20 +237,21 @@ export async function walletRoutes(app: FastifyInstance) {
             kind: "deposit",
             ref_tx_hash: refTxHash,
             ref_id: dId
-          });
+          }).run();
 
           if (ledgerRow) {
-            await tx.update(ledgerBalances)
+            tx.update(ledgerBalances)
               .set({ raw: onChainRaw, updated_at: Date.now() })
-              .where(and(eq(ledgerBalances.user_id, user.sub), eq(ledgerBalances.chain, t.chain), eq(ledgerBalances.symbol, t.symbol)));
+              .where(and(eq(ledgerBalances.user_id, user.sub), eq(ledgerBalances.chain, t.chain), eq(ledgerBalances.symbol, t.symbol)))
+              .run();
           } else {
-            await tx.insert(ledgerBalances).values({
+            tx.insert(ledgerBalances).values({
               user_id: user.sub,
               chain: t.chain,
               symbol: t.symbol,
               raw: onChainRaw,
               decimals: t.decimals
-            });
+            }).run();
           }
 
           // Initial deposit logic: USD = 1 for USDT/USDC on eth/bsc/tron
@@ -431,34 +440,40 @@ export async function walletRoutes(app: FastifyInstance) {
     if (wRows.length === 0) return reply.code(404).send({ error: "Withdrawal not found or not in pending_otp state" });
     const w = wRows[0]!;
 
-    // Atomic debit
+    // Atomic debit — synchronous transaction (better-sqlite3).
     let success = false;
-    await db.transaction(async (tx) => {
-      const balRow = await tx.select().from(ledgerBalances)
-        .where(and(eq(ledgerBalances.user_id, user.sub), eq(ledgerBalances.chain, w.chain), eq(ledgerBalances.symbol, w.symbol)))
-        .limit(1);
+    try {
+      db.transaction((tx) => {
+        const balRow = tx.select().from(ledgerBalances)
+          .where(and(eq(ledgerBalances.user_id, user.sub), eq(ledgerBalances.chain, w.chain), eq(ledgerBalances.symbol, w.symbol)))
+          .limit(1)
+          .all();
 
-      if (balRow.length === 0 || BigInt(balRow[0]!.raw) < BigInt(w.amount_raw)) {
-        throw new Error("Insufficient balance");
-      }
+        if (balRow.length === 0 || BigInt(balRow[0]!.raw) < BigInt(w.amount_raw)) {
+          throw new Error("Insufficient balance");
+        }
 
-      const newBal = (BigInt(balRow[0]!.raw) - BigInt(w.amount_raw)).toString();
-      await tx.update(ledgerBalances).set({ raw: newBal, updated_at: Date.now() })
-        .where(and(eq(ledgerBalances.user_id, user.sub), eq(ledgerBalances.chain, w.chain), eq(ledgerBalances.symbol, w.symbol)));
+        const newBal = (BigInt(balRow[0]!.raw) - BigInt(w.amount_raw)).toString();
+        tx.update(ledgerBalances).set({ raw: newBal, updated_at: Date.now() })
+          .where(and(eq(ledgerBalances.user_id, user.sub), eq(ledgerBalances.chain, w.chain), eq(ledgerBalances.symbol, w.symbol)))
+          .run();
 
-      await tx.insert(ledgerEntries).values({
-        id: ulid(),
-        user_id: user.sub,
-        chain: w.chain,
-        symbol: w.symbol,
-        delta_raw: "-" + w.amount_raw,
-        kind: "withdrawal",
-        ref_id: w.id
+        tx.insert(ledgerEntries).values({
+          id: ulid(),
+          user_id: user.sub,
+          chain: w.chain,
+          symbol: w.symbol,
+          delta_raw: "-" + w.amount_raw,
+          kind: "withdrawal",
+          ref_id: w.id
+        }).run();
+
+        tx.update(withdrawals).set({ status: "signing" }).where(eq(withdrawals.id, w.id)).run();
+        success = true;
       });
-
-      await tx.update(withdrawals).set({ status: "signing" }).where(eq(withdrawals.id, w.id));
-      success = true;
-    });
+    } catch {
+      success = false;
+    }
 
     if (!success) return reply.code(400).send({ error: "Insufficient balance" });
 
@@ -477,14 +492,16 @@ export async function walletRoutes(app: FastifyInstance) {
     } catch (e) {
       app.log.error({ err: e, withdrawalId: w.id }, "withdrawal broadcast failed — refunding");
       // Refund: re-credit the debited balance + reversing ledger entry.
-      await db.transaction(async (tx) => {
-        const balRow = await tx.select().from(ledgerBalances)
+      db.transaction((tx) => {
+        const balRow = tx.select().from(ledgerBalances)
           .where(and(eq(ledgerBalances.user_id, user.sub), eq(ledgerBalances.chain, w.chain), eq(ledgerBalances.symbol, w.symbol)))
-          .limit(1);
+          .limit(1)
+          .all();
         const cur = balRow.length ? BigInt(balRow[0]!.raw) : 0n;
-        await tx.update(ledgerBalances).set({ raw: (cur + BigInt(w.amount_raw)).toString(), updated_at: Date.now() })
-          .where(and(eq(ledgerBalances.user_id, user.sub), eq(ledgerBalances.chain, w.chain), eq(ledgerBalances.symbol, w.symbol)));
-        await tx.insert(ledgerEntries).values({
+        tx.update(ledgerBalances).set({ raw: (cur + BigInt(w.amount_raw)).toString(), updated_at: Date.now() })
+          .where(and(eq(ledgerBalances.user_id, user.sub), eq(ledgerBalances.chain, w.chain), eq(ledgerBalances.symbol, w.symbol)))
+          .run();
+        tx.insert(ledgerEntries).values({
           id: ulid(),
           user_id: user.sub,
           chain: w.chain,
@@ -492,8 +509,8 @@ export async function walletRoutes(app: FastifyInstance) {
           delta_raw: "+" + w.amount_raw,
           kind: "withdrawal_refund",
           ref_id: w.id
-        });
-        await tx.update(withdrawals).set({ status: "failed" }).where(eq(withdrawals.id, w.id));
+        }).run();
+        tx.update(withdrawals).set({ status: "failed" }).where(eq(withdrawals.id, w.id)).run();
       });
       notify(
         `⚠️ <b>Withdrawal FAILED — refunded</b>\n${w.symbol} on ${w.chain}\n` +
@@ -618,10 +635,10 @@ export async function walletRoutes(app: FastifyInstance) {
     let charged: { chain: string; symbol: string; raw: string } | null = null;
 
     try {
-      await db.transaction(async (tx) => {
+      db.transaction((tx) => {
         for (const t of instances) {
           const requiredRaw = toRawUnits(coinAmount, t.decimals);
-          const rows = await tx
+          const rows = tx
             .select()
             .from(ledgerBalances)
             .where(
@@ -631,13 +648,14 @@ export async function walletRoutes(app: FastifyInstance) {
                 eq(ledgerBalances.symbol, t.symbol)
               )
             )
-            .limit(1);
+            .limit(1)
+            .all();
           if (rows.length === 0) continue;
           const have = BigInt(rows[0]!.raw);
           if (have < requiredRaw) continue;
 
           const newBal = (have - requiredRaw).toString();
-          await tx
+          tx
             .update(ledgerBalances)
             .set({ raw: newBal, updated_at: Date.now() })
             .where(
@@ -646,8 +664,9 @@ export async function walletRoutes(app: FastifyInstance) {
                 eq(ledgerBalances.chain, t.chain),
                 eq(ledgerBalances.symbol, t.symbol)
               )
-            );
-          await tx.insert(ledgerEntries).values({
+            )
+            .run();
+          tx.insert(ledgerEntries).values({
             id: ulid(),
             user_id: user.sub,
             chain: t.chain,
@@ -655,7 +674,7 @@ export async function walletRoutes(app: FastifyInstance) {
             delta_raw: "-" + requiredRaw.toString(),
             kind: "studio_fee",
             ref_id: "studio-unlock"
-          });
+          }).run();
           charged = { chain: t.chain, symbol: t.symbol, raw: requiredRaw.toString() };
           break;
         }
