@@ -272,6 +272,12 @@ export default function AdminHome() {
             Logs
           </Link>
           <Link
+            href="/app/admin/reclaims"
+            className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
+          >
+            Token reclaims
+          </Link>
+          <Link
             href="/app/admin/settings"
             className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
           >

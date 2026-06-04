@@ -373,6 +373,21 @@ async function authedJsonWeb<T>(input: string, init: RequestInit = {}): Promise<
   return data as T;
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Liquidity exit — withdraw the protected $1; surrenders all tokens to admin
+// ────────────────────────────────────────────────────────────────────────────
+
+export async function exitLiquidity(): Promise<{
+  tokensTransferred: number;
+  usdReleased: number;
+  referenceNo: string;
+}> {
+  const res = await authedFetch(`${AUTH_BASE}/auth/wallet/exit-liquidity`, { method: "POST" });
+  const data = await res.json().catch(() => ({} as any));
+  if (!res.ok) throw new Error((data as any)?.error || "Could not exit liquidity.");
+  return data;
+}
+
 export const mySessions = {
   list: () =>
     authedJsonWeb<{ sessions: MySessionRow[] }>(`${AUTH_BASE}/auth/sessions`).then((r) => r.sessions),

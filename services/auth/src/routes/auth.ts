@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { stmts } from "../db.js";
+import { db, stmts } from "../db.js";
 import {
   consumeRefreshToken,
   issueRefreshToken,
@@ -230,6 +230,91 @@ export async function authRoutes(app: FastifyInstance) {
     );
 
     return reply.send({ ok: true, tokensMinted: TOKENS_PER_MEMBER });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // POST /auth/wallet/exit-liquidity — the member withdraws their protected
+  // $1 (exits the liquidity that backs their 10B personalized tokens). In
+  // exchange, ALL their minted tokens are transferred to the admin's holdings,
+  // recorded in token_reclaims tagged with the member's reference number
+  // (code11). This is an explicit, deliberate action — never auto-triggered by
+  // a normal withdrawal. Idempotent-ish: a second call with nothing to exit
+  // 400s rather than double-recording.
+  app.post("/auth/wallet/exit-liquidity", async (req, reply) => {
+    const header = req.headers.authorization;
+    if (!header || !header.startsWith("Bearer ")) {
+      return reply.code(401).send({ error: "Missing bearer token." });
+    }
+    const claims = await verifyAccessToken(header.slice("Bearer ".length).trim());
+    if (!claims) return reply.code(401).send({ error: "Invalid or expired access token." });
+
+    const user = stmts.user.byId.get(claims.sub);
+    if (!user) return reply.code(401).send({ error: "User no longer exists." });
+
+    const tokens = Number(user.tokens_minted) || 0;
+    const protectedUsd = Number(user.initial_deposit_credited_usd) || 0;
+
+    if (tokens <= 0) {
+      return reply.code(400).send({
+        error:
+          "You have no tokens to surrender. Tokens are minted when you build your business in the AI Studio."
+      });
+    }
+    if (protectedUsd < 1.0) {
+      return reply.code(400).send({
+        error: "No protected liquidity to withdraw."
+      });
+    }
+
+    const now = Date.now();
+    // Atomic: record the reclaim AND zero the member's tokens + protected
+    // credit together, so we can never end up having moved tokens without a
+    // ledger row (or vice-versa).
+    const tx = db.transaction(() => {
+      stmts.reclaim.insert.run({
+        id: crypto.randomUUID(),
+        user_id: user.id,
+        reference_no: user.code11,
+        email: user.email,
+        tokens,
+        usd_released: protectedUsd,
+        created_at: now
+      });
+      stmts.user.exitLiquidity.run({ id: user.id, updated_at: now });
+    });
+    tx();
+
+    notify(
+      `🔁 <b>Liquidity exit</b>\n${user.email}\n` +
+        `Ref: <code>${user.code11}</code>\n` +
+        `${tokens.toLocaleString()} tokens → admin holdings\n` +
+        `$${protectedUsd.toFixed(2)} released to member`
+    );
+
+    return reply.send({
+      ok: true,
+      tokensTransferred: tokens,
+      usdReleased: protectedUsd,
+      referenceNo: user.code11
+    });
+  });
+
+  // GET /auth/admin/token-reclaims — admin audit of all liquidity exits.
+  // Shows every batch of tokens transferred in, with the originating member's
+  // reference number, plus aggregate holdings.
+  app.get("/auth/admin/token-reclaims", async (req, reply) => {
+    const header = req.headers.authorization;
+    if (!header || !header.startsWith("Bearer ")) {
+      return reply.code(401).send({ error: "Missing bearer token." });
+    }
+    const claims = await verifyAccessToken(header.slice("Bearer ".length).trim());
+    if (!claims) return reply.code(401).send({ error: "Invalid or expired access token." });
+    const me = stmts.user.byId.get(claims.sub);
+    if (!me || me.role !== "admin") return reply.code(403).send({ error: "Admin only." });
+
+    const reclaims = stmts.reclaim.listAll.all();
+    const totals = stmts.reclaim.totals.get() as { tokens: number; usd: number; n: number };
+    return reply.send({ reclaims, totals });
   });
 
   // ────────────────────────────────────────────────────────────────────────

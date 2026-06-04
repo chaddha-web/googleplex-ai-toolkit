@@ -511,6 +511,28 @@ export type AdminSessionRow = SessionRow & {
   role: "user" | "admin";
 };
 
+// ────────────────────────────────────────────────────────────────────────────
+// Token reclaims — admin audit of liquidity exits
+// ────────────────────────────────────────────────────────────────────────────
+
+export type TokenReclaimRow = {
+  id: string;
+  user_id: string;
+  reference_no: string;
+  email: string | null;
+  tokens: number;
+  usd_released: number;
+  created_at: number;
+};
+
+export const tokenReclaims = {
+  list: () =>
+    authedJson<{
+      reclaims: TokenReclaimRow[];
+      totals: { tokens: number; usd: number; n: number };
+    }>(`${AUTH_BASE}/auth/admin/token-reclaims`)
+};
+
 export const sessions = {
   // User's own
   listMine: () =>

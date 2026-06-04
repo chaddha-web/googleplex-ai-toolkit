@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-context";
-import { authedFetch } from "@/lib/auth-client";
+import { authedFetch, exitLiquidity } from "@/lib/auth-client";
 import { QrCode } from "@/components/qr-code";
 
 const WALLET_BASE =
@@ -211,6 +211,15 @@ export default function WalletPage() {
 
           {/* Deposit — asset first, then network */}
           <DepositSection addrs={addrs} />
+
+          {/* Protected liquidity — the $1 backing the member's tokens */}
+          {(user?.tokensMinted ?? 0) > 0 && (
+            <ProtectedLiquidity
+              tokens={user!.tokensMinted!}
+              referenceNo={user?.code11 ?? ""}
+              onExited={refresh}
+            />
+          )}
         </>
       )}
 
@@ -231,6 +240,78 @@ export default function WalletPage() {
         />
       )}
     </div>
+  );
+}
+
+/* ───────────────────────── Protected liquidity ─────────────────────────── */
+
+function ProtectedLiquidity({
+  tokens,
+  referenceNo,
+  onExited
+}: {
+  tokens: number;
+  referenceNo: string;
+  onExited: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<{ usd: number; tokens: number } | null>(null);
+
+  async function exit() {
+    const ok = window.confirm(
+      `Withdraw your protected $1?\n\nThis surrenders ALL ${tokens.toLocaleString()} of your tokens to the platform — they're transferred to admin holdings under your reference number (${referenceNo}). This cannot be undone.`
+    );
+    if (!ok) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await exitLiquidity();
+      setDone({ usd: r.usdReleased, tokens: r.tokensTransferred });
+      onExited();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (done) {
+    return (
+      <section className="mt-10 rounded-2xl border border-white/10 bg-white/[0.02] p-6">
+        <h2 className="text-lg text-white mb-1">Liquidity exited</h2>
+        <p className="text-white/60 text-sm">
+          ${done.usd.toFixed(2)} released. {done.tokens.toLocaleString()} tokens transferred to the
+          platform under reference <span className="font-mono text-white/80">{referenceNo}</span>.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="mt-10 rounded-2xl border border-white/10 bg-white/[0.02] p-6">
+      <h2 className="text-lg text-white mb-1">Protected liquidity</h2>
+      <p className="text-white/60 text-sm leading-relaxed max-w-xl">
+        Your <span className="text-white">$1</span> deposit is the protected liquidity backing your{" "}
+        <span className="text-white">{tokens.toLocaleString()}</span> tokens. It stays locked as the
+        floor that keeps your tokens real. You can withdraw it at any time — but doing so surrenders
+        your tokens to the platform (recorded under your reference number{" "}
+        <span className="font-mono text-white/80">{referenceNo}</span>).
+      </p>
+      {error && (
+        <div className="mt-3 text-sm text-red-300 bg-red-950/40 border border-red-900/40 rounded-lg px-3 py-2">
+          {error}
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={exit}
+        disabled={busy}
+        className="mt-4 rounded-full bg-white/10 text-white text-sm font-medium px-5 py-2.5 hover:bg-white/15 disabled:opacity-40"
+      >
+        {busy ? "Processing…" : "Withdraw $1 & exit liquidity"}
+      </button>
+    </section>
   );
 }
 

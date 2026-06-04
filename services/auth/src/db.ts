@@ -177,6 +177,24 @@ db.exec(`
     reason          TEXT
   );
 
+  -- Token reclaims (liquidity exit). The $1 each member deposits is the
+  -- protected liquidity backing their 10B personalized tokens. When a member
+  -- withdraws that $1 (exits the liquidity), their tokens are transferred to
+  -- the admin's holdings — recorded here, tagged with the member's reference
+  -- number (their code11) so the admin has a full audit trail of whose tokens
+  -- came from where. Append-only; one row per exit.
+  CREATE TABLE IF NOT EXISTS token_reclaims (
+    id              TEXT PRIMARY KEY,
+    user_id         TEXT NOT NULL,
+    reference_no    TEXT NOT NULL,     -- the member's code11 at exit time
+    email           TEXT,              -- snapshot for display even if user later changes
+    tokens          INTEGER NOT NULL,  -- amount transferred to admin
+    usd_released    REAL NOT NULL,     -- the protected $ the member pulled out
+    created_at      INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_token_reclaims_created ON token_reclaims (created_at);
+  CREATE INDEX IF NOT EXISTS idx_token_reclaims_ref ON token_reclaims (reference_no);
+
   -- Inbound emails routed through Resend → our webhook.
   CREATE TABLE IF NOT EXISTS email_inbound (
     id           TEXT PRIMARY KEY,
@@ -340,6 +358,16 @@ export const stmts = {
         updated_at = @updated_at
       WHERE id = @id
     `),
+    // Liquidity exit: surrender all minted tokens (they go to admin) and
+    // release the protected $1 deposit back to a withdrawable state. We zero
+    // tokens_minted (transferred away) and the protected credit in one shot.
+    exitLiquidity: db.prepare(`
+      UPDATE users SET
+        tokens_minted = 0,
+        initial_deposit_credited_usd = 0,
+        updated_at = @updated_at
+      WHERE id = @id
+    `),
     updateProfile: db.prepare(`
       UPDATE users SET
         age = @age,
@@ -428,6 +456,21 @@ export const stmts = {
         FROM refresh_tokens rt
         JOIN users u ON u.id = rt.user_id
        ORDER BY rt.created_at DESC LIMIT 500
+    `)
+  },
+  reclaim: {
+    insert: db.prepare(`
+      INSERT INTO token_reclaims (id, user_id, reference_no, email, tokens, usd_released, created_at)
+      VALUES (@id, @user_id, @reference_no, @email, @tokens, @usd_released, @created_at)
+    `),
+    listAll: db.prepare(`
+      SELECT id, user_id, reference_no, email, tokens, usd_released, created_at
+        FROM token_reclaims ORDER BY created_at DESC LIMIT 500
+    `),
+    // Admin holdings = sum of every token ever reclaimed.
+    totals: db.prepare(`
+      SELECT COALESCE(SUM(tokens),0) AS tokens, COALESCE(SUM(usd_released),0) AS usd, COUNT(*) AS n
+        FROM token_reclaims
     `)
   },
   email: {
