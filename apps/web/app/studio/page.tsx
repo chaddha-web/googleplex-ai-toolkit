@@ -49,19 +49,6 @@ export default function StudioPage() {
         </div>
       )}
 
-      {tokensMinted > 0 && (
-        <div className="mt-8 liquid-glass rounded-2xl p-5">
-          <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase mb-1">
-            Your personalized tokens
-          </p>
-          <p className="text-3xl font-medium tracking-tight">
-            {tokensMinted.toLocaleString()}
-          </p>
-          <p className="text-white/40 text-xs mt-1">
-            Minted when you built your business in the Studio.
-          </p>
-        </div>
-      )}
 
       <BuildForm walletActive={walletActive} alreadyBuilt={tokensMinted > 0} />
     </div>

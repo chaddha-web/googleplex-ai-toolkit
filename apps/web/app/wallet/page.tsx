@@ -48,12 +48,15 @@ function usdFmt(n: number): string {
 }
 
 export default function WalletPage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [addrs, setAddrs] = useState<ChainAddrs | null>(null);
   const [assets, setAssets] = useState<AssetBreakdown[] | null>(null);
   const [offline, setOffline] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
+  // "minting" plays the Seva Credit issuance animation when the wallet just
+  // activated (tokens went 0 → 10B during a refresh on this page).
+  const [minting, setMinting] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -87,12 +90,20 @@ export default function WalletPage() {
     if (refreshing || now - lastRefreshRef.current < 5000) return;
     lastRefreshRef.current = now;
     setRefreshing(true);
+    const tokensBefore = user?.tokensMinted ?? 0;
     try {
       const res = await authedFetch(`${WALLET_BASE}/wallet/refresh`, { method: "POST" });
       if (res.ok) {
         const bal = await res.json();
         setAssets(Array.isArray(bal) ? bal : []);
         setOffline(false);
+      }
+      // The refresh may have activated the wallet + issued Seva Credit. Pull
+      // fresh /me; if tokens just went 0 → positive, play the minting process.
+      const updated = await refreshUser();
+      const tokensAfter = updated?.tokensMinted ?? 0;
+      if (tokensBefore <= 0 && tokensAfter > 0) {
+        setMinting(true);
       }
     } catch {
       /* keep last view */
@@ -165,6 +176,17 @@ export default function WalletPage() {
               {fundedAssets.length === 1 ? "" : "s"} · fixed-price valuation
             </p>
           </div>
+
+          {/* GoogolPlex Seva Credit — the member's 10B allocation, issued on
+              wallet activation. Shown only here, inside the wallet. When the
+              wallet just activated, a minting process animates the issuance. */}
+          {(user?.tokensMinted ?? 0) > 0 && (
+            <SevaCreditCard
+              total={user!.tokensMinted ?? 0}
+              minting={minting}
+              onDone={() => setMinting(false)}
+            />
+          )}
 
           {/* Holdings */}
           <section className="mt-10">
@@ -239,6 +261,73 @@ export default function WalletPage() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+/* ──────────────────────── GoogolPlex Seva Credit ───────────────────────── */
+
+function SevaCreditCard({
+  total,
+  minting,
+  onDone
+}: {
+  total: number;
+  minting: boolean;
+  onDone: () => void;
+}) {
+  // While minting, ramp the displayed count 0 → total over ~2.4s (ease-out),
+  // then settle and tell the parent we're done.
+  const [shown, setShown] = useState(minting ? 0 : total);
+
+  useEffect(() => {
+    if (!minting) {
+      setShown(total);
+      return;
+    }
+    setShown(0);
+    const duration = 2400;
+    const start = performance.now();
+    let raf = 0;
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
+      setShown(Math.floor(eased * total));
+      if (t < 1) {
+        raf = requestAnimationFrame(tick);
+      } else {
+        setShown(total);
+        // Hold the "issued" state briefly, then exit minting mode.
+        setTimeout(onDone, 900);
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [minting, total]);
+
+  return (
+    <div
+      className={`mt-4 liquid-glass rounded-3xl p-6 md:p-8 ring-1 transition-all ${
+        minting ? "ring-amber-300/50 shadow-[0_0_40px_-12px_rgba(252,211,77,0.4)]" : "ring-amber-300/15"
+      }`}
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <p className="text-amber-200/80 text-xs tracking-[0.3em] uppercase">
+          GoogolPlex Seva Credit
+        </p>
+        {minting && (
+          <span className="inline-block w-3 h-3 rounded-full border-2 border-amber-300/40 border-t-amber-300 animate-spin" />
+        )}
+      </div>
+      <p className="text-5xl font-medium tracking-tight tabular-nums">
+        {shown.toLocaleString()}
+      </p>
+      <p className="text-white/40 text-sm mt-2">
+        {minting
+          ? "Issuing your GoogolPlex Seva Credit…"
+          : "Issued the moment your wallet activated."}
+      </p>
     </div>
   );
 }

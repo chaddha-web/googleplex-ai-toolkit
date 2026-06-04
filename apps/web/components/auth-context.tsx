@@ -12,6 +12,7 @@ import {
   signOut as clientSignOut,
   subscribeAuth,
   tryRestore,
+  fetchMe,
   type User
 } from "@/lib/auth-client";
 
@@ -19,12 +20,15 @@ export type AuthState = {
   status: "loading" | "anonymous" | "authenticated";
   user: User | null;
   signOut: () => Promise<void>;
+  /** Re-fetch /auth/me and update context (e.g. after wallet activation). */
+  refreshUser: () => Promise<User | null>;
 };
 
 const AuthContext = createContext<AuthState>({
   status: "loading",
   user: null,
-  signOut: async () => {}
+  signOut: async () => {},
+  refreshUser: async () => null
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -60,9 +64,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setStatus("anonymous");
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    const u = await fetchMe();
+    if (u) {
+      setUser(u);
+      setStatus("authenticated");
+    }
+    return u;
+  }, []);
+
   const value = useMemo<AuthState>(
-    () => ({ status, user, signOut: doSignOut }),
-    [status, user, doSignOut]
+    () => ({ status, user, signOut: doSignOut, refreshUser }),
+    [status, user, doSignOut, refreshUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
