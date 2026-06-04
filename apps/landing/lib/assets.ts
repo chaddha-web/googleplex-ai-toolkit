@@ -3,8 +3,10 @@
  * Swap these out for self-hosted versions before going to production.
  */
 export const VIDEOS = {
-  hero:
-    "https://olzhwrdlyvwwyjaupuec.supabase.co/storage/v1/object/sign/free/Generated%20video%201%20(7).mp4?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV82NjYzNWZiYS05ZWVmLTRhN2QtODljZi01N2NmZDFmZmVjOGMiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJmcmVlL0dlbmVyYXRlZCB2aWRlbyAxICg3KS5tcDQiLCJpYXQiOjE3NzkxNDAwMzUsImV4cCI6MTgxMDY3NjAzNX0.MIPxHvb_FO6zG04artL_y-gsXY6DVLxDgdFtteWwp7c",
+  // Self-hosted on the box's nginx media server (./media → /media/*). No
+  // expiring signed URL, no third-party dependency. Swap the file on disk +
+  // bump this name to change the hero.
+  hero: "https://ggakingclub.com/media/hero.mp4",
   featured:
     "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260402_054547_9875cfc5-155a-4229-8ec8-b7ba7125cbf8.mp4",
   philosophy:
