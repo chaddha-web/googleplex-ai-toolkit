@@ -165,5 +165,22 @@ body > * { position: relative; z-index: 1; }
 .text-rose-500       { color: var(--danger)   !important; }
 
 /* Shell surfaces */
-header.bg-black\/60 { background-color: rgba(250,247,242,0.7) !important; backdrop-filter: blur(10px) !important; }
 aside.bg-black\/40  { background-color: var(--surface-2)      !important; backdrop-filter: blur(10px) !important; }
+
+/* Distinct branded top bar — a deep navy→indigo gradient so it stands apart
+   from the soft light page. Text + interactive bits forced light to stay
+   legible on the dark bar (overriding the global light text-* remaps). */
+header.bg-black\/60 {
+  background: linear-gradient(100deg, #0E1326 0%, #241C5E 55%, #5B4BFF 100%) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.10) !important;
+  backdrop-filter: none !important;
+  box-shadow: 0 1px 24px -8px rgba(91,75,255,0.45);
+}
+header.bg-black\/60 span,
+header.bg-black\/60 .text-white,
+header.bg-black\/60 .hover\:text-white:hover { color: #fff !important; }
+header.bg-black\/60 .text-white\/70 { color: rgba(255,255,255,0.85) !important; }
+header.bg-black\/60 .text-white\/50,
+header.bg-black\/60 .text-white\/40 { color: rgba(255,255,255,0.62) !important; }
+header.bg-black\/60 .hover\:bg-white\/5:hover { background-color: rgba(255,255,255,0.12) !important; }
+header.bg-black\/60 .border-white\/5 { border-color: rgba(255,255,255,0.12) !important; }
