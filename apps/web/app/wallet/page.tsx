@@ -234,6 +234,9 @@ export default function WalletPage() {
           {/* Deposit — asset first, then network */}
           <DepositSection addrs={addrs} />
 
+          {/* Transaction history — grouped by date, click a row for detail */}
+          <TransactionHistory />
+
           {/* Protected liquidity — the $1 backing the member's tokens */}
           {(user?.tokensMinted ?? 0) > 0 && (
             <ProtectedLiquidity
@@ -261,6 +264,224 @@ export default function WalletPage() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+/* ─────────────────────────── Transaction history ───────────────────────── */
+
+type Tx = {
+  id: string;
+  kind: string;
+  chain: string | null;
+  symbol: string;
+  amount: number; // signed
+  usd: number | null;
+  tx_hash: string | null;
+  to: string | null;
+  status: string;
+  created_at: number | null;
+};
+
+const EXPLORER_TX: Record<string, (h: string) => string> = {
+  eth: (h) => `https://etherscan.io/tx/${h}`,
+  bsc: (h) => `https://bscscan.com/tx/${h}`,
+  tron: (h) => `https://tronscan.org/#/transaction/${h}`,
+  btc: (h) => `https://blockstream.info/tx/${h}`
+};
+
+function explorerUrl(chain: string | null, hash: string | null): string | null {
+  if (!chain || !hash) return null;
+  // Our synthetic "sync-…" hashes for reconciled deposits aren't real on-chain
+  // ids, so don't link them out.
+  if (hash.startsWith("sync-")) return null;
+  return EXPLORER_TX[chain]?.(hash) ?? null;
+}
+
+function txMeta(kind: string, amount: number): { label: string; icon: string; tone: string } {
+  if (kind === "deposit") return { label: "Received", icon: "↓", tone: "text-emerald-300" };
+  if (kind === "withdrawal") return { label: "Sent", icon: "↑", tone: "text-white" };
+  if (kind === "withdrawal_refund") return { label: "Refund", icon: "↺", tone: "text-emerald-300" };
+  if (kind === "studio_fee") return { label: "Studio fee", icon: "•", tone: "text-white/70" };
+  if (kind.includes("swap")) return { label: "Swap", icon: "⇄", tone: "text-white/80" };
+  return { label: amount >= 0 ? "Received" : "Sent", icon: amount >= 0 ? "↓" : "↑", tone: amount >= 0 ? "text-emerald-300" : "text-white" };
+}
+
+function shortHash(h: string): string {
+  return h.length > 18 ? `${h.slice(0, 10)}…${h.slice(-8)}` : h;
+}
+
+function dayKey(ms: number): string {
+  return new Date(ms).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+}
+
+function TransactionHistory() {
+  const [txs, setTxs] = useState<Tx[] | null>(null);
+  const [open, setOpen] = useState<Tx | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await authedFetch(`${WALLET_BASE}/wallet/history`);
+        const data = r.ok ? await r.json() : [];
+        setTxs(Array.isArray(data) ? data : []);
+      } catch {
+        setTxs([]);
+      }
+    })();
+  }, []);
+
+  // Group by day, preserving recency order.
+  const groups = useMemo(() => {
+    const g: { day: string; items: Tx[] }[] = [];
+    for (const t of txs ?? []) {
+      const day = t.created_at ? dayKey(t.created_at) : "—";
+      const last = g[g.length - 1];
+      if (last && last.day === day) last.items.push(t);
+      else g.push({ day, items: [t] });
+    }
+    return g;
+  }, [txs]);
+
+  return (
+    <section className="mt-10">
+      <p className="text-white/40 text-xs tracking-[0.3em] uppercase mb-3">
+        Transaction history
+      </p>
+      {txs === null ? (
+        <div className="liquid-glass rounded-2xl p-6 text-white/40 text-sm">Loading…</div>
+      ) : txs.length === 0 ? (
+        <div className="liquid-glass rounded-2xl p-6 text-white/40 text-sm">
+          No transactions yet. Deposits and withdrawals will appear here.
+        </div>
+      ) : (
+        <div className="liquid-glass rounded-2xl overflow-hidden divide-y divide-white/5">
+          {groups.map((grp) => (
+            <div key={grp.day}>
+              <p className="px-5 pt-4 pb-2 text-white/30 text-[11px] tracking-wider uppercase">
+                {grp.day}
+              </p>
+              {grp.items.map((t) => {
+                const m = txMeta(t.kind, t.amount);
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setOpen(t)}
+                    className="w-full flex items-center gap-3 px-5 py-3 hover:bg-white/5 transition-colors text-left"
+                  >
+                    <span className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center text-white/70 shrink-0">
+                      {m.icon}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm text-white">{m.label}</span>
+                      <span className="block text-xs text-white/40 truncate font-mono">
+                        {t.to ? shortHash(t.to) : t.tx_hash ? shortHash(t.tx_hash) : t.symbol}
+                      </span>
+                    </span>
+                    <span className="text-right shrink-0">
+                      <span className={`block text-sm tabular-nums ${m.tone}`}>
+                        {t.amount >= 0 ? "+" : ""}
+                        {fmt(t.amount, 8)} {t.symbol}
+                      </span>
+                      {t.usd != null && (
+                        <span className="block text-xs text-white/40">
+                          {t.amount >= 0 ? "+" : "-"}
+                          {usdFmt(t.usd)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-white/30 shrink-0">›</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {open && <TxDetail tx={open} onClose={() => setOpen(null)} />}
+    </section>
+  );
+}
+
+function TxDetail({ tx, onClose }: { tx: Tx; onClose: () => void }) {
+  const m = txMeta(tx.kind, tx.amount);
+  const url = explorerUrl(tx.chain, tx.tx_hash);
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start sm:items-center justify-center p-0 sm:p-6"
+      onClick={onClose}
+    >
+      <div
+        className="bg-[#0c0c0c] w-full sm:max-w-md sm:rounded-3xl min-h-screen sm:min-h-0 ring-1 ring-white/10 p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex justify-end">
+          <button type="button" onClick={onClose} className="text-white/50 hover:text-white text-xl">
+            ✕
+          </button>
+        </div>
+
+        <div className="text-center mb-6">
+          <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-3 text-white/70 text-lg">
+            {m.icon}
+          </div>
+          <p className="text-white/50 text-sm">{m.label}</p>
+          <p className={`text-3xl font-medium tracking-tight mt-1 tabular-nums ${m.tone}`}>
+            {tx.amount >= 0 ? "+" : ""}
+            {fmt(tx.amount, 18)} {tx.symbol}
+          </p>
+          {url && (
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-block mt-2 text-sky-400 hover:text-sky-300 text-sm"
+            >
+              View in explorer ↗
+            </a>
+          )}
+        </div>
+
+        <dl className="divide-y divide-white/5 text-sm">
+          {tx.usd != null && (
+            <Detail label="Amount">
+              {tx.amount >= 0 ? "+" : "-"}
+              {usdFmt(tx.usd)}
+            </Detail>
+          )}
+          <Detail label="Type">{m.label}</Detail>
+          <Detail label="Status">
+            <span className={tx.status === "confirmed" || tx.status === "broadcast" ? "text-emerald-400" : "text-amber-300"}>
+              {tx.status === "broadcast" ? "Confirmed" : tx.status.replace(/_/g, " ")}
+            </span>
+          </Detail>
+          <Detail label="Account">{tx.chain ? CHAIN_LABEL[tx.chain as Chain] ?? tx.chain : "—"}</Detail>
+          <Detail label="Date">
+            {tx.created_at ? new Date(tx.created_at).toLocaleString() : "—"}
+          </Detail>
+          {tx.tx_hash && !tx.tx_hash.startsWith("sync-") && (
+            <Detail label="Transaction ID">
+              <span className="font-mono text-xs break-all">{tx.tx_hash}</span>
+            </Detail>
+          )}
+          {tx.to && (
+            <Detail label="To">
+              <span className="font-mono text-xs break-all">{tx.to}</span>
+            </Detail>
+          )}
+        </dl>
+      </div>
+    </div>
+  );
+}
+
+function Detail({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-3">
+      <dt className="text-white/50 shrink-0">{label}</dt>
+      <dd className="text-white text-right min-w-0">{children}</dd>
     </div>
   );
 }

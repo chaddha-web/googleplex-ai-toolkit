@@ -568,6 +568,10 @@ export async function walletRoutes(app: FastifyInstance) {
   });
 
   // GET /wallet/history
+  // Returns enriched ledger entries: signed human amount, USD value, the
+  // on-chain tx hash, counterparty address + status (joined from the
+  // deposit/withdrawal the entry references). Used by the wallet history
+  // list + per-transaction detail view.
   app.get("/wallet/history", async (req: any, reply) => {
     if (!(await requireAuth(req, reply))) return;
     const user = req.user!;
@@ -575,9 +579,46 @@ export async function walletRoutes(app: FastifyInstance) {
     const entries = await db.select().from(ledgerEntries)
       .where(eq(ledgerEntries.user_id, user.sub))
       .orderBy(desc(ledgerEntries.created_at))
-      .limit(50);
+      .limit(100);
 
-    return reply.send(entries);
+    // Pull the referenced withdrawals + deposits in bulk for join data.
+    const wRows = await db.select().from(withdrawals).where(eq(withdrawals.user_id, user.sub));
+    const dRows = await db.select().from(deposits).where(eq(deposits.user_id, user.sub));
+    const wById = new Map(wRows.map((w) => [w.id, w]));
+    const dById = new Map(dRows.map((d) => [d.id, d]));
+
+    const enriched = entries.map((e) => {
+      const t = findToken((e.chain as any) ?? "eth", e.symbol);
+      const decimals = t?.decimals ?? 18;
+      const signed = BigInt(e.delta_raw); // delta_raw carries the +/- sign
+      const human = Number(signed) / 10 ** decimals;
+      const price = priceUsd(e.symbol as any) ?? null;
+      const usd = price != null ? Math.abs(human) * price : null;
+
+      const w = e.ref_id ? wById.get(e.ref_id) : undefined;
+      const d = e.ref_id ? dById.get(e.ref_id) : undefined;
+      const txHash = e.ref_tx_hash ?? w?.tx_hash ?? d?.tx_hash ?? null;
+      const counterparty = w?.dest_address ?? null;
+      const status =
+        w?.status ?? (e.kind === "deposit" ? "confirmed" : "confirmed");
+
+      return {
+        id: e.id,
+        kind: e.kind,
+        chain: e.chain,
+        symbol: e.symbol,
+        delta_raw: e.delta_raw,
+        decimals,
+        amount: human, // signed
+        usd, // absolute USD value
+        tx_hash: txHash,
+        to: counterparty,
+        status,
+        created_at: e.created_at
+      };
+    });
+
+    return reply.send(enriched);
   });
 
   // GET /wallet/studio/quote
