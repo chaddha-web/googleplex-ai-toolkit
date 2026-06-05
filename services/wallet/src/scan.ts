@@ -36,6 +36,9 @@ const ETHERSCAN_KEY = process.env.ETHERSCAN_API_KEY; // V2: one key, all EVM cha
 const ETHERSCAN_V2 = "https://api.etherscan.io/v2/api";
 const BTC_API = process.env.BTC_API_URL ?? "https://mempool.space/api";
 const EVM_LOG_RANGE = BigInt(process.env.EVM_LOG_RANGE ?? 200_000);
+const ETH_RPC = process.env.ETH_RPC_URL ?? "";
+const BSC_RPC = process.env.BSC_RPC_URL ?? "";
+const isAlchemy = (u: string) => /alchemy\.com/i.test(u);
 
 const TRANSFER_EVENT = parseAbiItem(
   "event Transfer(address indexed from, address indexed to, uint256 value)"
@@ -152,8 +155,93 @@ async function scanEvmLogs(
   return out;
 }
 
+// ── EVM via Alchemy getAssetTransfers (preferred — full history, no key) ────
+// Both our ETH + BSC RPCs are Alchemy, which exposes alchemy_getAssetTransfers:
+// a single call returns the full incoming-transfer history (native + ERC20)
+// with tx hash, sender, raw amount, and block timestamp. No block-range cap,
+// no extra API key — reuses the RPC we already have.
+async function scanEvmAlchemy(
+  chain: "eth" | "bsc",
+  address: string
+): Promise<IncomingTransfer[]> {
+  const rpc = chain === "eth" ? ETH_RPC : BSC_RPC;
+  const nativeSym = chain === "eth" ? "ETH" : "BNB";
+  const tokenByContract = new Map(
+    TOKENS.filter((t) => t.chain === chain && !t.native).map((t) => [lc((t as any).address), t])
+  );
+  const out: IncomingTransfer[] = [];
+
+  const body = {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "alchemy_getAssetTransfers",
+    params: [
+      {
+        toAddress: address,
+        category: ["external", "erc20"], // native + tokens
+        withMetadata: true,
+        excludeZeroValue: true,
+        order: "desc",
+        maxCount: "0x32" // 50
+      }
+    ]
+  };
+
+  const res = await fetch(rpc, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error(`alchemy_getAssetTransfers ${res.status}`);
+  const j = (await res.json()) as { result?: { transfers?: any[] } };
+
+  for (const t of j.result?.transfers ?? []) {
+    const rawHex = t.rawContract?.value as string | undefined;
+    if (!rawHex) continue;
+    let symbol: string | null = null;
+    if (t.category === "external") {
+      symbol = nativeSym;
+    } else if (t.category === "erc20") {
+      const known = tokenByContract.get(lc(t.rawContract?.address ?? ""));
+      if (!known) continue; // ignore unknown tokens (spam/airdrops)
+      symbol = known.symbol;
+    } else {
+      continue;
+    }
+    const ts = t.metadata?.blockTimestamp ? Date.parse(t.metadata.blockTimestamp) : null;
+    out.push({
+      chain,
+      symbol,
+      amountRaw: BigInt(rawHex).toString(),
+      txHash: t.hash,
+      from: t.from,
+      blockNumber: t.blockNum ? parseInt(t.blockNum, 16) : null,
+      ts: Number.isFinite(ts as number) ? (ts as number) : null
+    });
+  }
+  return out;
+}
+
 async function scanEvm(chain: "eth" | "bsc", address: string): Promise<IncomingTransfer[]> {
-  return ETHERSCAN_KEY ? scanEvmEtherscan(chain, address) : scanEvmLogs(chain, address);
+  const rpc = chain === "eth" ? ETH_RPC : BSC_RPC;
+  // Prefer Alchemy's transfer API (full history, reuses our RPC key), then
+  // Etherscan V2 (if a key is configured), then bounded getLogs as a last
+  // resort.
+  if (isAlchemy(rpc)) {
+    try {
+      return await scanEvmAlchemy(chain, address);
+    } catch {
+      /* fall through */
+    }
+  }
+  if (ETHERSCAN_KEY) {
+    try {
+      return await scanEvmEtherscan(chain, address);
+    } catch {
+      /* fall through */
+    }
+  }
+  return scanEvmLogs(chain, address);
 }
 
 // ── TRON (TRC20 + native TRX) ───────────────────────────────────────────────
