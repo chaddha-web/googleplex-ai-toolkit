@@ -12,6 +12,7 @@ import { requireAuth, requireInternal, requireRole } from "./lib/guard.js";
 import { eq, and, desc } from "drizzle-orm";
 import { ulid } from "ulid";
 import { reconcile, type UserAddressMap } from "./reconcile.js";
+import { scanIncomingTransfers } from "./scan.js";
 import {
   ASSET_INSTANCES,
   LOGICAL_ASSETS,
@@ -199,11 +200,12 @@ export async function walletRoutes(app: FastifyInstance) {
     const a = addrs[0]!;
     const snap = await reconcile({ eth: a.eth, bsc: a.bsc, tron: a.tron, btc: a.btc });
 
-    // Diff against ledger and update
+    // Diff against ledger and update BALANCES (authoritative on-chain via
+    // balanceOf). We no longer create history rows here — the real
+    // per-transfer history (with tx hash + sender) is indexed below from
+    // transfer events. This block only keeps ledger_balances current and
+    // detects the $1 activation deposit.
     let initialDepositCreditedUsd = 0;
-    
-    // Synchronous transaction (better-sqlite3). The async RPC reconcile()
-    // already ran above; here we only do sync ledger writes.
     db.transaction((tx) => {
       const existingBalances = tx.select().from(ledgerBalances).where(eq(ledgerBalances.user_id, user.sub)).all();
 
@@ -214,30 +216,6 @@ export async function walletRoutes(app: FastifyInstance) {
 
         if (BigInt(onChainRaw) > BigInt(ledgerRaw)) {
           const delta = BigInt(onChainRaw) - BigInt(ledgerRaw);
-          const refTxHash = "sync-" + Date.now() + "-" + t.chain + "-" + t.symbol; // simplified tx hash logic
-          const dId = ulid();
-
-          tx.insert(deposits).values({
-            id: dId,
-            user_id: user.sub,
-            chain: t.chain,
-            symbol: t.symbol,
-            amount_raw: delta.toString(),
-            tx_hash: refTxHash,
-            confirmed_at: Date.now(),
-            credited_at: Date.now()
-          }).run();
-
-          tx.insert(ledgerEntries).values({
-            id: ulid(),
-            user_id: user.sub,
-            chain: t.chain,
-            symbol: t.symbol,
-            delta_raw: delta.toString(),
-            kind: "deposit",
-            ref_tx_hash: refTxHash,
-            ref_id: dId
-          }).run();
 
           if (ledgerRow) {
             tx.update(ledgerBalances)
@@ -282,6 +260,50 @@ export async function walletRoutes(app: FastifyInstance) {
       } catch (e) {
         app.log.error(e);
       }
+    }
+
+    // Index individual incoming transfers (real tx hash + sender) for the
+    // transaction history. Best-effort + non-fatal — the balance above is
+    // already authoritative. Dedupe by tx hash against existing deposits.
+    try {
+      const transfers = await scanIncomingTransfers({ eth: a.eth, bsc: a.bsc, tron: a.tron, btc: a.btc });
+      if (transfers.length > 0) {
+        const existing = db.select({ h: deposits.tx_hash }).from(deposits).where(eq(deposits.user_id, user.sub)).all();
+        const seen = new Set(existing.map((r) => r.h));
+        db.transaction((tx) => {
+          for (const tr of transfers) {
+            if (seen.has(tr.txHash)) continue;
+            seen.add(tr.txHash);
+            const dId = ulid();
+            const ts = tr.ts ?? Date.now();
+            tx.insert(deposits).values({
+              id: dId,
+              user_id: user.sub,
+              chain: tr.chain,
+              symbol: tr.symbol,
+              amount_raw: tr.amountRaw,
+              tx_hash: tr.txHash,
+              from_address: tr.from,
+              block_number: tr.blockNumber,
+              confirmed_at: ts,
+              credited_at: Date.now()
+            }).run();
+            tx.insert(ledgerEntries).values({
+              id: ulid(),
+              user_id: user.sub,
+              chain: tr.chain,
+              symbol: tr.symbol,
+              delta_raw: tr.amountRaw, // positive = received
+              kind: "deposit",
+              ref_tx_hash: tr.txHash,
+              ref_id: dId,
+              created_at: ts
+            }).run();
+          }
+        });
+      }
+    } catch (e) {
+      app.log.error({ err: e }, "transfer indexing failed (non-fatal)");
     }
 
     // Return fresh JIT view
@@ -598,7 +620,9 @@ export async function walletRoutes(app: FastifyInstance) {
       const w = e.ref_id ? wById.get(e.ref_id) : undefined;
       const d = e.ref_id ? dById.get(e.ref_id) : undefined;
       const txHash = e.ref_tx_hash ?? w?.tx_hash ?? d?.tx_hash ?? null;
-      const counterparty = w?.dest_address ?? null;
+      // Counterparty: withdrawals have a destination; deposits have a sender.
+      const to = w?.dest_address ?? null;
+      const from = d?.from_address ?? null;
       const status =
         w?.status ?? (e.kind === "deposit" ? "confirmed" : "confirmed");
 
@@ -612,7 +636,8 @@ export async function walletRoutes(app: FastifyInstance) {
         amount: human, // signed
         usd, // absolute USD value
         tx_hash: txHash,
-        to: counterparty,
+        to,
+        from,
         status,
         created_at: e.created_at
       };

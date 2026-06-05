@@ -58,6 +58,7 @@ export const deposits = sqliteTable("deposits", {
   symbol: text("symbol").notNull(),
   amount_raw: text("amount_raw").notNull(),
   tx_hash: text("tx_hash").notNull().unique(),
+  from_address: text("from_address"), // on-chain sender, when indexed from transfers
   block_number: integer("block_number"),
   confirmed_at: integer("confirmed_at"),
   credited_at: integer("credited_at")

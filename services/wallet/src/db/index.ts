@@ -97,3 +97,11 @@ sqlite.exec(`
   CREATE INDEX IF NOT EXISTS idx_withdrawals_user    ON withdrawals (user_id, requested_at);
   CREATE INDEX IF NOT EXISTS idx_deposits_user       ON deposits (user_id, confirmed_at);
 `);
+
+// Backfill migration: on-chain sender, added when deposits are indexed from
+// transfer events (older rows from the balance-diff path don't have it).
+try {
+  sqlite.exec(`ALTER TABLE deposits ADD COLUMN from_address TEXT`);
+} catch {
+  /* column already exists */
+}

@@ -279,6 +279,7 @@ type Tx = {
   usd: number | null;
   tx_hash: string | null;
   to: string | null;
+  from: string | null;
   status: string;
   created_at: number | null;
 };
@@ -464,6 +465,11 @@ function TxDetail({ tx, onClose }: { tx: Tx; onClose: () => void }) {
           {tx.tx_hash && !tx.tx_hash.startsWith("sync-") && (
             <Detail label="Transaction ID">
               <span className="font-mono text-xs break-all">{tx.tx_hash}</span>
+            </Detail>
+          )}
+          {tx.from && (
+            <Detail label="From">
+              <span className="font-mono text-xs break-all">{tx.from}</span>
             </Detail>
           )}
           {tx.to && (
