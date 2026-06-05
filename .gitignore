@@ -72,3 +72,7 @@ media/
 # Whitepaper PDF is served from the nginx media server, not bundled.
 apps/landing/public/*.pdf
 apps/landing/lib/*.pdf
+
+# Sidebar ambient video — served from the media server, not bundled.
+final.mp4
+*.mp4

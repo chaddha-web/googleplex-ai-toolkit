@@ -8,6 +8,11 @@ import { useAuth } from "@/components/auth-context";
 const LANDING_URL =
   process.env.NEXT_PUBLIC_LANDING_URL || "http://localhost:3010";
 
+// Ambient sidebar video — served from the nginx media server (not bundled).
+const SIDEBAR_VIDEO_URL =
+  process.env.NEXT_PUBLIC_SIDEBAR_VIDEO_URL ||
+  "https://ggakingclub.com/media/final.mp4";
+
 const NAV_ITEMS: { href: string; label: string }[] = [
   { href: "/", label: "Home" },
   { href: "/wallet", label: "Wallet" },
@@ -141,7 +146,7 @@ function Sidebar({
     <aside
       className={`dashboard-sidebar w-60 shrink-0 flex-col bg-black/90 md:bg-black/40 ${className}`}
     >
-      <nav className="px-3.5 pt-5 flex-1">
+      <nav className="px-3.5 pt-5">
         <ul className="space-y-1">
           {NAV_ITEMS.map((item) => {
             const active =
@@ -163,6 +168,22 @@ function Sidebar({
           })}
         </ul>
       </nav>
+
+      {/* Ambient looping video fills the empty space below the nav. */}
+      <div className="flex-1 min-h-0 px-3.5 pt-4 pb-3">
+        <div className="sidebar-video-wrap h-full w-full overflow-hidden rounded-2xl">
+          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          <video
+            src={SIDEBAR_VIDEO_URL}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="h-full w-full object-cover"
+          />
+        </div>
+      </div>
+
       <p className="px-5 pb-6 text-[10px] tracking-[0.22em] uppercase nav-foot">
         v0.1 · dashboard
       </p>
