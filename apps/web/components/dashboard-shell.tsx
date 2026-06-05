@@ -168,11 +168,12 @@ function Sidebar({
         </ul>
       </nav>
 
-      {/* Ambient looping video — shown in full at the sidebar's width. The
-          4:5 box keeps the whole frame visible (no crop); object-contain
-          guards against any letterboxing baked into the file. Sidebar width
-          is unchanged. */}
-      <div className="px-3.5 pt-4">
+      {/* Spacer pushes the video + footer to the bottom of the sidebar. */}
+      <div className="flex-1" />
+
+      {/* Ambient looping video — anchored to the bottom of the sidebar, shown
+          in full at the sidebar's width (4:5, no crop). */}
+      <div className="px-3.5 pb-3">
         <div className="sidebar-video-wrap w-full aspect-[4/5] overflow-hidden rounded-2xl">
           {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
           <video
@@ -185,9 +186,6 @@ function Sidebar({
           />
         </div>
       </div>
-
-      {/* Spacer pushes the footer to the bottom; sidebar runs full height. */}
-      <div className="flex-1" />
 
       <p className="px-5 pb-6 text-[10px] tracking-[0.22em] uppercase nav-foot">
         v0.1 · dashboard
