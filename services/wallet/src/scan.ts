@@ -1,25 +1,27 @@
 /**
- * Incoming-transfer indexer. Where reconcile.ts reads *balances* (balanceOf),
- * this reads individual *transfers* into a user's deposit address — giving us
- * the real on-chain tx hash, the sender address, and per-deposit amounts for
- * the transaction history.
+ * Incoming-transfer indexer — reads individual deposits into a user's address
+ * across ALL chains, giving the real on-chain tx hash, sender, amount + time
+ * for the transaction history. (reconcile.ts reads balances; this reads the
+ * transfers behind them.)
  *
- *   - TRON: TronGrid TRC20 transfer history (authoritative, has the API key).
- *   - EVM (ETH/BSC): viem getLogs over the ERC20 Transfer event, bounded to a
- *     recent block window (public RPCs cap getLogs ranges). Best-effort — if
- *     the RPC rejects the range, we skip and the balance path still credits.
- *   - BTC: not indexed here (balanceOf only) — added later if needed.
+ *   - EVM (ETH/BSC): Etherscan V2 unified API (one ETHERSCAN_API_KEY, chainid
+ *     switch) for native + ERC20/BEP20 transfers. Falls back to viem getLogs
+ *     (bounded) for tokens if no key is set.
+ *   - TRON: TronGrid — TRC20 transfers + native TRX transfers (TRON_API_KEY).
+ *   - BTC: mempool.space address txs (no key).
  *
- * Everything is read-only; callers persist + dedupe by tx hash.
+ * All read-only; callers persist + dedupe by tx hash. Per-chain failures are
+ * swallowed so one bad provider doesn't sink the whole scan.
  */
 
+import { createHash } from "node:crypto";
 import { parseAbiItem } from "viem";
 import { ethClient } from "./chain/eth.js";
 import { bscClient } from "./chain/bsc.js";
 import { TOKENS } from "./tokens.js";
 
 export type IncomingTransfer = {
-  chain: "eth" | "bsc" | "tron";
+  chain: "eth" | "bsc" | "tron" | "btc";
   symbol: string;
   amountRaw: string; // base units
   txHash: string;
@@ -30,72 +32,96 @@ export type IncomingTransfer = {
 
 const TRON_API = process.env.TRON_API_URL ?? "https://api.trongrid.io";
 const TRON_KEY = process.env.TRON_API_KEY;
-// How many recent blocks to scan for EVM Transfer logs. ~ a few days on both
-// chains; new deposits are caught on the refresh that follows them. Tunable.
+const ETHERSCAN_KEY = process.env.ETHERSCAN_API_KEY; // V2: one key, all EVM chains
+const ETHERSCAN_V2 = "https://api.etherscan.io/v2/api";
+const BTC_API = process.env.BTC_API_URL ?? "https://mempool.space/api";
 const EVM_LOG_RANGE = BigInt(process.env.EVM_LOG_RANGE ?? 200_000);
 
 const TRANSFER_EVENT = parseAbiItem(
   "event Transfer(address indexed from, address indexed to, uint256 value)"
 );
 
-/** TRC20 transfers INTO a Tron address (USDT/USDC/PARTY). */
-async function scanTron(address: string): Promise<IncomingTransfer[]> {
-  const tronTokens = TOKENS.filter((t) => t.chain === "tron" && !t.native);
-  const byContract = new Map(tronTokens.map((t) => [(t as any).address as string, t]));
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (TRON_KEY) headers["TRON-PRO-API-KEY"] = TRON_KEY;
+const lc = (s: string) => s.toLowerCase();
 
-  const url = `${TRON_API}/v1/accounts/${address}/transactions/trc20?only_to=true&limit=50`;
-  const res = await fetch(url, { headers });
-  if (!res.ok) throw new Error(`TronGrid trc20 history ${res.status}`);
-  const data = (await res.json()) as {
-    data?: Array<{
-      transaction_id: string;
-      from: string;
-      to: string;
-      value: string;
-      token_info?: { address?: string; symbol?: string; decimals?: number };
-      block_timestamp?: number;
-      type?: string;
-    }>;
-  };
-
+// ── EVM via Etherscan V2 (preferred — full history) ─────────────────────────
+async function scanEvmEtherscan(
+  chain: "eth" | "bsc",
+  address: string
+): Promise<IncomingTransfer[]> {
+  const chainId = chain === "eth" ? 1 : 56;
+  const nativeSym = chain === "eth" ? "ETH" : "BNB";
   const out: IncomingTransfer[] = [];
-  for (const t of data.data ?? []) {
-    if (t.type && t.type !== "Transfer") continue;
-    const contract = t.token_info?.address ?? "";
-    const known = byContract.get(contract);
-    if (!known) continue; // ignore unknown tokens (spam/airdrops)
-    out.push({
-      chain: "tron",
-      symbol: known.symbol,
-      amountRaw: String(t.value),
-      txHash: t.transaction_id,
-      from: t.from,
-      blockNumber: null,
-      ts: t.block_timestamp ?? null
-    });
+  const tokenByContract = new Map(
+    TOKENS.filter((t) => t.chain === chain && !t.native).map((t) => [lc((t as any).address), t])
+  );
+
+  const base = `${ETHERSCAN_V2}?chainid=${chainId}&address=${address}&page=1&offset=100&sort=desc&apikey=${ETHERSCAN_KEY}`;
+
+  // ERC20 / BEP20 transfers
+  try {
+    const r = await fetch(`${base}&module=account&action=tokentx`);
+    const j = (await r.json()) as { status: string; result: any[] };
+    if (Array.isArray(j.result)) {
+      for (const t of j.result) {
+        if (lc(t.to) !== lc(address)) continue; // incoming only
+        const known = tokenByContract.get(lc(t.contractAddress));
+        if (!known) continue; // ignore unknown tokens (spam)
+        out.push({
+          chain,
+          symbol: known.symbol,
+          amountRaw: String(t.value),
+          txHash: t.hash,
+          from: t.from,
+          blockNumber: t.blockNumber ? Number(t.blockNumber) : null,
+          ts: t.timeStamp ? Number(t.timeStamp) * 1000 : null
+        });
+      }
+    }
+  } catch {
+    /* skip ERC20 */
+  }
+
+  // Native ETH / BNB transfers
+  try {
+    const r = await fetch(`${base}&module=account&action=txlist`);
+    const j = (await r.json()) as { status: string; result: any[] };
+    if (Array.isArray(j.result)) {
+      for (const t of j.result) {
+        if (lc(t.to ?? "") !== lc(address)) continue;
+        if (t.isError !== "0") continue;
+        if (!t.value || t.value === "0") continue;
+        out.push({
+          chain,
+          symbol: nativeSym,
+          amountRaw: String(t.value),
+          txHash: t.hash,
+          from: t.from,
+          blockNumber: t.blockNumber ? Number(t.blockNumber) : null,
+          ts: t.timeStamp ? Number(t.timeStamp) * 1000 : null
+        });
+      }
+    }
+  } catch {
+    /* skip native */
   }
   return out;
 }
 
-/** ERC20/BEP20 transfers INTO an EVM address, via getLogs (bounded). */
-async function scanEvm(
+// ── EVM via viem getLogs (fallback when no Etherscan key) ───────────────────
+async function scanEvmLogs(
   chain: "eth" | "bsc",
   address: string
 ): Promise<IncomingTransfer[]> {
   const client = chain === "eth" ? ethClient : bscClient;
   const tokens = TOKENS.filter((t) => t.chain === chain && !t.native);
   const out: IncomingTransfer[] = [];
-
   let latest: bigint;
   try {
     latest = await client.getBlockNumber();
   } catch {
-    return out; // RPC down — skip, balance path still works
+    return out;
   }
   const fromBlock = latest > EVM_LOG_RANGE ? latest - EVM_LOG_RANGE : 0n;
-
   for (const tok of tokens) {
     try {
       const logs = await client.getLogs({
@@ -120,16 +146,112 @@ async function scanEvm(
         });
       }
     } catch {
-      // Provider rejected the range / token — skip this token, keep going.
+      /* skip token */
     }
   }
   return out;
 }
 
-/**
- * Scan all of a user's deposit addresses for incoming transfers. Per-chain
- * failures are swallowed so one bad RPC doesn't sink the whole scan.
- */
+async function scanEvm(chain: "eth" | "bsc", address: string): Promise<IncomingTransfer[]> {
+  return ETHERSCAN_KEY ? scanEvmEtherscan(chain, address) : scanEvmLogs(chain, address);
+}
+
+// ── TRON (TRC20 + native TRX) ───────────────────────────────────────────────
+async function scanTron(address: string): Promise<IncomingTransfer[]> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (TRON_KEY) headers["TRON-PRO-API-KEY"] = TRON_KEY;
+  const out: IncomingTransfer[] = [];
+  const byContract = new Map(
+    TOKENS.filter((t) => t.chain === "tron" && !t.native).map((t) => [(t as any).address as string, t])
+  );
+
+  // TRC20
+  try {
+    const r = await fetch(`${TRON_API}/v1/accounts/${address}/transactions/trc20?only_to=true&limit=50`, { headers });
+    const j = (await r.json()) as { data?: any[] };
+    for (const t of j.data ?? []) {
+      if (t.type && t.type !== "Transfer") continue;
+      const known = byContract.get(t.token_info?.address ?? "");
+      if (!known) continue;
+      out.push({
+        chain: "tron",
+        symbol: known.symbol,
+        amountRaw: String(t.value),
+        txHash: t.transaction_id,
+        from: t.from,
+        blockNumber: null,
+        ts: t.block_timestamp ?? null
+      });
+    }
+  } catch {
+    /* skip trc20 */
+  }
+
+  // Native TRX (TransferContract)
+  try {
+    const r = await fetch(`${TRON_API}/v1/accounts/${address}/transactions?only_to=true&limit=30`, { headers });
+    const j = (await r.json()) as { data?: any[] };
+    for (const t of j.data ?? []) {
+      const c = t.raw_data?.contract?.[0];
+      if (c?.type !== "TransferContract") continue;
+      const v = c.parameter?.value;
+      if (!v?.amount) continue;
+      // owner_address / to_address are hex (41…) here; we keep the tx + amount.
+      out.push({
+        chain: "tron",
+        symbol: "TRX",
+        amountRaw: String(v.amount),
+        txHash: t.txID,
+        from: hexToTronBase58(v.owner_address) ?? v.owner_address ?? "",
+        blockNumber: null,
+        ts: t.block_timestamp ?? null
+      });
+    }
+  } catch {
+    /* skip native */
+  }
+  return out;
+}
+
+// ── BTC via mempool.space ───────────────────────────────────────────────────
+async function scanBtc(address: string): Promise<IncomingTransfer[]> {
+  const out: IncomingTransfer[] = [];
+  try {
+    const r = await fetch(`${BTC_API}/address/${address}/txs`);
+    const txs = (await r.json()) as any[];
+    if (!Array.isArray(txs)) return out;
+    for (const tx of txs) {
+      // Received = sum of outputs paying our address.
+      let received = 0n;
+      for (const vout of tx.vout ?? []) {
+        if (vout.scriptpubkey_address === address) received += BigInt(vout.value ?? 0);
+      }
+      if (received <= 0n) continue;
+      // Skip if we were also an input (self-transfer / change) — net it out.
+      let spent = 0n;
+      for (const vin of tx.vin ?? []) {
+        if (vin.prevout?.scriptpubkey_address === address) spent += BigInt(vin.prevout.value ?? 0);
+      }
+      const net = received - spent;
+      if (net <= 0n) continue;
+      const from = tx.vin?.[0]?.prevout?.scriptpubkey_address ?? "";
+      out.push({
+        chain: "btc",
+        symbol: "BTC",
+        amountRaw: net.toString(),
+        txHash: tx.txid,
+        from,
+        blockNumber: tx.status?.block_height ?? null,
+        ts: tx.status?.block_time ? tx.status.block_time * 1000 : null
+      });
+    }
+  } catch {
+    /* skip btc */
+  }
+  return out;
+}
+
+/** Scan every deposit address for incoming transfers across all chains. */
 export async function scanIncomingTransfers(addrs: {
   eth: string;
   bsc: string;
@@ -139,11 +261,36 @@ export async function scanIncomingTransfers(addrs: {
   const results = await Promise.allSettled([
     scanEvm("eth", addrs.eth),
     scanEvm("bsc", addrs.bsc),
-    scanTron(addrs.tron)
+    scanTron(addrs.tron),
+    scanBtc(addrs.btc)
   ]);
   const out: IncomingTransfer[] = [];
-  for (const r of results) {
-    if (r.status === "fulfilled") out.push(...r.value);
-  }
+  for (const r of results) if (r.status === "fulfilled") out.push(...r.value);
   return out;
+}
+
+// Minimal hex(41-prefixed) → Tron base58check, for native TRX sender display.
+const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+function hexToTronBase58(hex?: string): string | null {
+  if (!hex) return null;
+  try {
+    const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
+    const payload = Buffer.from(clean, "hex"); // 21 bytes (0x41 + 20)
+    const sha256 = (b: Buffer) => createHash("sha256").update(b).digest();
+    const checksum = sha256(sha256(payload)).subarray(0, 4);
+    const full = Buffer.concat([payload, checksum]);
+    let num = BigInt("0x" + full.toString("hex"));
+    let str = "";
+    while (num > 0n) {
+      str = B58[Number(num % 58n)] + str;
+      num /= 58n;
+    }
+    for (const byte of full) {
+      if (byte === 0) str = "1" + str;
+      else break;
+    }
+    return str;
+  } catch {
+    return null;
+  }
 }
