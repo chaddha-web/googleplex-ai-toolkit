@@ -11,7 +11,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DashboardShell } from "@/components/dashboard-shell";
 import { useAuth } from "@/components/auth-context";
 import { mySessions, type MySessionRow, currentSessionId } from "@/lib/auth-client";
 
@@ -34,11 +33,9 @@ function parseUA(ua: string | null): string {
 }
 
 export default function SecurityPage() {
-  return (
-    <DashboardShell>
-      <SecurityInner />
-    </DashboardShell>
-  );
+  // The root layout already wraps every route in <DashboardShell>, so this
+  // page must NOT add another one (that produced a duplicate sidebar).
+  return <SecurityInner />;
 }
 
 function SecurityInner() {
