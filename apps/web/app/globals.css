@@ -171,10 +171,10 @@ aside.bg-black\/40  { background-color: var(--surface-2)      !important; backdr
    from the soft light page. Text + interactive bits forced light to stay
    legible on the dark bar (overriding the global light text-* remaps). */
 header.bg-black\/60 {
-  background: linear-gradient(100deg, #0E1326 0%, #241C5E 55%, #5B4BFF 100%) !important;
-  border-bottom: 1px solid rgba(255,255,255,0.10) !important;
+  background: linear-gradient(100deg, #4F46E5 0%, #7C3AED 32%, #C026D3 64%, #EC4899 100%) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.18) !important;
   backdrop-filter: none !important;
-  box-shadow: 0 1px 24px -8px rgba(91,75,255,0.45);
+  box-shadow: 0 2px 30px -6px rgba(192,38,211,0.5);
 }
 header.bg-black\/60 span,
 header.bg-black\/60 .text-white,
