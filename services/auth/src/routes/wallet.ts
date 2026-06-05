@@ -3,6 +3,7 @@ import { stmts } from "../db.js";
 import { verifyAccessToken } from "../jwt.js";
 import { notify } from "../notify.js";
 import { performLiquidityExit } from "../liquidity.js";
+import { sendWalletActivatedEmail, sendDepositEmail, sendWithdrawalEmail } from "../emails.js";
 import * as argon2 from "@node-rs/argon2";
 
 const INTERNAL_TOKEN = process.env.INTERNAL_SERVICE_TOKEN;
@@ -160,6 +161,11 @@ export async function walletRoutes(app: FastifyInstance) {
         `✅ <b>Wallet activated</b>\n${user.email}\n` +
           `ID: <code>${user.code11}</code> · credited $${Number(creditedUsd).toFixed(2)}`
       );
+      sendWalletActivatedEmail({
+        to: user.email,
+        firstName: user.first_name,
+        creditedUsd: Number(creditedUsd)
+      }).catch(() => {});
     }
 
     return reply.send({ ok: true, walletStatus: nextStatus });
@@ -182,6 +188,47 @@ export async function walletRoutes(app: FastifyInstance) {
       tokens: result?.tokens ?? 0,
       referenceNo: result?.referenceNo ?? user.code11
     });
+  });
+
+  // POST /internal/email/deposit — wallet service calls this after indexing a
+  // new incoming deposit, so we can email the member a branded confirmation.
+  app.post("/internal/email/deposit", async (req: any, reply) => {
+    if (!requireInternal(req, reply)) return;
+    const b = (req.body ?? {}) as {
+      userId?: string; amount?: string; symbol?: string; chain?: string; usd?: number | null; txHash?: string | null;
+    };
+    const u = b.userId ? stmts.user.byId.get(b.userId) : null;
+    if (!u) return reply.code(404).send({ error: "User not found." });
+    sendDepositEmail({
+      to: u.email,
+      firstName: u.first_name,
+      amount: String(b.amount ?? "0"),
+      symbol: String(b.symbol ?? ""),
+      chain: String(b.chain ?? ""),
+      usd: b.usd ?? null,
+      txHash: b.txHash ?? null
+    }).catch(() => {});
+    return reply.send({ ok: true });
+  });
+
+  // POST /internal/email/withdrawal — wallet service calls after a broadcast.
+  app.post("/internal/email/withdrawal", async (req: any, reply) => {
+    if (!requireInternal(req, reply)) return;
+    const b = (req.body ?? {}) as {
+      userId?: string; amount?: string; symbol?: string; chain?: string; dest?: string | null; txHash?: string | null;
+    };
+    const u = b.userId ? stmts.user.byId.get(b.userId) : null;
+    if (!u) return reply.code(404).send({ error: "User not found." });
+    sendWithdrawalEmail({
+      to: u.email,
+      firstName: u.first_name,
+      amount: String(b.amount ?? "0"),
+      symbol: String(b.symbol ?? ""),
+      chain: String(b.chain ?? ""),
+      dest: b.dest ?? null,
+      txHash: b.txHash ?? null
+    }).catch(() => {});
+    return reply.send({ ok: true });
   });
 
   // POST /internal/users/:id/studio-unlock

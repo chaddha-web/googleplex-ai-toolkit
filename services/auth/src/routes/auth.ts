@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { stmts } from "../db.js";
 import { performLiquidityExit } from "../liquidity.js";
+import { sendSevaCreditEmail } from "../emails.js";
 import {
   consumeRefreshToken,
   issueRefreshToken,
@@ -271,6 +272,12 @@ export async function authRoutes(app: FastifyInstance) {
         `ID: <code>${user.code11}</code>\n` +
         `${SEVA_CREDIT_AMOUNT.toLocaleString()} credits`
     );
+    sendSevaCreditEmail({
+      to: user.email,
+      firstName: user.first_name,
+      memberId: user.code11,
+      amount: SEVA_CREDIT_AMOUNT
+    }).catch(() => {});
 
     return reply.send({ ok: true, sevaCredit: SEVA_CREDIT_AMOUNT });
   });

@@ -11,7 +11,7 @@ import {
   isValidIdempotencyKey,
   timingSafeEqualHex
 } from "../otp.js";
-import { sendOtpEmail } from "../email.js";
+import { sendSignupOtp, sendLoginOtp, sendWelcomeEmail } from "../emails.js";
 import { issueRefreshToken, signAccessToken, TTL } from "../jwt.js";
 import { notify } from "../notify.js";
 
@@ -100,11 +100,15 @@ export async function otpRoutes(app: FastifyInstance) {
     });
 
     try {
-      await sendOtpEmail({
-        to: normalisedEmail,
-        code,
-        firstName: mode === "signup" ? (firstName as string).trim() : null
-      });
+      if (mode === "signup") {
+        await sendSignupOtp({
+          to: normalisedEmail,
+          code,
+          firstName: (firstName as string)?.trim() || null
+        });
+      } else {
+        await sendLoginOtp({ to: normalisedEmail, code });
+      }
     } catch (err) {
       req.log.error({ err }, "[otp/request] resend send failed");
       // Roll back the OTP row so the user can retry without hitting the
@@ -211,6 +215,12 @@ export async function otpRoutes(app: FastifyInstance) {
           `${user.email}\n` +
           `ID: <code>${user.code11}</code> · role: ${user.role}`
       );
+      // Welcome email (best-effort).
+      sendWelcomeEmail({
+        to: user.email,
+        firstName: user.first_name,
+        memberId: user.code11
+      }).catch(() => {});
     } else {
       // Existing user logging back in. Useful as a "was that you?" signal.
       // IP is via req.ip (trustProxy on); UA truncated to keep the message tidy.

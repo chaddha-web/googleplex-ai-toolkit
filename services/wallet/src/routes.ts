@@ -270,10 +270,12 @@ export async function walletRoutes(app: FastifyInstance) {
       if (transfers.length > 0) {
         const existing = db.select({ h: deposits.tx_hash }).from(deposits).where(eq(deposits.user_id, user.sub)).all();
         const seen = new Set(existing.map((r) => r.h));
+        const fresh: typeof transfers = [];
         db.transaction((tx) => {
           for (const tr of transfers) {
             if (seen.has(tr.txHash)) continue;
             seen.add(tr.txHash);
+            fresh.push(tr);
             const dId = ulid();
             const ts = tr.ts ?? Date.now();
             tx.insert(deposits).values({
@@ -301,6 +303,27 @@ export async function walletRoutes(app: FastifyInstance) {
             }).run();
           }
         });
+        // Email a branded confirmation for each newly-indexed deposit.
+        for (const tr of fresh) {
+          const tok = findToken(tr.chain as any, tr.symbol);
+          const human = Number(BigInt(tr.amountRaw)) / 10 ** (tok?.decimals ?? 18);
+          const price = priceUsd(tr.symbol as any) ?? null;
+          fetch(AUTH_BASE + "/internal/email/deposit", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + process.env.INTERNAL_SERVICE_TOKEN
+            },
+            body: JSON.stringify({
+              userId: user.sub,
+              amount: human.toLocaleString(undefined, { maximumFractionDigits: 8 }),
+              symbol: tr.symbol,
+              chain: tr.chain,
+              usd: price != null ? human * price : null,
+              txHash: tr.txHash
+            })
+          }).catch(() => {});
+        }
       }
     } catch (e) {
       app.log.error({ err: e }, "transfer indexing failed (non-fatal)");
@@ -550,6 +573,27 @@ export async function walletRoutes(app: FastifyInstance) {
       `💸 <b>Withdrawal sent</b>\n${w.symbol} on ${w.chain}\n` +
         `to <code>${w.dest_address}</code>\ntx: <code>${txHash}</code>`
     );
+
+    // Branded withdrawal-sent email (best-effort).
+    {
+      const tok = findToken(w.chain as any, w.symbol);
+      const human = Number(BigInt(w.amount_raw)) / 10 ** (tok?.decimals ?? 18);
+      fetch(AUTH_BASE + "/internal/email/withdrawal", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + process.env.INTERNAL_SERVICE_TOKEN
+        },
+        body: JSON.stringify({
+          userId: user.sub,
+          amount: human.toLocaleString(undefined, { maximumFractionDigits: 8 }),
+          symbol: w.symbol,
+          chain: w.chain,
+          dest: w.dest_address,
+          txHash
+        })
+      }).catch(() => {});
+    }
 
     // ── Protected-liquidity floor check ──────────────────────────────────
     // The $1 a member deposits backs their 10B tokens. They may freely
