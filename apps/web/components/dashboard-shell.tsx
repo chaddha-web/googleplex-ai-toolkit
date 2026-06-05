@@ -143,7 +143,11 @@ function Sidebar({
 }) {
   return (
     <aside
-      className={`dashboard-sidebar w-60 shrink-0 flex-col bg-black/90 md:bg-black/40 ${className}`}
+      // On desktop the sidebar pins to the viewport (sticky, one screen tall)
+      // instead of stretching to the full scrollable page height — it stays
+      // the same height no matter how long the page content is. self-start
+      // stops the flex row from stretching it.
+      className={`dashboard-sidebar w-60 shrink-0 flex-col bg-black/90 md:bg-black/40 md:sticky md:top-0 md:h-screen md:self-start ${className}`}
     >
       <nav className="px-3.5 pt-5">
         <ul className="space-y-1">
