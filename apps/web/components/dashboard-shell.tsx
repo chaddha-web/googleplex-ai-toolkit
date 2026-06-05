@@ -80,42 +80,41 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   if (user?.role === "admin") return null;
 
   return (
-    <div className="flex flex-col min-h-screen w-full">
-      {/* Full-width top bar across the very top. */}
-      <TopBar
-        firstName={user?.firstName ?? ""}
-        email={user?.email ?? ""}
-        menuOpen={menuOpen}
-        onToggleMenu={() => setMenuOpen((v) => !v)}
-        onSignOut={async () => {
-          await signOut();
-          router.refresh();
-        }}
-      />
+    <div className="flex min-h-screen w-full">
+      {/* Full-height sidebar on the left — the white panel runs the whole
+          length of the page. */}
+      <Sidebar pathname={pathname} className="hidden md:flex" />
 
-      {/* Sidebar + content sit BELOW the top bar. */}
-      <div className="flex flex-1 min-h-0 w-full">
-        {/* Desktop sidebar (static) — starts below the top bar. */}
-        <Sidebar pathname={pathname} className="hidden md:flex" />
+      {/* Mobile drawer + backdrop */}
+      {menuOpen && (
+        <>
+          {/* Backdrop — tap anywhere off the menu to dismiss. */}
+          <div
+            className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm md:hidden"
+            onClick={() => setMenuOpen(false)}
+            aria-hidden="true"
+          />
+          <Sidebar
+            pathname={pathname}
+            className="fixed inset-y-0 left-0 z-40 flex md:hidden animate-[slideIn_0.18s_ease-out]"
+            onNavigate={() => setMenuOpen(false)}
+          />
+        </>
+      )}
 
-        {/* Mobile drawer + backdrop */}
-        {menuOpen && (
-          <>
-            {/* Backdrop — tap anywhere off the menu to dismiss. */}
-            <div
-              className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm md:hidden"
-              onClick={() => setMenuOpen(false)}
-              aria-hidden="true"
-            />
-            <Sidebar
-              pathname={pathname}
-              className="fixed inset-y-0 left-0 z-40 flex md:hidden animate-[slideIn_0.18s_ease-out]"
-              onNavigate={() => setMenuOpen(false)}
-            />
-          </>
-        )}
-
-        <main className="flex-1 min-w-0 px-6 md:px-10 py-10">{children}</main>
+      {/* Content column — the top bar sits here, to the RIGHT of the sidebar. */}
+      <div className="flex-1 flex flex-col min-w-0">
+        <TopBar
+          firstName={user?.firstName ?? ""}
+          email={user?.email ?? ""}
+          menuOpen={menuOpen}
+          onToggleMenu={() => setMenuOpen((v) => !v)}
+          onSignOut={async () => {
+            await signOut();
+            router.refresh();
+          }}
+        />
+        <main className="flex-1 px-6 md:px-10 py-10">{children}</main>
       </div>
 
       {/* Drawer slide-in keyframe (scoped, no global CSS needed). */}
