@@ -299,13 +299,21 @@ function explorerUrl(chain: string | null, hash: string | null): string | null {
   return EXPLORER_TX[chain]?.(hash) ?? null;
 }
 
-function txMeta(kind: string, amount: number): { label: string; icon: string; tone: string } {
-  if (kind === "deposit") return { label: "Received", icon: "↓", tone: "text-emerald-300" };
-  if (kind === "withdrawal") return { label: "Sent", icon: "↑", tone: "text-white" };
-  if (kind === "withdrawal_refund") return { label: "Refund", icon: "↺", tone: "text-emerald-300" };
-  if (kind === "studio_fee") return { label: "Studio fee", icon: "•", tone: "text-white/70" };
-  if (kind.includes("swap")) return { label: "Swap", icon: "⇄", tone: "text-white/80" };
-  return { label: amount >= 0 ? "Received" : "Sent", icon: amount >= 0 ? "↓" : "↑", tone: amount >= 0 ? "text-emerald-300" : "text-white" };
+function txMeta(
+  kind: string,
+  amount: number
+): { label: string; icon: string; tone: string; chip: string } {
+  const inChip = "bg-emerald-400/15 text-emerald-300";
+  const outChip = "bg-black/[0.06] text-white";
+  const neutralChip = "bg-black/[0.06] text-white/60";
+  if (kind === "deposit") return { label: "Received", icon: "↓", tone: "text-emerald-300", chip: inChip };
+  if (kind === "withdrawal") return { label: "Sent", icon: "↑", tone: "text-white", chip: outChip };
+  if (kind === "withdrawal_refund") return { label: "Refund", icon: "↺", tone: "text-emerald-300", chip: inChip };
+  if (kind === "studio_fee") return { label: "Studio fee", icon: "•", tone: "text-white/60", chip: neutralChip };
+  if (kind.includes("swap")) return { label: "Swap", icon: "⇄", tone: "text-white", chip: neutralChip };
+  return amount >= 0
+    ? { label: "Received", icon: "↓", tone: "text-emerald-300", chip: inChip }
+    : { label: "Sent", icon: "↑", tone: "text-white", chip: outChip };
 }
 
 function shortHash(h: string): string {
@@ -350,16 +358,16 @@ function TransactionHistory() {
         Transaction history
       </p>
       {txs === null ? (
-        <div className="liquid-glass rounded-2xl p-6 text-white/40 text-sm">Loading…</div>
+        <div className="liquid-glass rounded-2xl p-6 text-white/60 text-sm">Loading…</div>
       ) : txs.length === 0 ? (
-        <div className="liquid-glass rounded-2xl p-6 text-white/40 text-sm">
+        <div className="liquid-glass rounded-2xl p-6 text-white/60 text-sm">
           No transactions yet. Deposits and withdrawals will appear here.
         </div>
       ) : (
-        <div className="liquid-glass rounded-2xl overflow-hidden divide-y divide-white/5">
+        <div className="liquid-glass rounded-2xl overflow-hidden divide-y divide-white/10">
           {groups.map((grp) => (
             <div key={grp.day}>
-              <p className="px-5 pt-4 pb-2 text-white/30 text-[11px] tracking-wider uppercase">
+              <p className="px-5 pt-4 pb-2 text-white/50 text-[11px] font-semibold tracking-wider uppercase">
                 {grp.day}
               </p>
               {grp.items.map((t) => {
@@ -369,30 +377,34 @@ function TransactionHistory() {
                     key={t.id}
                     type="button"
                     onClick={() => setOpen(t)}
-                    className="w-full flex items-center gap-3 px-5 py-3 hover:bg-white/5 transition-colors text-left"
+                    className="w-full flex items-center gap-3.5 px-5 py-3.5 hover:bg-black/[0.03] transition-colors text-left"
                   >
-                    <span className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center text-white/70 shrink-0">
+                    <span
+                      className={`w-10 h-10 rounded-full flex items-center justify-center text-[15px] font-semibold shrink-0 ${m.chip}`}
+                    >
                       {m.icon}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-sm text-white">{m.label}</span>
-                      <span className="block text-xs text-white/40 truncate font-mono">
+                      <span className="block text-sm font-medium text-white leading-tight">
+                        {m.label}
+                      </span>
+                      <span className="block text-xs text-white/55 truncate font-mono mt-0.5">
                         {t.to ? shortHash(t.to) : t.tx_hash ? shortHash(t.tx_hash) : t.symbol}
                       </span>
                     </span>
-                    <span className="text-right shrink-0">
-                      <span className={`block text-sm tabular-nums ${m.tone}`}>
+                    <span className="text-right shrink-0 min-w-[96px]">
+                      <span className={`block text-sm font-semibold tabular-nums leading-tight ${m.tone}`}>
                         {t.amount >= 0 ? "+" : ""}
                         {fmt(t.amount, 8)} {t.symbol}
                       </span>
                       {t.usd != null && (
-                        <span className="block text-xs text-white/40">
+                        <span className="block text-xs text-white/50 tabular-nums mt-0.5">
                           {t.amount >= 0 ? "+" : "-"}
                           {usdFmt(t.usd)}
                         </span>
                       )}
                     </span>
-                    <span className="text-white/30 shrink-0">›</span>
+                    <span className="text-white/40 shrink-0 text-lg leading-none">›</span>
                   </button>
                 );
               })}
@@ -415,7 +427,8 @@ function TxDetail({ tx, onClose }: { tx: Tx; onClose: () => void }) {
       onClick={onClose}
     >
       <div
-        className="bg-[#0c0c0c] w-full sm:max-w-md sm:rounded-3xl min-h-screen sm:min-h-0 ring-1 ring-white/10 p-6"
+        className="w-full sm:max-w-md sm:rounded-3xl min-h-screen sm:min-h-0 ring-1 ring-black/10 p-6 shadow-2xl"
+        style={{ background: "var(--surface-card)" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-end">
@@ -425,10 +438,12 @@ function TxDetail({ tx, onClose }: { tx: Tx; onClose: () => void }) {
         </div>
 
         <div className="text-center mb-6">
-          <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-3 text-white/70 text-lg">
+          <div
+            className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-semibold ${m.chip}`}
+          >
             {m.icon}
           </div>
-          <p className="text-white/50 text-sm">{m.label}</p>
+          <p className="text-white/60 text-sm">{m.label}</p>
           <p className={`text-3xl font-medium tracking-tight mt-1 tabular-nums ${m.tone}`}>
             {tx.amount >= 0 ? "+" : ""}
             {fmt(tx.amount, 18)} {tx.symbol}
@@ -445,7 +460,7 @@ function TxDetail({ tx, onClose }: { tx: Tx; onClose: () => void }) {
           )}
         </div>
 
-        <dl className="divide-y divide-white/5 text-sm">
+        <dl className="divide-y divide-white/10 text-sm">
           {tx.usd != null && (
             <Detail label="Amount">
               {tx.amount >= 0 ? "+" : "-"}

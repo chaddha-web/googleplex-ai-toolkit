@@ -59,11 +59,34 @@ type StudioResult = {
   demo: boolean;
   provider: string;
   storeName: string;
+  tagline?: string;
   slug: string;
   url: string;
   brandKit: string;
   logoSvg?: string;
+  logoGlyphSvg?: string;
+  logoNote?: string;
+  founder?: { name: string; role: string; vision: string };
+  guidelines?: {
+    palette: { hex: string; name: string }[];
+    typography: { display: string; body: string };
+    voice: string;
+  };
 };
+
+/** Small numbered section header used across the brand-kit reveal. */
+function StepHead({ n, label }: { n: number; label: string }) {
+  return (
+    <div className="flex items-center gap-3 mb-5">
+      <span className="w-7 h-7 rounded-full bg-white text-black text-[13px] font-bold flex items-center justify-center">
+        {n}
+      </span>
+      <span className="text-white/40 text-[11px] tracking-[0.28em] uppercase font-semibold">
+        {label}
+      </span>
+    </div>
+  );
+}
 
 function BuildForm({
   walletActive,
@@ -148,57 +171,199 @@ function BuildForm({
       </button>
 
       {result && (
-        <div className="mt-6 grid lg:grid-cols-2 gap-4">
-          {/* Brand kit + logo */}
-          <div className="liquid-glass rounded-2xl p-6">
-            <div className="flex items-center gap-3 mb-4">
-              {result.logoSvg && (
-                <span
-                  className="shrink-0"
-                  dangerouslySetInnerHTML={{ __html: result.logoSvg }}
-                />
-              )}
-              <div>
-                <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase">
-                  Brand kit
-                </p>
-                <p className="text-white text-lg font-medium leading-tight">
-                  {result.storeName}
-                </p>
-              </div>
-            </div>
-            <div className="text-white/80 text-sm leading-relaxed whitespace-pre-wrap font-sans">
-              {result.brandKit}
-            </div>
+        <div className="mt-8 space-y-4">
+          {/* Load the brand fonts so the type + logo render true-to-brand. */}
+          <link
+            rel="stylesheet"
+            href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,400..500&family=Hanken+Grotesk:wght@400;500;600&display=swap"
+          />
+
+          <div>
+            <p className="text-emerald-300/90 text-sm">
+              ✓ Brand generated &amp; site published live for{" "}
+              <span className="font-medium">{result.storeName}</span>.
+            </p>
           </div>
 
-          {/* Live site preview */}
-          <div className="liquid-glass rounded-2xl p-3">
-            <div className="flex items-center justify-between px-3 py-2">
-              <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase">
-                Live store
+          {/* 1 — THE LOGO */}
+          <section className="liquid-glass rounded-2xl p-6">
+            <StepHead n={1} label="The logo" />
+            <div className="grid sm:grid-cols-[180px_1fr] gap-6 items-center">
+              <div className="aspect-square rounded-2xl bg-white ring-1 ring-white/10 flex items-center justify-center p-8">
+                {result.logoSvg && (
+                  <span
+                    className="w-full h-full [&_svg]:w-full [&_svg]:h-full block"
+                    dangerouslySetInnerHTML={{ __html: result.logoSvg }}
+                  />
+                )}
+              </div>
+              <div>
+                <p
+                  className="text-3xl text-white"
+                  style={{ fontFamily: "Fraunces, Georgia, serif" }}
+                >
+                  {result.storeName}
+                </p>
+                {result.tagline && (
+                  <p className="text-white/50 text-sm italic mt-1">{result.tagline}</p>
+                )}
+                <p className="text-white/70 text-sm leading-relaxed mt-3">
+                  {result.logoNote ??
+                    "A custom mark generated from your business description."}
+                </p>
+                {result.logoGlyphSvg && (
+                  <div className="flex gap-2.5 mt-4">
+                    <span
+                      className="w-11 h-11 rounded-xl flex items-center justify-center p-2 [&_svg]:w-full [&_svg]:h-full"
+                      style={{ background: "#20453B" }}
+                      dangerouslySetInnerHTML={{ __html: result.logoGlyphSvg }}
+                    />
+                    <span
+                      className="w-11 h-11 rounded-xl flex items-center justify-center p-2 ring-1 ring-black/10 [&_svg]:w-full [&_svg]:h-full"
+                      style={{ background: "#F6F2E9" }}
+                      dangerouslySetInnerHTML={{ __html: result.logoSvg ?? "" }}
+                    />
+                    <span
+                      className="w-11 h-11 rounded-xl flex items-center justify-center p-2 [&_svg]:w-full [&_svg]:h-full"
+                      style={{ background: "#18211E" }}
+                      dangerouslySetInnerHTML={{ __html: result.logoGlyphSvg }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* 2 — FOUNDER & VISION */}
+          {result.founder && (
+            <section className="liquid-glass rounded-2xl p-6">
+              <StepHead n={2} label="The founder & vision" />
+              <div className="grid sm:grid-cols-[88px_1fr] gap-5 items-start">
+                <div
+                  className="w-22 h-22 sm:w-[88px] sm:h-[88px] rounded-2xl flex items-center justify-center text-4xl"
+                  style={{
+                    background: "linear-gradient(160deg,#2b574a,#16332b)",
+                    color: "#E9C46A",
+                    fontFamily: "Fraunces, serif"
+                  }}
+                >
+                  {result.founder.name.charAt(0)}
+                </div>
+                <div>
+                  <p
+                    className="text-white text-xl italic leading-snug"
+                    style={{ fontFamily: "Fraunces, Georgia, serif" }}
+                  >
+                    “{result.founder.vision}”
+                  </p>
+                  <p className="text-white font-medium mt-3">{result.founder.name}</p>
+                  <p className="text-white/50 text-sm">{result.founder.role}</p>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* 3 — BRAND GUIDELINES */}
+          {result.guidelines ? (
+            <section className="liquid-glass rounded-2xl p-6">
+              <StepHead n={3} label="Brand guidelines" />
+              <div className="grid sm:grid-cols-2 gap-6">
+                <div>
+                  <p className="text-white/40 text-[10px] tracking-[0.2em] uppercase mb-3">
+                    Palette
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    {result.guidelines.palette.map((c) => (
+                      <div key={c.hex} className="w-[78px]">
+                        <div
+                          className="h-14 rounded-xl ring-1 ring-black/10"
+                          style={{ background: c.hex }}
+                        />
+                        <p className="text-white text-xs font-medium mt-1.5">{c.name}</p>
+                        <p className="text-white/40 text-[11px] tabular-nums">{c.hex}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-white/40 text-[10px] tracking-[0.2em] uppercase mb-3">
+                    Typography
+                  </p>
+                  <p
+                    className="text-white text-3xl leading-none"
+                    style={{ fontFamily: `${result.guidelines.typography.display}, Georgia, serif` }}
+                  >
+                    {result.guidelines.typography.display}
+                  </p>
+                  <p className="text-white/40 text-xs mt-1">Display · headings</p>
+                  <p
+                    className="text-white text-base mt-4"
+                    style={{ fontFamily: `${result.guidelines.typography.body}, system-ui, sans-serif` }}
+                  >
+                    {result.guidelines.typography.body} — clean, friendly body text.
+                  </p>
+                  <p className="text-white/40 text-xs mt-1">Body · UI</p>
+                </div>
+                <div className="sm:col-span-2 border-t border-white/5 pt-4">
+                  <p className="text-white/40 text-[10px] tracking-[0.2em] uppercase mb-2">
+                    Voice &amp; tone
+                  </p>
+                  <p className="text-white/70 text-sm leading-relaxed">
+                    {result.guidelines.voice}
+                  </p>
+                </div>
+              </div>
+            </section>
+          ) : (
+            <section className="liquid-glass rounded-2xl p-6">
+              <StepHead n={3} label="Brand guidelines" />
+              <div className="text-white/80 text-sm leading-relaxed whitespace-pre-wrap font-sans">
+                {result.brandKit}
+              </div>
+            </section>
+          )}
+
+          {/* 4 — FIRST LOOK (live site, 16:9) */}
+          <section className="liquid-glass rounded-2xl p-6">
+            <StepHead n={4} label="First look" />
+            <div className="rounded-xl overflow-hidden ring-1 ring-black/10 bg-white">
+              <div className="flex items-center gap-2.5 px-3 py-2.5 bg-black/[0.04] border-b border-black/5">
+                <span className="flex gap-1.5">
+                  <i className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: "#FF5F57" }} />
+                  <i className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: "#FEBC2E" }} />
+                  <i className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: "#28C840" }} />
+                </span>
+                <div className="flex-1 bg-white rounded-md ring-1 ring-black/10 px-3 py-1.5 text-[12px] text-black/55 truncate">
+                  🔒 {typeof window !== "undefined" ? window.location.host : ""}
+                  {liveUrl}
+                </div>
+              </div>
+              <div className="relative w-full aspect-[16/9] bg-white">
+                <iframe
+                  title="Live store first look"
+                  src={liveUrl}
+                  className="absolute inset-0 w-full h-full border-0"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-4 mt-4 flex-wrap">
+              <p className="text-white/50 text-sm break-all">
+                Live at{" "}
+                <span className="text-white font-medium">
+                  {typeof window !== "undefined" ? window.location.host : ""}
+                  {liveUrl}
+                </span>
               </p>
               <a
                 href={liveUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-emerald-300/90 text-xs font-medium hover:text-emerald-200"
+                className="bg-white text-black rounded-full px-6 py-2.5 text-sm font-semibold hover:bg-white/90 transition-colors"
               >
-                Open ↗
+                Open store ↗
               </a>
             </div>
-            <div className="rounded-xl overflow-hidden bg-white ring-1 ring-white/10">
-              <iframe
-                title="Live store preview"
-                src={liveUrl}
-                className="w-full h-[360px] border-0"
-              />
-            </div>
-            <p className="text-white/40 text-xs mt-2 px-3 break-all">
-              {typeof window !== "undefined" ? window.location.origin : ""}
-              {liveUrl}
-            </p>
-          </div>
+          </section>
         </div>
       )}
     </form>
