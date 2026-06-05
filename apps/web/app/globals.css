@@ -171,16 +171,17 @@ aside.bg-black\/40  { background-color: var(--surface-2)      !important; backdr
    from the soft light page. Text + interactive bits forced light to stay
    legible on the dark bar (overriding the global light text-* remaps). */
 header.bg-black\/60 {
-  background: linear-gradient(100deg, #4F46E5 0%, #7C3AED 32%, #C026D3 64%, #EC4899 100%) !important;
-  border-bottom: 1px solid rgba(255,255,255,0.18) !important;
+  background: linear-gradient(90deg, #8B93B0 0%, #9A9FB8 33%, #A9A0B2 66%, #B8A5A8 100%) !important;
+  border-bottom: 1px solid rgba(14,19,38,0.10) !important;
   backdrop-filter: none !important;
-  box-shadow: 0 2px 30px -6px rgba(192,38,211,0.5);
+  box-shadow: 0 2px 24px -8px rgba(139,147,176,0.55);
 }
+/* Soft twilight tones are light mid-tones — keep text dark ink for legibility. */
 header.bg-black\/60 span,
 header.bg-black\/60 .text-white,
-header.bg-black\/60 .hover\:text-white:hover { color: #fff !important; }
-header.bg-black\/60 .text-white\/70 { color: rgba(255,255,255,0.85) !important; }
+header.bg-black\/60 .hover\:text-white:hover { color: #1a2036 !important; }
+header.bg-black\/60 .text-white\/70 { color: rgba(26,32,54,0.82) !important; }
 header.bg-black\/60 .text-white\/50,
-header.bg-black\/60 .text-white\/40 { color: rgba(255,255,255,0.62) !important; }
-header.bg-black\/60 .hover\:bg-white\/5:hover { background-color: rgba(255,255,255,0.12) !important; }
-header.bg-black\/60 .border-white\/5 { border-color: rgba(255,255,255,0.12) !important; }
+header.bg-black\/60 .text-white\/40 { color: rgba(26,32,54,0.62) !important; }
+header.bg-black\/60 .hover\:bg-white\/5:hover { background-color: rgba(255,255,255,0.25) !important; }
+header.bg-black\/60 .border-white\/5 { border-color: rgba(14,19,38,0.10) !important; }
