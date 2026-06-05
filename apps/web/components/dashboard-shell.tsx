@@ -136,9 +136,9 @@ function Sidebar({
 }) {
   return (
     <aside
-      className={`w-60 shrink-0 flex-col border-r border-white/5 bg-black/90 md:bg-black/40 backdrop-blur-sm ${className}`}
+      className={`dashboard-sidebar w-60 shrink-0 flex-col bg-black/90 md:bg-black/40 ${className}`}
     >
-      <nav className="px-3 pt-6 flex-1">
+      <nav className="px-3.5 pt-5 flex-1">
         <ul className="space-y-1">
           {NAV_ITEMS.map((item) => {
             const active =
@@ -150,12 +150,9 @@ function Sidebar({
                 <Link
                   href={item.href}
                   onClick={onNavigate}
-                  className={`block rounded-xl px-4 py-2.5 text-sm transition-colors ${
-                    active
-                      ? "bg-white text-black font-medium"
-                      : "text-white/60 hover:bg-white/5 hover:text-white"
-                  }`}
+                  className={`nav-item ${active ? "nav-item-active" : ""}`}
                 >
+                  <span className="nav-dot" />
                   {item.label}
                 </Link>
               </li>
@@ -163,7 +160,7 @@ function Sidebar({
           })}
         </ul>
       </nav>
-      <p className="px-6 pb-6 text-white/30 text-[10px] tracking-widest uppercase">
+      <p className="px-5 pb-6 text-[10px] tracking-[0.22em] uppercase nav-foot">
         v0.1 · dashboard
       </p>
     </aside>
