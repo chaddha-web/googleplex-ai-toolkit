@@ -346,8 +346,25 @@ export async function walletRoutes(app: FastifyInstance) {
       app.log.error({ err: e }, "transfer indexing failed (non-fatal)");
     }
 
-    // Return fresh JIT view
-    return reply.send(snap.byLogicalAsset);
+    // Return the authoritative LEDGER view (same source as GET /wallet/balances).
+    // reconcile() above already credited the ledger from any new on-chain
+    // deposits — but the ledger, not the live on-chain snapshot, is what the
+    // member actually holds: deposits are swept to treasury after crediting (so
+    // the deposit address reads ~0 afterwards) and admin/credit adjustments live
+    // only in the ledger. Returning snap.byLogicalAsset would wrongly show $0 in
+    // those cases, which made Refresh appear to "wipe" the balance.
+    const ledgerRows = await db
+      .select()
+      .from(ledgerBalances)
+      .where(eq(ledgerBalances.user_id, user.sub));
+    const rawLedger = { eth: {}, bsc: {}, tron: {}, btc: {} } as Record<
+      string,
+      Record<string, string>
+    >;
+    for (const b of ledgerRows) {
+      if (b.chain in rawLedger) rawLedger[b.chain]![b.symbol] = b.raw;
+    }
+    return reply.send(aggregate(rawLedger as any));
   });
 
   // POST /wallet/withdrawals
