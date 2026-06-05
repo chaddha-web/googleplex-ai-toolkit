@@ -76,3 +76,6 @@ apps/landing/lib/*.pdf
 # Sidebar ambient video — served from the media server, not bundled.
 final.mp4
 *.mp4
+
+# GoogolPlex Studio — runtime-published stores (generated, not committed)
+apps/web/.published-sites/

@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callProvider, type ChatMsg, type Provider } from "@/lib/ai-providers";
+import { publishSite, sanitizeSlug } from "@/lib/sites-store";
+import {
+  DEMO_BRAND_KIT,
+  DEMO_LOGO_SVG,
+  DEMO_SLUG,
+  DEMO_STORE_NAME
+} from "@/lib/studio-demo";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,7 +16,11 @@ const AUTH_INTERNAL = (
 ).replace(/\/$/, "");
 const INTERNAL_TOKEN = process.env.INTERNAL_SERVICE_TOKEN;
 
-const SYSTEM = `You are the GoogolPlex AI Studio — a senior brand designer + founder coach.
+// When on, the Studio returns the hand-built showcase instead of calling a
+// provider — used for demos / recording with no API key.
+const DEMO_MODE = process.env.STUDIO_DEMO_MODE === "1";
+
+const BRAND_SYSTEM = `You are the GoogolPlex AI Studio — a senior brand designer + founder coach.
 Given a member's project description, produce a concise, ready-to-use brand kit.
 
 Return clean Markdown with these sections:
@@ -21,6 +32,22 @@ Return clean Markdown with these sections:
 - **First 3 steps** — to launch in the GoogolPlex ecosystem
 
 Keep it tight and practical. No preamble.`;
+
+const SITE_SYSTEM = `You are the GoogolPlex AI Studio site generator.
+Given a member's business description and brand name, output ONE complete, valid,
+self-contained HTML5 document for a premium marketing landing page.
+
+Hard requirements:
+- A single file: all CSS in one <style> tag, no external CSS/JS frameworks.
+- Distinctive Google Fonts via <link> (NOT Inter/Roboto/Arial).
+- An inline <svg> logo mark (no external images).
+- Sections: sticky nav, hero, services/offerings, about the founder, mission,
+  how-it-works, a call-to-action, and a footer.
+- Cohesive color system via CSS variables; generous spacing; subtle load animation.
+- Mobile responsive.
+- End with a small fixed badge reading "Built with GoogolPlex Studio".
+
+Output ONLY the raw HTML, starting with <!doctype html>. No markdown fences, no commentary.`;
 
 type AiConfig = {
   activeProvider: Provider;
@@ -54,14 +81,23 @@ function providerChain(cfg: AiConfig): Provider[] {
   return order.filter((p) => cfg.providers[p]?.key);
 }
 
+function stripFences(s: string): string {
+  return s
+    .replace(/^\s*```(?:html)?\s*/i, "")
+    .replace(/\s*```\s*$/i, "")
+    .trim();
+}
+
 export async function POST(req: NextRequest) {
-  let body: { prompt?: unknown };
+  let body: { prompt?: unknown; storeName?: unknown };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
   const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+  const storeName =
+    typeof body.storeName === "string" ? body.storeName.trim() : "";
   if (!prompt || prompt.length > 4000) {
     return NextResponse.json(
       { error: "A project description (1–4000 chars) is required." },
@@ -69,6 +105,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Build the real provider chain.
   const cfg = await loadConfig();
   const attempts: Array<{ provider: Provider; key: string; model: string | null }> = [];
   if (cfg) {
@@ -79,29 +116,86 @@ export async function POST(req: NextRequest) {
   if (attempts.length === 0 && process.env.ANTHROPIC_API_KEY) {
     attempts.push({ provider: "anthropic", key: process.env.ANTHROPIC_API_KEY, model: null });
   }
-  if (attempts.length === 0) {
-    return NextResponse.json(
-      { error: "AI is not configured yet — an admin must add a provider key in Settings." },
-      { status: 503 }
-    );
+
+  // ── Demo short-circuit ──────────────────────────────────────────────────
+  // Explicit demo flag, or no provider configured: return the hand-built
+  // showcase store (already live at /store/<DEMO_SLUG>). Looks identical to the
+  // real flow in the UI — no key required.
+  if (DEMO_MODE || attempts.length === 0) {
+    return NextResponse.json({
+      ok: true,
+      demo: true,
+      provider: "demo",
+      storeName: storeName || DEMO_STORE_NAME,
+      slug: DEMO_SLUG,
+      url: `/store/${DEMO_SLUG}`,
+      logoSvg: DEMO_LOGO_SVG,
+      brandKit: DEMO_BRAND_KIT
+    });
   }
 
-  const messages: ChatMsg[] = [
+  // ── Real pipeline ───────────────────────────────────────────────────────
+  const brandMsgs: ChatMsg[] = [
     { role: "user", content: `Project description:\n\n${prompt}` }
   ];
+  const siteMsgs: ChatMsg[] = [
+    {
+      role: "user",
+      content: `Brand name: ${storeName || "(choose a strong one)"}\n\nBusiness description:\n\n${prompt}`
+    }
+  ];
 
+  let brandKit: string | null = null;
+  let siteHtml: string | null = null;
+  let usedProvider: Provider | null = null;
   let lastErr: unknown = null;
+
   for (const a of attempts) {
     try {
-      const brandKit = await callProvider(a.provider, a.key, a.model, SYSTEM, messages);
-      if (brandKit) return NextResponse.json({ ok: true, provider: a.provider, brandKit });
+      const [bk, site] = await Promise.all([
+        callProvider(a.provider, a.key, a.model, BRAND_SYSTEM, brandMsgs),
+        callProvider(a.provider, a.key, a.model, SITE_SYSTEM, siteMsgs)
+      ]);
+      if (bk && site) {
+        brandKit = bk;
+        siteHtml = stripFences(site);
+        usedProvider = a.provider;
+        break;
+      }
     } catch (e) {
       lastErr = e;
     }
   }
-  console.error("[studio/generate] all providers failed", lastErr);
-  return NextResponse.json(
-    { error: "Generation failed — please try again." },
-    { status: 502 }
-  );
+
+  if (!brandKit || !siteHtml) {
+    console.error("[studio/generate] all providers failed", lastErr);
+    return NextResponse.json(
+      { error: "Generation failed — please try again." },
+      { status: 502 }
+    );
+  }
+
+  // Publish the generated site so it's live at /store/<slug>.
+  const slug =
+    sanitizeSlug(storeName) || sanitizeSlug(prompt.slice(0, 40)) || "my-store";
+  let url: string;
+  try {
+    url = await publishSite(slug, siteHtml);
+  } catch (e) {
+    console.error("[studio/generate] publish failed", e);
+    return NextResponse.json(
+      { error: "Generated, but publishing failed." },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({
+    ok: true,
+    demo: false,
+    provider: usedProvider,
+    storeName: storeName || slug,
+    slug,
+    url,
+    brandKit
+  });
 }

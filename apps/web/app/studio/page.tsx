@@ -55,6 +55,16 @@ export default function StudioPage() {
   );
 }
 
+type StudioResult = {
+  demo: boolean;
+  provider: string;
+  storeName: string;
+  slug: string;
+  url: string;
+  brandKit: string;
+  logoSvg?: string;
+};
+
 function BuildForm({
   walletActive,
   alreadyBuilt
@@ -62,47 +72,64 @@ function BuildForm({
   walletActive: boolean;
   alreadyBuilt: boolean;
 }) {
+  const [storeName, setStoreName] = useState("");
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [minted, setMinted] = useState<number | null>(null);
-  const [brandKit, setBrandKit] = useState<string | null>(null);
+  const [result, setResult] = useState<StudioResult | null>(null);
 
   async function build(e: React.FormEvent) {
     e.preventDefault();
     if (!walletActive || !prompt.trim() || busy) return;
     setBusy(true);
     setError(null);
+    setResult(null);
     try {
-      // 1) Generate the brand kit with the admin-configured AI provider/keys.
+      // 1) Generate the brand kit + a full website, and publish it live.
+      setStage("Designing your brand & building your site…");
       const res = await fetch("/api/studio/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({ prompt, storeName })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Generation failed.");
-      setBrandKit(data.brandKit);
+      setResult(data as StudioResult);
       // 2) Business built → mint the member's 10B tokens (once).
+      setStage("Minting your personalized tokens…");
       const { tokensMinted } = await buildStudioBusiness();
       setMinted(tokensMinted);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
+      setStage(null);
     }
   }
 
+  const liveUrl = result?.url ?? "";
+
   return (
     <form onSubmit={build} className="mt-10 space-y-4">
-      <textarea
-        value={prompt}
-        onChange={(e) => setPrompt(e.target.value)}
-        rows={4}
-        placeholder="A community-owned coffee roaster co-op. Warm, earthy, slightly playful. Trades on Tron."
-        className="bg-[#1A1A1A] border-none rounded-xl w-full px-4 py-3 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20 resize-none"
-      />
+      <div className="grid sm:grid-cols-[minmax(0,220px)_1fr] gap-3">
+        <input
+          value={storeName}
+          onChange={(e) => setStoreName(e.target.value)}
+          placeholder="Store name (e.g. Lustre)"
+          className="bg-[#1A1A1A] border-none rounded-xl w-full px-4 py-3 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20"
+        />
+        <textarea
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          rows={4}
+          placeholder="A premium home & office cleaning concierge, founded by Fateh. Calm, trustworthy, a little luxurious."
+          className="bg-[#1A1A1A] border-none rounded-xl w-full px-4 py-3 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20 resize-none"
+        />
+      </div>
       {error && <p className="text-rose-300/90 text-sm">{error}</p>}
+      {busy && stage && <p className="text-white/50 text-sm">{stage}</p>}
       {minted !== null && (
         <p className="text-emerald-300/90 text-sm">
           🎉 Business built — {minted.toLocaleString()} personalized tokens minted in your name.
@@ -116,17 +143,61 @@ function BuildForm({
         {busy
           ? "Generating…"
           : alreadyBuilt
-          ? "Generate brand kit →"
+          ? "Generate brand & site →"
           : "Build my business →"}
       </button>
 
-      {brandKit && (
-        <div className="liquid-glass rounded-2xl p-6 mt-4">
-          <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase mb-3">
-            Your AI brand kit
-          </p>
-          <div className="text-white/80 text-sm leading-relaxed whitespace-pre-wrap font-sans">
-            {brandKit}
+      {result && (
+        <div className="mt-6 grid lg:grid-cols-2 gap-4">
+          {/* Brand kit + logo */}
+          <div className="liquid-glass rounded-2xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              {result.logoSvg && (
+                <span
+                  className="shrink-0"
+                  dangerouslySetInnerHTML={{ __html: result.logoSvg }}
+                />
+              )}
+              <div>
+                <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase">
+                  Brand kit
+                </p>
+                <p className="text-white text-lg font-medium leading-tight">
+                  {result.storeName}
+                </p>
+              </div>
+            </div>
+            <div className="text-white/80 text-sm leading-relaxed whitespace-pre-wrap font-sans">
+              {result.brandKit}
+            </div>
+          </div>
+
+          {/* Live site preview */}
+          <div className="liquid-glass rounded-2xl p-3">
+            <div className="flex items-center justify-between px-3 py-2">
+              <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase">
+                Live store
+              </p>
+              <a
+                href={liveUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-emerald-300/90 text-xs font-medium hover:text-emerald-200"
+              >
+                Open ↗
+              </a>
+            </div>
+            <div className="rounded-xl overflow-hidden bg-white ring-1 ring-white/10">
+              <iframe
+                title="Live store preview"
+                src={liveUrl}
+                className="w-full h-[360px] border-0"
+              />
+            </div>
+            <p className="text-white/40 text-xs mt-2 px-3 break-all">
+              {typeof window !== "undefined" ? window.location.origin : ""}
+              {liveUrl}
+            </p>
           </div>
         </div>
       )}
