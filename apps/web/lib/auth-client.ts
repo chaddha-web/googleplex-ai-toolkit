@@ -338,6 +338,28 @@ export async function buildStudioBusiness(): Promise<{
   return { tokensMinted: data.tokensMinted, alreadyMinted: data.alreadyMinted };
 }
 
+/**
+ * DEMO ONLY — simulate an on-chain deposit crediting (no real chain). The
+ * wallet service must run with WALLET_DEMO_MODE=1; otherwise it 404s. Refreshes
+ * the session afterwards so activation status reflects immediately.
+ */
+export async function simulateDeposit(
+  symbol: string,
+  chain: string,
+  amount: number
+): Promise<{ ok: boolean; txHash?: string; creditedUsd?: number }> {
+  const res = await authedFetch(`${WALLET_BASE}/wallet/demo/deposit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ symbol, chain, amount })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Simulated deposit failed.");
+  const me = await fetchMe();
+  if (me) emit(me);
+  return data;
+}
+
 /** Charge the $18 Studio fee in `asset`, then refresh the session. */
 export async function unlockStudio(asset: string): Promise<User | null> {
   const res = await authedFetch(`${WALLET_BASE}/wallet/studio/unlock`, {

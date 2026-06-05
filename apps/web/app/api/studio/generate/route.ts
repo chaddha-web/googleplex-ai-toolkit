@@ -45,7 +45,8 @@ Hard requirements:
   how-it-works, a call-to-action, and a footer.
 - Cohesive color system via CSS variables; generous spacing; subtle load animation.
 - Mobile responsive.
-- End with a small fixed badge reading "Built with GoogolPlex Studio".
+- End with a small fixed badge AND a footer line, both reading
+  "Developed by GoogolPlex AI Powerbox".
 
 Output ONLY the raw HTML, starting with <!doctype html>. No markdown fences, no commentary.`;
 

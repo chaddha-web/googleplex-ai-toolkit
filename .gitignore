@@ -79,3 +79,6 @@ final.mp4
 
 # GoogolPlex Studio — runtime-published stores (generated, not committed)
 apps/web/.published-sites/
+
+# Throwaway local verification scripts
+scripts/_*.ts
