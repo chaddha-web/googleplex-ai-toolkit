@@ -141,7 +141,7 @@ export function Hero() {
       <div className="relative z-10 w-full flex flex-col md:flex-row md:items-end md:justify-between gap-6 px-6 md:px-12 pb-12">
         <div className="flex md:justify-start justify-center">
           <a
-            href="/Googolplex_Whitepaper.pdf"
+            href="/media/Googolplex_Whitepaper.pdf"
             download="Googolplex_Whitepaper.pdf"
             className="liquid-glass rounded-full px-8 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
           >

@@ -474,13 +474,13 @@ export function AboutContent() {
                 <Link href="/signup" className="rounded-full px-8 py-3.5 text-black text-sm font-semibold bg-gradient-to-r from-amber-200 to-yellow-400 hover:from-amber-100 hover:to-yellow-300 transition-all">
                   Begin your $1 journey
                 </Link>
-                <Link
-                  href="/Googolplex_Whitepaper.pdf"
+                <a
+                  href="/media/Googolplex_Whitepaper.pdf"
                   download="Googolplex_Whitepaper.pdf"
                   className="liquid-glass rounded-full px-8 py-3.5 text-white text-sm font-medium hover:bg-white/5 transition-colors"
                 >
                   View Whitepaper
-                </Link>
+                </a>
               </div>
             </motion.div>
           </section>

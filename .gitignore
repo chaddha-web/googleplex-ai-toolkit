@@ -68,3 +68,7 @@ media/
 
 # Local-only Remotion video project (large, not part of the deploy)
 /video/
+
+# Whitepaper PDF is served from the nginx media server, not bundled.
+apps/landing/public/*.pdf
+apps/landing/lib/*.pdf
