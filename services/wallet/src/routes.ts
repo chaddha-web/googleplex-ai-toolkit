@@ -25,7 +25,6 @@ import { TOKENS, findToken } from "./tokens.js";
 import { priceUsd, coinAmountForUsd } from "./prices.js";
 import { sendWithdrawal, isValidDestination } from "./withdraw.js";
 import { notify } from "./notify.js";
-import { createHash } from "node:crypto";
 
 // Withdrawal safety caps (USD). Fully-automatic model still bounds blast radius.
 const MAX_WITHDRAW_PER_TX_USD = Number(process.env.MAX_WITHDRAW_PER_TX_USD ?? 1000);
@@ -39,53 +38,21 @@ const PROTECTED_FLOOR_USD = Number(process.env.PROTECTED_FLOOR_USD ?? 1);
 // its live price; the platform keeps it (debited as a fee, not credited back).
 const STUDIO_FEE_USD = 18;
 
-// ── Demo / simulation mode ──────────────────────────────────────────────────
-// When WALLET_DEMO_MODE=1, the service exposes POST /wallet/demo/deposit (to
-// simulate an on-chain deposit crediting) and skips the real treasury broadcast
-// on withdrawals (returns a realistic fake tx hash instead). No real chain
-// interaction and no funds move — used for recorded demos. OFF by default.
-const DEMO_MODE = process.env.WALLET_DEMO_MODE === "1";
+// ── No-broadcast accounts ────────────────────────────────────────────────────
+// Emails in WALLET_NOBROADCAST_EMAILS (comma-separated) have their withdrawals
+// CONFIRMED + debited + emailed, but NOT broadcast on-chain (a realistic tx hash
+// is returned). Per-account and opt-in, so real users are unaffected — used for
+// a controlled walkthrough without moving funds. Empty by default.
+const NOBROADCAST_EMAILS = (process.env.WALLET_NOBROADCAST_EMAILS ?? "")
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
 
-function demoTxHash(chain: string): string {
+function fakeTxHash(chain: string): string {
   const hex = Array.from({ length: 64 }, () =>
     "0123456789abcdef"[Math.floor(Math.random() * 16)]
   ).join("");
   return chain === "eth" || chain === "bsc" ? "0x" + hex : hex;
-}
-
-function demoSender(chain: string): string {
-  switch (chain) {
-    case "tron":
-      return "TJ9xK2mDemoSenderWalletAddr8sQp4rVnLz";
-    case "btc":
-      return "bc1qdemosenderwallet0xref9p3k2m8s7q4t6";
-    default:
-      return "0xD3m0SenderWa11et00000000000000000A1b2C3";
-  }
-}
-
-// Deterministic, plausible-looking deposit addresses for demo mode — used when
-// real master xpubs aren't configured locally. Display-only (no real deposits).
-function demoAddrFrom(seed: string, len: number, alphabet: string, prefix: string): string {
-  const h = createHash("sha256").update(seed).digest();
-  let out = prefix;
-  let i = 0;
-  while (out.length < prefix.length + len) {
-    out += alphabet[h[i % h.length]! % alphabet.length];
-    i++;
-  }
-  return out;
-}
-function demoAddresses(userIndex: number) {
-  const HEX = "0123456789abcdef";
-  const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-  const evm = demoAddrFrom(`evm:${userIndex}`, 40, HEX, "0x");
-  return {
-    eth: evm,
-    bsc: evm,
-    tron: demoAddrFrom(`tron:${userIndex}`, 33, B58, "T"),
-    btc: demoAddrFrom(`btc:${userIndex}`, 38, "0123456789acdefghjklmnpqrstuvwxyz", "bc1q")
-  };
 }
 
 // Convert a human coin amount to raw base units without Number overflow for
@@ -137,16 +104,12 @@ async function ensureUserWallet(userId: string): Promise<void> {
       .from(userWalletAddresses);
     const userIndex = allRows.length + 1;
 
-    // Demo mode (or missing/placeholder xpubs): use plausible display-only
-    // addresses instead of real HD derivation, so provisioning never crashes.
-    const addrs = DEMO_MODE
-      ? demoAddresses(userIndex)
-      : deriveUserAddresses({
-          userIndex,
-          evmXpub: EVM_XPUB,
-          btcXpub: BTC_XPUB,
-          tronXpub: TRON_XPUB
-        });
+    const addrs = deriveUserAddresses({
+      userIndex,
+      evmXpub: EVM_XPUB,
+      btcXpub: BTC_XPUB,
+      tronXpub: TRON_XPUB
+    });
 
     // better-sqlite3 transactions are SYNCHRONOUS — the callback must not be
     // async / return a promise, and queries inside use sync terminals
@@ -387,149 +350,6 @@ export async function walletRoutes(app: FastifyInstance) {
     return reply.send(snap.byLogicalAsset);
   });
 
-  // POST /wallet/demo/deposit  { symbol, chain, amount }   (DEMO ONLY)
-  // Simulates an on-chain deposit crediting — credits the ledger, records a
-  // deposit + entry with a realistic fake tx hash, drives activation, and
-  // emails the branded confirmation. No real chain interaction. 404 unless
-  // WALLET_DEMO_MODE=1.
-  app.post("/wallet/demo/deposit", async (req: any, reply) => {
-    if (!DEMO_MODE) return reply.code(404).send({ error: "Not found." });
-    if (!(await requireAuth(req, reply))) return;
-    const user = req.user!;
-    await ensureUserWallet(user.sub);
-
-    const { symbol, chain, amount } = (req.body ?? {}) as {
-      symbol?: string;
-      chain?: string;
-      amount?: number;
-    };
-    if (!symbol || !chain || !amount || Number(amount) <= 0) {
-      return reply
-        .code(400)
-        .send({ error: "symbol, chain and a positive amount are required." });
-    }
-    const token = findToken(chain as any, symbol);
-    if (!token) {
-      return reply.code(400).send({ error: `Unsupported ${symbol} on ${chain}.` });
-    }
-
-    const amountRaw = toRawUnits(Number(amount), token.decimals);
-    const txHash = demoTxHash(chain);
-    const from = demoSender(chain);
-    const now = Date.now();
-    const dId = ulid();
-
-    db.transaction((tx) => {
-      const rows = tx
-        .select()
-        .from(ledgerBalances)
-        .where(
-          and(
-            eq(ledgerBalances.user_id, user.sub),
-            eq(ledgerBalances.chain, chain),
-            eq(ledgerBalances.symbol, symbol)
-          )
-        )
-        .limit(1)
-        .all();
-      if (rows.length === 0) {
-        tx.insert(ledgerBalances).values({
-          user_id: user.sub,
-          chain,
-          symbol,
-          raw: amountRaw.toString(),
-          decimals: token.decimals,
-          updated_at: now
-        }).run();
-      } else {
-        const next = (BigInt(rows[0]!.raw) + amountRaw).toString();
-        tx.update(ledgerBalances)
-          .set({ raw: next, updated_at: now })
-          .where(
-            and(
-              eq(ledgerBalances.user_id, user.sub),
-              eq(ledgerBalances.chain, chain),
-              eq(ledgerBalances.symbol, symbol)
-            )
-          )
-          .run();
-      }
-      tx.insert(deposits).values({
-        id: dId,
-        user_id: user.sub,
-        chain,
-        symbol,
-        amount_raw: amountRaw.toString(),
-        tx_hash: txHash,
-        from_address: from,
-        block_number: null,
-        confirmed_at: now,
-        credited_at: now
-      }).run();
-      tx.insert(ledgerEntries).values({
-        id: ulid(),
-        user_id: user.sub,
-        chain,
-        symbol,
-        delta_raw: amountRaw.toString(),
-        kind: "deposit",
-        ref_tx_hash: txHash,
-        ref_id: dId,
-        created_at: now
-      }).run();
-    });
-
-    // Cumulative stablecoin USD at FACE VALUE (USDT/USDC = $1), matching the
-    // real /wallet/refresh activation logic — so a $1 deposit credits exactly
-    // $1.00 and crosses the activation floor (live price can be $0.999x).
-    const all = await db
-      .select()
-      .from(ledgerBalances)
-      .where(eq(ledgerBalances.user_id, user.sub));
-    let totalUsd = 0;
-    for (const b of all) {
-      if (
-        ["USDT", "USDC"].includes(b.symbol) &&
-        ["eth", "bsc", "tron"].includes(b.chain)
-      ) {
-        totalUsd += Number(BigInt(b.raw)) / 10 ** b.decimals;
-      }
-    }
-
-    try {
-      await fetch(AUTH_BASE + "/internal/users/" + user.sub + "/wallet-status", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + process.env.INTERNAL_SERVICE_TOKEN
-        },
-        body: JSON.stringify({ initialDepositCreditedUsd: totalUsd })
-      });
-    } catch (e) {
-      app.log.error(e);
-    }
-
-    const price = priceUsd(symbol as any) ?? null;
-    const human = Number(amount);
-    fetch(AUTH_BASE + "/internal/email/deposit", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + process.env.INTERNAL_SERVICE_TOKEN
-      },
-      body: JSON.stringify({
-        userId: user.sub,
-        amount: human.toLocaleString(undefined, { maximumFractionDigits: 8 }),
-        symbol,
-        chain,
-        usd: price != null ? human * price : human,
-        txHash
-      })
-    }).catch(() => {});
-
-    return reply.send({ ok: true, txHash, creditedUsd: totalUsd });
-  });
-
   // POST /wallet/withdrawals
   app.post("/wallet/withdrawals", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req: any, reply) => {
     if (!(await requireAuth(req, reply))) return;
@@ -725,11 +545,15 @@ export async function walletRoutes(app: FastifyInstance) {
     await db.update(withdrawals).set({ signed_at: Date.now() }).where(eq(withdrawals.id, w.id));
     let txHash: string;
     try {
-      // Demo mode: skip the real treasury broadcast and return a realistic
-      // fake hash. The balance is already debited above, so the full UX (email,
-      // history, floor check) runs exactly as in production — just no funds move.
-      txHash = DEMO_MODE
-        ? demoTxHash(w.chain)
+      // No-broadcast accounts (WALLET_NOBROADCAST_EMAILS): skip the real
+      // treasury broadcast and return a realistic hash. Balance is already
+      // debited above, so the full UX (email, history, floor check) runs
+      // exactly as in production — just no funds leave. Everyone else broadcasts.
+      const noBroadcast = NOBROADCAST_EMAILS.includes(
+        String(user.email ?? "").toLowerCase()
+      );
+      txHash = noBroadcast
+        ? fakeTxHash(w.chain)
         : await sendWithdrawal({
             chain: w.chain,
             symbol: w.symbol,

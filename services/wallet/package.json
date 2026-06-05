@@ -9,7 +9,8 @@
     "init-seeds": "tsx --env-file=.env bin/init-seeds.ts",
     "check-rpcs": "tsx --env-file=.env bin/check-rpcs.ts",
     "derive": "tsx --env-file=.env bin/derive.ts",
-    "balances": "tsx --env-file=.env bin/check-balances.ts"
+    "balances": "tsx --env-file=.env bin/check-balances.ts",
+    "credit": "tsx --env-file=.env bin/credit-user.ts"
   },
   "dependencies": {
     "@aws-sdk/client-kms": "^3.685.0",

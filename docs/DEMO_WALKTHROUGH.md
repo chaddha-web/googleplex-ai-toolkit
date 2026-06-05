@@ -1,84 +1,63 @@
-# GoogolPlex — Loom Demo Walkthrough
+# GoogolPlex — Loom Demo (live, on production)
 
-Everything runs locally with **no real money** (chain ops are simulated). Real
-OTP emails still send. The generated store is genuinely live at a local URL.
+The demo runs on the **real** site (`ggakingclub.com`). You create a fresh
+account; I credit it off-camera with an admin CLI on the server; you record the
+journey; then I **delete the account and revert everything**.
 
-## 0. Start the stack
-```bash
-bash scripts/dev-demo.sh
+> Nothing in the app shows "demo". The only special pieces are server-side and
+> get torn down afterwards.
+
+## What I set up on the server (before you record)
+- `STUDIO_DEMO_MODE=1` → the Studio "Generate" returns the pre-built showcase
+  store (no AI key needed). *(Removed after.)*
+- `WALLET_NOBROADCAST_EMAILS=<your demo email>` → only this account's withdrawals
+  confirm without an on-chain broadcast. Everyone else is unaffected. *(Removed after.)*
+
+## The recording flow
+
+1. **Landing** — open `https://ggakingclub.com`. Show the marketing site.
+2. **Sign up** — `/signup`, new email + name. Enter the OTP from your inbox
+   (off-camera). *(Distinct signup + welcome emails fire.)*
+3. **Wallet password** — set it when prompted (used to confirm withdrawals).
+4. **Open the Wallet once** — this provisions your deposit addresses. *(Required
+   before I can credit.)*
+5. **→ Tell me the email.** I run, on the box:
+   ```
+   docker exec gplex-wallet npx tsx --env-file=.env bin/credit-user.ts \
+     --email <you> --amount 1 --asset USDT --chain bsc
+   ```
+   Your wallet flips **Active** (activation email fires).
+6. **Generate Seva Credit** — dashboard card → counts up to **10,000,000,000**.
+7. **$100 top-up** — I run the credit CLI again (`--amount 100 --chain tron`).
+   Wallet shows ≈ **$101**, with both deposits in transaction history (tap a row
+   → tx hash, sender, explorer links).
+8. **Studio ($18)** — unlock the Studio (balance → ≈ $83).
+9. **Build the business** — store name **Lustre**, describe the cleaning company
+   (founder = you). **Generate** → logo + brand kit + **live store preview**.
+   Open it: `https://app.ggakingclub.com/store/lustre-by-fateh`
+   (hero, services, founder, mission, "Developed by GoogolPlex AI Powerbox").
+10. **Community** — comment / like / vote.
+11. **Withdraw $20 USDT (TRC20)** — Wallet → Withdraw → USDT/TRON, $20, paste a
+    destination address → confirm with wallet password. Success + email + tx
+    hash. (No on-chain broadcast for this account; balance → ≈ $63.)
+
+## Teardown (after you record) — I run this
 ```
-Wait for all three to be up, then open **http://localhost:3000**.
+# delete the account + ALL its data (wallet + auth)
+docker exec gplex-wallet npx tsx --env-file=.env bin/purge-user.ts --email <you> --yes
+```
+Then I revert the two env flags (`STUDIO_DEMO_MODE`, `WALLET_NOBROADCAST_EMAILS`)
+in `.env.prod` and restart the affected containers. Nothing demo-related remains.
 
-- **Demo account:** `morsemus@gmail.com` (signs up as a normal user — full dashboard).
-- **Hidden demo panel:** bottom-left **⚙** button. It has off-camera buttons to
-  simulate deposits. Keep it off-screen while recording.
+## Kept permanently (not torn down)
+- The **Lustre showcase store** (`demo-sites/lustre-by-fateh.html`) — it's the
+  website we built.
+- The **real Studio pipeline** (brand kit + full site generation + publish). To
+  make it genuinely AI-generative: add a provider key in **Admin → Settings** and
+  remove `STUDIO_DEMO_MODE` — same UI, real output.
 
-> If a port is busy, stop any already-running dev servers first.
-
----
-
-## 1. Sign up / log in (OTP)
-1. Go to **/signup**, enter name + `morsemus@gmail.com`.
-2. The 6-digit OTP arrives by email. Enter it (off-camera if you prefer).
-3. You land on the dashboard. *(Distinct signup vs login + welcome emails fire.)*
-
-## 2. Set the wallet password
-- Follow the setup prompt to set a wallet password (used to confirm withdrawals).
-  Status becomes **“awaiting activation deposit.”**
-
-## 3. Activate the wallet — $1 USDT (BEP20)
-1. (Optional) Show the **Wallet → Deposit** screen and the BEP20 address.
-2. **Off-camera:** open the ⚙ panel → **“Simulate $1 USDT (BEP20)”**.
-   The page refreshes; wallet is now **Active**. *(Activation email fires.)*
-
-## 4. Generate the 10B Seva Credit
-- On the dashboard, the **“Generate Seva Credit”** card now appears →
-  click it → watch it count up to **10,000,000,000**. *(Seva compliance email fires.)*
-- Open **Wallet** to show the Seva Credit balance.
-
-## 5. Top up — $100 USDT (TRC20)
-- **Off-camera:** ⚙ panel → **“Simulate $100 USDT (TRC20)”**.
-- **Wallet** now shows ≈ **$101** total, with the deposit in transaction history
-  (tap a row → detail page with tx hash, sender, explorer links). *(Deposit email fires.)*
-
-## 6. Activate the Studio ($18)
-- Go to **Studio** → pay the one-time **$18** unlock (deducted from balance →
-  ≈ **$83** left). Studio unlocks.
-
-## 7. Build the cleaning business in the Studio
-1. Store name: **Lustre** (or anything).
-2. Description: *“A premium home & office cleaning concierge, founded by Fateh…”*
-3. Click **Generate brand & site**. You’ll see:
-   - the **logo**, the **brand kit** (names, palette, typography, story), and
-   - a **live website preview** + **Open store ↗**.
-4. Open the live store: **http://localhost:3000/store/lustre-by-fateh**
-   (hero, services, the founder = Fateh, mission, “Developed by GoogolPlex AI Powerbox”).
-
-> Demo mode shows the pre-built Lustre store. To make it truly AI-generative,
-> an admin pastes a provider key in **Admin → Settings** and turns demo mode off
-> — same UI, real generation.
-
-## 8. Use the Community
-- Open **Community**, leave a comment / like / cast a vote (PARTY-gated).
-
-## 9. Withdraw $20 USDT (TRC20)
-1. **Wallet → Withdraw** → asset **USDT / TRON**, amount **$20**, paste a
-   destination TRON address.
-2. Confirm with your **wallet password** (or OTP).
-3. Success screen + **confirmation email** + a realistic **tx hash**.
-   *(Demo mode: nothing is broadcast on-chain; balance drops to ≈ $63.)*
-
----
-
-## What’s real vs simulated
-| Real | Simulated (demo mode) |
+## Admin CLI reference
+| Action | Command (in `gplex-wallet` container) |
 |---|---|
-| OTP + all branded emails (Resend) | Deposits crediting (⚙ panel) |
-| Auth, sessions, dashboard, community | The $20 withdrawal broadcast (fake hash) |
-| Studio generate→publish pipeline + the live store | Token prices fixed (USDT=$1) |
-| 10B Seva Credit mint, ledger, history | — |
-
-## Going live later
-- Turn off the demo flags (`WALLET_DEMO_MODE`, `STUDIO_DEMO_MODE`,
-  `NEXT_PUBLIC_DEMO_MODE`) → real chain deposits/withdrawals + real AI generation.
-- Real master xpubs + KMS seeds are required for real on-chain addresses/signing.
+| Credit / activate | `npx tsx --env-file=.env bin/credit-user.ts --email <e> --amount <n> --asset USDT --chain bsc\|tron\|eth` |
+| Purge (delete everything) | `npx tsx --env-file=.env bin/purge-user.ts --email <e> --yes` |

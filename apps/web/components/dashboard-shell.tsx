@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-context";
-import { DemoPanel } from "@/components/demo-panel";
 
 const LANDING_URL =
   process.env.NEXT_PUBLIC_LANDING_URL || "http://localhost:3010";
@@ -117,9 +116,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         />
         <main className="flex-1 px-6 md:px-10 py-10">{children}</main>
       </div>
-
-      {/* Hidden demo controls (only when NEXT_PUBLIC_DEMO_MODE=1). */}
-      <DemoPanel />
 
       {/* Drawer slide-in keyframe (scoped, no global CSS needed). */}
       <style jsx global>{`

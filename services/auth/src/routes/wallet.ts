@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { stmts } from "../db.js";
+import { db, stmts } from "../db.js";
 import { verifyAccessToken } from "../jwt.js";
 import { notify } from "../notify.js";
 import { performLiquidityExit } from "../liquidity.js";
@@ -111,6 +111,56 @@ export async function walletRoutes(app: FastifyInstance) {
     }
 
     return reply.send({ ok: true });
+  });
+
+  // GET /internal/users/lookup?email=  — resolve an account by email (internal
+  // only). Used by the wallet credit CLI to map email → user id.
+  app.get("/internal/users/lookup", async (req: any, reply) => {
+    if (!requireInternal(req, reply)) return;
+    const email = String(req.query?.email ?? "").trim().toLowerCase();
+    if (!email) return reply.code(400).send({ error: "email query param required." });
+    const user = stmts.user.byEmail.get(email);
+    if (!user) return reply.code(404).send({ error: "User not found." });
+    return reply.send({
+      id: user.id,
+      email: user.email,
+      code11: user.code11,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      role: user.role,
+      walletStatus: user.wallet_status,
+      tokensMinted: user.tokens_minted,
+      initialDepositCreditedUsd: user.initial_deposit_credited_usd
+    });
+  });
+
+  // POST /internal/users/:id/purge — DELETE an account and all its auth-side
+  // data (used to tear down a demo account after recording). Best-effort per
+  // table so a missing column/table never blocks the purge. Internal only.
+  app.post("/internal/users/:id/purge", async (req: any, reply) => {
+    if (!requireInternal(req, reply)) return;
+    const { id } = req.params;
+    const user = stmts.user.byId.get(id);
+    if (!user) return reply.code(404).send({ error: "User not found." });
+    const email = user.email;
+    const byUserId = [
+      "refresh_tokens",
+      "community_votes",
+      "community_reactions",
+      "community_comment_likes",
+      "community_comments",
+      "token_reclaims",
+      "email_sends"
+    ];
+    for (const t of byUserId) {
+      try { db.prepare(`DELETE FROM ${t} WHERE user_id = ?`).run(id); } catch { /* table/col may not exist */ }
+    }
+    for (const t of ["otp_sessions", "email_sends", "email_unsubscribes"]) {
+      try { db.prepare(`DELETE FROM ${t} WHERE email = ?`).run(email); } catch { /* ignore */ }
+    }
+    db.prepare("DELETE FROM users WHERE id = ?").run(id);
+    notify(`🧹 <b>Demo account purged</b>\n${email}`);
+    return reply.send({ ok: true, purged: email });
   });
 
   // POST /internal/users/:id/wallet-status
