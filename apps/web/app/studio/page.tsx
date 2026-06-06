@@ -374,6 +374,7 @@ function StudioPaywall() {
   const [options, setOptions] = useState<StudioQuoteOption[] | null>(null);
   const [feeUsd, setFeeUsd] = useState(18);
   const [selected, setSelected] = useState<string | null>(null);
+  const [walletPwd, setWalletPwd] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -393,11 +394,11 @@ function StudioPaywall() {
   }, []);
 
   async function pay() {
-    if (!selected) return;
+    if (!selected || !walletPwd.trim()) return;
     setLoading(true);
     setError(null);
     try {
-      await unlockStudio(selected);
+      await unlockStudio(selected, walletPwd);
       // On success the auth context emits the updated user (studioUnlocked),
       // which re-renders the parent into the real Studio.
     } catch (e) {
@@ -470,12 +471,27 @@ function StudioPaywall() {
           </div>
         )}
 
+        {/* In-platform spending is authorized with the wallet password. */}
+        <div className="mt-6">
+          <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase mb-2">
+            Wallet password
+          </p>
+          <input
+            type="password"
+            value={walletPwd}
+            onChange={(e) => setWalletPwd(e.target.value)}
+            placeholder="••••••••"
+            autoComplete="current-password"
+            className="bg-[#1A1A1A] rounded-xl w-full sm:max-w-xs h-11 px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20"
+          />
+        </div>
+
         {error && <p className="mt-4 text-rose-300/90 text-sm">{error}</p>}
 
         <button
           type="button"
           onClick={pay}
-          disabled={loading || !selected}
+          disabled={loading || !selected || !walletPwd.trim()}
           className="mt-6 w-full sm:w-auto rounded-full px-8 py-3 text-black text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ background: "#d6ee4f" }}
         >
@@ -483,8 +499,8 @@ function StudioPaywall() {
         </button>
 
         <p className="text-white/30 text-xs mt-4 leading-relaxed">
-          The fee is deducted from your wallet balance in the selected coin.
-          You'll need that balance available; deposits go to your wallet
+          The fee is deducted from your wallet balance in the selected coin, and
+          authorized with your wallet password. Deposits go to your wallet
           addresses.
         </p>
       </div>

@@ -434,14 +434,16 @@ export async function walletRoutes(app: FastifyInstance) {
 
     const wId = ulid();
 
-    // Trigger OTP
+    // Trigger a BRANDED wallet OTP (not the login template) for this withdrawal.
     let otpSessionId = "stub-otp";
     try {
-      // In reality, hit POST http://localhost:4200/auth/otp/request
-      const res = await fetch(AUTH_BASE + "/auth/otp/request", {
+      const res = await fetch(AUTH_BASE + "/auth/wallet-otp/request", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: user.email, mode: "login" })
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: req.headers.authorization
+        },
+        body: "{}"
       });
       if (!res.ok) throw new Error("OTP request failed");
       otpSessionId = "called-otp-service";
@@ -480,10 +482,12 @@ export async function walletRoutes(app: FastifyInstance) {
 
     const { id } = req.params;
     const { code, walletPassword } = req.body as any;
-    if (!code && !walletPassword) return reply.code(400).send({ error: "Missing code or walletPassword" });
+    // Withdrawals require BOTH the wallet password AND the emailed OTP.
+    if (!walletPassword) return reply.code(400).send({ error: "Wallet password is required." });
+    if (!code) return reply.code(400).send({ error: "The emailed verification code is required." });
 
-    // Validate code or wallet password
-    if (walletPassword) {
+    // 1) Verify the wallet password.
+    {
       try {
         const authResp = await fetch(AUTH_BASE + "/auth/wallet-password/verify", {
           method: "POST",
@@ -498,7 +502,9 @@ export async function walletRoutes(app: FastifyInstance) {
         app.log.error(e);
         return reply.code(502).send({ error: "Failed to verify password" });
       }
-    } else {
+    }
+    // 2) Verify the OTP.
+    {
       try {
         const authResp = await fetch(AUTH_BASE + "/auth/otp/verify", {
           method: "POST",
@@ -779,6 +785,24 @@ export async function walletRoutes(app: FastifyInstance) {
     if (!asset || !(LOGICAL_ASSETS as string[]).includes(asset)) {
       return reply.code(400).send({ error: "Unknown or missing asset." });
     }
+
+    // In-platform spending requires the wallet password (no OTP).
+    const walletPassword = (req.body as any)?.walletPassword as string | undefined;
+    if (!walletPassword) {
+      return reply.code(400).send({ error: "Wallet password is required." });
+    }
+    try {
+      const pwResp = await fetch(AUTH_BASE + "/auth/wallet-password/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: bearer },
+        body: JSON.stringify({ password: walletPassword })
+      });
+      if (!pwResp.ok) return reply.code(400).send({ error: "Invalid wallet password" });
+    } catch (e) {
+      app.log.error(e);
+      return reply.code(502).send({ error: "Failed to verify password" });
+    }
+
     const coinAmount = coinAmountForUsd(STUDIO_FEE_USD, asset);
     if (coinAmount === null) {
       return reply.code(400).send({ error: `${asset} is not priced right now.` });

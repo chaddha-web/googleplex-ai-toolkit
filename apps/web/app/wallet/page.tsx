@@ -675,8 +675,9 @@ function WithdrawModal({
   const [error, setError] = useState<string | null>(null);
 
   const [withdrawalId, setWithdrawalId] = useState<string | null>(null);
-  const usePassword = walletStatus === "active"; // password set during onboarding
-  const [secret, setSecret] = useState(""); // OTP code or wallet password
+  // Withdrawals require BOTH the wallet password AND the emailed OTP.
+  const [pwd, setPwd] = useState("");
+  const [code, setCode] = useState("");
   const [txHash, setTxHash] = useState<string | null>(null);
 
   const max = chainRow?.amount ?? 0;
@@ -708,19 +709,16 @@ function WithdrawModal({
   }
 
   async function confirm() {
-    if (!withdrawalId || !secret.trim()) return;
+    if (!withdrawalId || !pwd.trim() || !code.trim()) return;
     setBusy(true);
     setError(null);
     try {
-      const body = usePassword
-        ? { walletPassword: secret }
-        : { code: secret };
       const res = await authedFetch(
         `${WALLET_BASE}/wallet/withdrawals/${withdrawalId}/confirm`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body)
+          body: JSON.stringify({ walletPassword: pwd, code })
         }
       );
       const data = await res.json().catch(() => ({}));
@@ -828,24 +826,34 @@ function WithdrawModal({
         {step === "auth" && (
           <div className="space-y-5">
             <p className="text-white/60 text-sm leading-relaxed">
-              {usePassword
-                ? "Enter your wallet password to authorize this withdrawal."
-                : "We sent a 6-digit code to your email. Enter it to authorize this withdrawal."}
+              Authorize this withdrawal with your wallet password and the 6-digit
+              code we just emailed you.
             </p>
-            <Field label={usePassword ? "Wallet password" : "Email code"}>
+            <Field label="Wallet password">
               <input
-                type={usePassword ? "password" : "text"}
-                value={secret}
-                onChange={(e) => setSecret(e.target.value)}
-                placeholder={usePassword ? "••••••••" : "123456"}
-                autoComplete={usePassword ? "current-password" : "one-time-code"}
+                type="password"
+                value={pwd}
+                onChange={(e) => setPwd(e.target.value)}
+                placeholder="••••••••"
+                autoComplete="current-password"
                 className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20"
+              />
+            </Field>
+            <Field label="Email code">
+              <input
+                type="text"
+                inputMode="numeric"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="123456"
+                autoComplete="one-time-code"
+                className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20 tracking-[0.3em] font-mono"
               />
             </Field>
             {error && <p className="text-rose-300/90 text-sm">{error}</p>}
             <button
               onClick={confirm}
-              disabled={!secret.trim() || busy}
+              disabled={!pwd.trim() || code.length !== 6 || busy}
               className="w-full h-12 rounded-full bg-white text-black font-medium hover:bg-white/90 transition-colors disabled:opacity-30"
             >
               {busy ? "Confirming…" : "Confirm withdrawal"}

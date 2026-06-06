@@ -1,9 +1,17 @@
 import type { FastifyInstance } from "fastify";
 import { db, stmts } from "../db.js";
+import crypto from "node:crypto";
 import { verifyAccessToken } from "../jwt.js";
 import { notify } from "../notify.js";
 import { performLiquidityExit } from "../liquidity.js";
-import { sendWalletActivatedEmail, sendDepositEmail, sendWithdrawalEmail } from "../emails.js";
+import { sendWalletActivatedEmail, sendDepositEmail, sendWithdrawalEmail, sendWalletOtp } from "../emails.js";
+import {
+  generateCode,
+  hashCode,
+  OTP_TTL_SECONDS,
+  MAX_OTP_ATTEMPTS,
+  timingSafeEqualHex
+} from "../otp.js";
 import * as argon2 from "@node-rs/argon2";
 
 const INTERNAL_TOKEN = process.env.INTERNAL_SERVICE_TOKEN;
@@ -68,29 +76,119 @@ export async function walletRoutes(app: FastifyInstance) {
     });
 
     const now = Date.now();
+    // Store the password hash but DO NOT advance the wallet yet — the user must
+    // confirm with a branded OTP first (POST /auth/wallet-password/confirm).
     stmts.user.updateWalletPassword.run({
       id: user.id,
       wallet_password_hash: hash,
       wallet_password_set_at: now,
-      wallet_status: "pending_initial_deposit",
+      wallet_status: "pending_password",
       wallet_status_changed_at: now,
       updated_at: now
     });
 
-    const updatedUser = stmts.user.byId.get(user.id)!;
+    // Issue a wallet-verification OTP (branded email).
+    const code = generateCode();
+    stmts.otp.insert.run({
+      id: crypto.randomUUID(),
+      email: user.email,
+      code_hash: hashCode(code),
+      // Stored as 'login' to satisfy the otp_sessions CHECK constraint; the
+      // emailed code is the branded wallet-verification one (sendWalletOtp).
+      mode: "login",
+      first_name: null,
+      last_name: null,
+      expires_at: now + OTP_TTL_SECONDS * 1000,
+      attempts: 0,
+      idempotency_key: null,
+      created_at: now
+    });
+    try {
+      await sendWalletOtp({ to: user.email, code });
+    } catch (err) {
+      req.log.error({ err }, "[wallet-password] OTP send failed");
+      return reply.code(502).send({ error: "Couldn't send the verification code. Please try again." });
+    }
+
+    return reply.send({ ok: true, otpRequired: true });
+  });
+
+  // POST /auth/wallet-password/confirm — verify the wallet OTP, then advance.
+  app.post("/auth/wallet-password/confirm", async (req, reply) => {
+    const user = await requireAuth(req, reply);
+    if (!user) return;
+    if (!user.wallet_password_hash) {
+      return reply.code(400).send({ error: "Set a wallet password first." });
+    }
+    const code = (req.body as { code?: string } | undefined)?.code;
+    if (typeof code !== "string" || !/^\d{6}$/.test(code)) {
+      return reply.code(400).send({ error: "Enter the 6-digit code." });
+    }
+    const session = stmts.otp.activeForEmail.get(user.email, Date.now());
+    if (!session) {
+      return reply.code(400).send({ error: "No pending code — set your password again to get a new one." });
+    }
+    if (session.attempts >= MAX_OTP_ATTEMPTS) {
+      stmts.otp.delete.run(session.id);
+      return reply.code(429).send({ error: "Too many attempts — set your password again." });
+    }
+    if (!timingSafeEqualHex(hashCode(code), session.code_hash)) {
+      stmts.otp.bumpAttempts.run(session.id);
+      return reply.code(400).send({ error: "Incorrect code." });
+    }
+    stmts.otp.delete.run(session.id);
+
+    const now = Date.now();
+    stmts.user.updateWalletStatus.run({
+      id: user.id,
+      wallet_status: "pending_initial_deposit",
+      wallet_status_changed_at: now,
+      initial_deposit_credited_usd: user.initial_deposit_credited_usd,
+      initial_deposit_completed_at: user.initial_deposit_completed_at,
+      updated_at: now
+    });
+    const u = stmts.user.byId.get(user.id)!;
     return reply.send({
       ok: true,
       user: {
-        id: updatedUser.id,
-        email: updatedUser.email,
-        code11: updatedUser.code11,
-        firstName: updatedUser.first_name,
-        lastName: updatedUser.last_name,
-        role: updatedUser.role,
-        walletStatus: updatedUser.wallet_status,
-        initialDepositCreditedUsd: updatedUser.initial_deposit_credited_usd
+        id: u.id,
+        email: u.email,
+        code11: u.code11,
+        firstName: u.first_name,
+        lastName: u.last_name,
+        role: u.role,
+        walletStatus: u.wallet_status,
+        initialDepositCreditedUsd: u.initial_deposit_credited_usd
       }
     });
+  });
+
+  // POST /auth/wallet-otp/request — issue a BRANDED wallet OTP for a sensitive
+  // wallet action (e.g. a withdrawal). Authenticated; emails sendWalletOtp.
+  app.post("/auth/wallet-otp/request", async (req, reply) => {
+    const user = await requireAuth(req, reply);
+    if (!user) return;
+    const code = generateCode();
+    const now = Date.now();
+    stmts.otp.insert.run({
+      id: crypto.randomUUID(),
+      email: user.email,
+      code_hash: hashCode(code),
+      mode: "login", // satisfies the otp_sessions CHECK; email is the wallet one
+      first_name: null,
+      last_name: null,
+      expires_at: now + OTP_TTL_SECONDS * 1000,
+      attempts: 0,
+      idempotency_key: null,
+      created_at: now
+    });
+    try {
+      await sendWalletOtp({ to: user.email, code });
+    } catch (err) {
+      req.log.error({ err }, "[wallet-otp] send failed");
+      return reply.code(502).send({ error: "Couldn't send the verification code." });
+    }
+    return reply.send({ ok: true });
   });
 
   // POST /auth/wallet-password/verify

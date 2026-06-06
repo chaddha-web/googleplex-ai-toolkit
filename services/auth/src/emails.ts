@@ -142,6 +142,21 @@ export async function sendLoginOtp(opts: { to: string; code: string }): Promise<
   await deliver({ from: FROM.login, to: opts.to, subject: "Your GoogolPlex login code", html, text });
 }
 
+/** Wallet verification code — confirms wallet password setup. from no-reply@. */
+export async function sendWalletOtp(opts: { to: string; code: string }): Promise<void> {
+  const html = shell({
+    preheader: "Your GoogolPlex wallet verification code",
+    heading: "Verify your wallet",
+    body:
+      P("You're setting the password that protects your GoogolPlex wallet. Enter this code to confirm:") +
+      codeBlock(opts.code) +
+      P('<span style="color:rgba(255,255,255,0.5);font-size:13px;">This code expires in 10 minutes. If this wasn\'t you, do not share it — secure your account and ignore this email.</span>'),
+    footerNote: "Wallet verification was requested at ggakingclub.com."
+  });
+  const text = `Your GoogolPlex wallet verification code is ${opts.code}. It expires in 10 minutes.\n\nIf this wasn't you, ignore this email.\n\n— GoogolPlex`;
+  await deliver({ from: FROM.noreply, to: opts.to, subject: "Your GoogolPlex wallet code", html, text });
+}
+
 /** Welcome email — after the account is created. from no-reply@. */
 export async function sendWelcomeEmail(opts: { to: string; firstName?: string | null; memberId: string }): Promise<void> {
   const hi = opts.firstName ? opts.firstName : "there";

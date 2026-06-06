@@ -234,14 +234,32 @@ export async function fetchMe(): Promise<User | null> {
 // Wallet-password endpoints — drive the onboarding state machine
 // ────────────────────────────────────────────────────────────────────────────
 
-export async function setWalletPassword(password: string): Promise<User> {
+/**
+ * Set the wallet password. This stores it and emails a branded OTP — the wallet
+ * is NOT advanced until the OTP is confirmed via confirmWalletPasswordOtp().
+ */
+export async function setWalletPassword(
+  password: string
+): Promise<{ otpRequired: boolean }> {
   const res = await authedFetch(`${AUTH_BASE}/auth/wallet-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ password })
   });
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Could not set wallet password.");
+  return { otpRequired: !!data.otpRequired };
+}
+
+/** Confirm the wallet-password OTP → advances the wallet to await the deposit. */
+export async function confirmWalletPasswordOtp(code: string): Promise<User> {
+  const res = await authedFetch(`${AUTH_BASE}/auth/wallet-password/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not verify the code.");
   if (data.user) emit(data.user);
   return data.user as User;
 }
@@ -339,11 +357,14 @@ export async function buildStudioBusiness(): Promise<{
 }
 
 /** Charge the $18 Studio fee in `asset`, then refresh the session. */
-export async function unlockStudio(asset: string): Promise<User | null> {
+export async function unlockStudio(
+  asset: string,
+  walletPassword: string
+): Promise<User | null> {
   const res = await authedFetch(`${WALLET_BASE}/wallet/studio/unlock`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ asset })
+    body: JSON.stringify({ asset, walletPassword })
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Could not unlock Studio.");

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-context";
-import { setWalletPassword, requestOtp, verifyOtp } from "@/lib/auth-client";
+import { setWalletPassword, confirmWalletPasswordOtp } from "@/lib/auth-client";
 
 /**
  * Wallet activation step 1: set a wallet password, then re-verify identity via
@@ -33,9 +33,8 @@ export default function PasswordSetupPage() {
     setError(null);
     setLoading(true);
     try {
+      // Stores the password and emails a BRANDED wallet verification code.
       await setWalletPassword(password);
-      // Re-verify identity via OTP before allowing the deposit step.
-      await requestOtp({ email: user.email, mode: "login" });
       setStage("otp");
     } catch (err) {
       setError((err as Error).message || "Could not save your wallet password.");
@@ -50,7 +49,8 @@ export default function PasswordSetupPage() {
     setError(null);
     setLoading(true);
     try {
-      await verifyOtp({ email: user.email, code: code.trim() });
+      // Confirms the wallet OTP and advances the wallet to await the deposit.
+      await confirmWalletPasswordOtp(code.trim());
       router.push("/setup/deposit");
     } catch (err) {
       setError((err as Error).message || "Invalid code.");
