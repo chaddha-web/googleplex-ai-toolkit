@@ -38,23 +38,6 @@ const PROTECTED_FLOOR_USD = Number(process.env.PROTECTED_FLOOR_USD ?? 1);
 // its live price; the platform keeps it (debited as a fee, not credited back).
 const STUDIO_FEE_USD = 18;
 
-// ── No-broadcast accounts ────────────────────────────────────────────────────
-// Emails in WALLET_NOBROADCAST_EMAILS (comma-separated) have their withdrawals
-// CONFIRMED + debited + emailed, but NOT broadcast on-chain (a realistic tx hash
-// is returned). Per-account and opt-in, so real users are unaffected — used for
-// a controlled walkthrough without moving funds. Empty by default.
-const NOBROADCAST_EMAILS = (process.env.WALLET_NOBROADCAST_EMAILS ?? "")
-  .split(",")
-  .map((s) => s.trim().toLowerCase())
-  .filter(Boolean);
-
-function fakeTxHash(chain: string): string {
-  const hex = Array.from({ length: 64 }, () =>
-    "0123456789abcdef"[Math.floor(Math.random() * 16)]
-  ).join("");
-  return chain === "eth" || chain === "bsc" ? "0x" + hex : hex;
-}
-
 // Convert a human coin amount to raw base units without Number overflow for
 // high-decimal tokens: keep up to 6 decimals of precision in Number math, then
 // scale the rest with BigInt.
@@ -568,21 +551,12 @@ export async function walletRoutes(app: FastifyInstance) {
     await db.update(withdrawals).set({ signed_at: Date.now() }).where(eq(withdrawals.id, w.id));
     let txHash: string;
     try {
-      // No-broadcast accounts (WALLET_NOBROADCAST_EMAILS): skip the real
-      // treasury broadcast and return a realistic hash. Balance is already
-      // debited above, so the full UX (email, history, floor check) runs
-      // exactly as in production — just no funds leave. Everyone else broadcasts.
-      const noBroadcast = NOBROADCAST_EMAILS.includes(
-        String(user.email ?? "").toLowerCase()
-      );
-      txHash = noBroadcast
-        ? fakeTxHash(w.chain)
-        : await sendWithdrawal({
-            chain: w.chain,
-            symbol: w.symbol,
-            amountRaw: w.amount_raw,
-            destAddress: w.dest_address
-          });
+      txHash = await sendWithdrawal({
+        chain: w.chain,
+        symbol: w.symbol,
+        amountRaw: w.amount_raw,
+        destAddress: w.dest_address
+      });
     } catch (e) {
       app.log.error({ err: e, withdrawalId: w.id }, "withdrawal broadcast failed — refunding");
       // Refund: re-credit the debited balance + reversing ledger entry.

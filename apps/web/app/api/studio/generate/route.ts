@@ -1,17 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callProvider, type ChatMsg, type Provider } from "@/lib/ai-providers";
 import { publishSite, sanitizeSlug } from "@/lib/sites-store";
-import {
-  DEMO_BRAND_KIT,
-  DEMO_LOGO_SVG,
-  DEMO_LOGO_GLYPH_SVG,
-  DEMO_LOGO_NOTE,
-  DEMO_SLUG,
-  DEMO_STORE_NAME,
-  DEMO_TAGLINE,
-  DEMO_FOUNDER,
-  DEMO_GUIDELINES
-} from "@/lib/studio-demo";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,10 +9,6 @@ const AUTH_INTERNAL = (
   process.env.AUTH_INTERNAL_BASE || "http://auth:4200"
 ).replace(/\/$/, "");
 const INTERNAL_TOKEN = process.env.INTERNAL_SERVICE_TOKEN;
-
-// When on, the Studio returns the hand-built showcase instead of calling a
-// provider — used for demos / recording with no API key.
-const DEMO_MODE = process.env.STUDIO_DEMO_MODE === "1";
 
 const BRAND_SYSTEM = `You are the GoogolPlex AI Studio — a senior brand designer + founder coach.
 Given a member's project description, produce a concise, ready-to-use brand kit.
@@ -123,26 +108,11 @@ export async function POST(req: NextRequest) {
     attempts.push({ provider: "anthropic", key: process.env.ANTHROPIC_API_KEY, model: null });
   }
 
-  // ── Demo short-circuit ──────────────────────────────────────────────────
-  // Explicit demo flag, or no provider configured: return the hand-built
-  // showcase store (already live at /store/<DEMO_SLUG>). Looks identical to the
-  // real flow in the UI — no key required.
-  if (DEMO_MODE || attempts.length === 0) {
-    return NextResponse.json({
-      ok: true,
-      demo: true,
-      provider: "demo",
-      storeName: storeName || DEMO_STORE_NAME,
-      tagline: DEMO_TAGLINE,
-      slug: DEMO_SLUG,
-      url: `/store/${DEMO_SLUG}`,
-      logoSvg: DEMO_LOGO_SVG,
-      logoGlyphSvg: DEMO_LOGO_GLYPH_SVG,
-      logoNote: DEMO_LOGO_NOTE,
-      founder: DEMO_FOUNDER,
-      guidelines: DEMO_GUIDELINES,
-      brandKit: DEMO_BRAND_KIT
-    });
+  if (attempts.length === 0) {
+    return NextResponse.json(
+      { error: "AI is not configured yet — an admin must add a provider key in Settings." },
+      { status: 503 }
+    );
   }
 
   // ── Real pipeline ───────────────────────────────────────────────────────
