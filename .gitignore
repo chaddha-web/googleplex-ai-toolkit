@@ -63,8 +63,9 @@ typechain-types/
 _landing.bak.*
 *.bak
 
-# Large static media served by the nginx media container (host-only, not in git)
-media/
+# Large static media served by the nginx media container (host-only, not in git).
+# Anchored to the repo root so it doesn't also swallow infra/media/ (nginx conf).
+/media/
 
 # Local-only Remotion video project (large, not part of the deploy)
 /video/

@@ -194,6 +194,9 @@ services:
     restart: unless-stopped
     volumes:
       - ./media:/usr/share/nginx/html/media:ro
+      # Long-lived cache headers for /media/* (incl. 206 range responses) so
+      # videos load from disk cache on back-navigation instead of re-fetching.
+      - ./infra/media/default.conf:/etc/nginx/conf.d/default.conf:ro
     labels:
       - traefik.enable=true
       - traefik.http.routers.media.rule=Host(`${DOMAIN}`) && PathPrefix(`/media`)
