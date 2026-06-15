@@ -73,6 +73,7 @@ export function Hero() {
       <div className="absolute inset-0 w-full h-full">
         <LoopVideo
           src={VIDEOS.hero}
+          eager
           placeholderClass="placeholder-video"
           className="absolute inset-0 w-full h-full object-cover object-center"
         />

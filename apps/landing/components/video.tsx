@@ -6,34 +6,70 @@ type FadeProps = {
   src: string;
   placeholderClass?: string;
   className?: string;
+  /**
+   * Load immediately instead of waiting to scroll into view. Use for the
+   * above-the-fold hero — everything else loads lazily so the visible video
+   * gets the full pipe first.
+   */
+  eager?: boolean;
 };
 
 /**
- * Shared resilience for the background videos.
+ * Shared resilience + lazy/sequential loading for the background videos.
  *
- * The old behaviour gave up permanently after a 4.5s timeout: any connection
- * slower than that flipped to a static placeholder for the whole session and
- * never recovered — which is why the hero "didn't load half the time". The
- * media files are large (16MB hero), so on mobile the first frame routinely
- * crossed that deadline.
+ * Two problems this solves:
  *
- * New behaviour:
- *   - The branded placeholder sits BEHIND the <video> and shows only until
- *     playback actually starts. No black flash while buffering.
- *   - We only treat a real `error` event as a hard failure (404 / decode).
- *   - We keep nudging play() so a slow buffer just appears late instead of
- *     being abandoned.
+ *  1. "Hero loaded half the time." The old splash preloaded all six videos in
+ *     parallel and the player gave up permanently after a 4.5s timeout, so on
+ *     a slow pipe the visible hero — competing with five invisible videos —
+ *     routinely missed the deadline and was abandoned for the whole session.
  *
- * Pair this with `-movflags +faststart` on the source files so the moov atom
- * is at the front and the browser can render the first frame after a few
- * hundred KB instead of the whole file.
+ *  2. Bandwidth contention. Every <video preload="auto"> fetched on mount, so
+ *     the footer video downloaded while you were still looking at the hero.
+ *
+ * Fix: the source isn't attached until the element scrolls near the viewport
+ * (IntersectionObserver, ~400px lookahead), so videos load one section at a
+ * time as you reach them. The branded placeholder sits BEHIND the video and
+ * clears the moment playback starts; only a real `error` is a hard failure;
+ * play() is re-nudged on a stalled buffer instead of giving up.
+ *
+ * Pair with `-movflags +faststart` on the source files so the first frame is
+ * decodable after a few hundred KB rather than the whole file.
  */
-function useResilientVideo(src: string) {
+function useResilientVideo(src: string, eager = false) {
   const vidRef = useRef<HTMLVideoElement | null>(null);
+  // Whether the source is attached + actively loading.
+  const [active, setActive] = useState(eager);
   const [playing, setPlaying] = useState(false);
   const [errored, setErrored] = useState(false);
 
+  // Lazy activation: attach the source only once the element nears the
+  // viewport. Eager videos skip this and load straight away. For an element
+  // already on screen the observer fires on its first callback, so above-fold
+  // lazy videos still load immediately.
   useEffect(() => {
+    if (active) return;
+    const v = vidRef.current;
+    if (!v || typeof IntersectionObserver === "undefined") {
+      setActive(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setActive(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "400px 0px" }
+    );
+    io.observe(v);
+    return () => io.disconnect();
+  }, [active]);
+
+  // Playback wiring — only once the source is attached.
+  useEffect(() => {
+    if (!active) return;
     const v = vidRef.current;
     if (!v) return;
     setPlaying(false);
@@ -55,8 +91,8 @@ function useResilientVideo(src: string) {
     tryPlay();
 
     // Re-arm a stalled autoplay without restarting the download (no load()):
-    // if it still isn't running, ask it to play again. Reflect the real
-    // element state so a video that quietly started gets un-placeholdered.
+    // reflect the real element state so a video that quietly started gets
+    // un-placeholdered, and re-ask to play if it hasn't.
     const nudge = window.setInterval(() => {
       const el = vidRef.current;
       if (!el) return;
@@ -72,9 +108,9 @@ function useResilientVideo(src: string) {
       v.removeEventListener("playing", onPlaying);
       v.removeEventListener("error", onError);
     };
-  }, [src]);
+  }, [active, src]);
 
-  return { vidRef, playing, errored };
+  return { vidRef, active, playing, errored };
 }
 
 /**
@@ -84,7 +120,8 @@ function useResilientVideo(src: string) {
 export function FadeLoopVideo({
   src,
   placeholderClass = "placeholder-video",
-  className = ""
+  className = "",
+  eager = true
 }: FadeProps) {
   const vidRef = useRef<HTMLVideoElement | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -93,7 +130,7 @@ export function FadeLoopVideo({
 
   useEffect(() => {
     const v = vidRef.current;
-    if (!v) return;
+    if (!v || !eager) return;
     setPlaying(false);
     setErrored(false);
 
@@ -146,36 +183,35 @@ export function FadeLoopVideo({
       v.removeEventListener("ended", onEnded);
       v.removeEventListener("error", onError);
     };
-  }, [src]);
+  }, [src, eager]);
 
   return (
     <>
       {(!playing || errored) && (
         <div className={`${placeholderClass} absolute inset-0 ${className}`} />
       )}
-      {!errored && (
-        <video
-          ref={vidRef}
-          src={src}
-          muted
-          autoPlay
-          playsInline
-          preload="auto"
-          className={className}
-          style={{ opacity: 0 }}
-        />
-      )}
+      <video
+        ref={vidRef}
+        src={src}
+        muted
+        autoPlay
+        playsInline
+        preload="auto"
+        className={`${className} ${errored ? "invisible" : ""}`}
+        style={{ opacity: 0 }}
+      />
     </>
   );
 }
 
-/** Simple looping video (no crossfade) — used for hero + section cards. */
+/** Simple looping video — hero (eager) + section cards (lazy by default). */
 export function LoopVideo({
   src,
   placeholderClass = "placeholder-video",
-  className = ""
+  className = "",
+  eager = false
 }: FadeProps) {
-  const { vidRef, playing, errored } = useResilientVideo(src);
+  const { vidRef, active, playing, errored } = useResilientVideo(src, eager);
 
   return (
     <>
@@ -183,43 +219,48 @@ export function LoopVideo({
       {(!playing || errored) && (
         <div className={`${placeholderClass} absolute inset-0 ${className}`} />
       )}
-      {!errored && (
-        <video
-          ref={vidRef}
-          src={src}
-          muted
-          autoPlay
-          loop
-          playsInline
-          preload="auto"
-          className={className}
-        />
-      )}
+      <video
+        ref={vidRef}
+        // Source attaches only once active (eager, or scrolled into view).
+        src={active ? src : undefined}
+        muted
+        autoPlay
+        loop
+        playsInline
+        preload={active ? "auto" : "none"}
+        className={`${className} ${errored ? "invisible" : ""}`}
+      />
     </>
   );
 }
 
 /** Absolute-filled background video for the footer / CTA section. */
-export function FooterBgVideo({ src }: { src: string }) {
-  const { vidRef, playing, errored } = useResilientVideo(src);
+export function FooterBgVideo({
+  src,
+  eager = false
+}: {
+  src: string;
+  eager?: boolean;
+}) {
+  const { vidRef, active, playing, errored } = useResilientVideo(src, eager);
 
   return (
     <>
       {(!playing || errored) && (
         <div className="absolute inset-0 w-full h-full placeholder-video z-0" />
       )}
-      {!errored && (
-        <video
-          ref={vidRef}
-          src={src}
-          muted
-          autoPlay
-          loop
-          playsInline
-          preload="auto"
-          className="absolute inset-0 w-full h-full object-cover z-0"
-        />
-      )}
+      <video
+        ref={vidRef}
+        src={active ? src : undefined}
+        muted
+        autoPlay
+        loop
+        playsInline
+        preload={active ? "auto" : "none"}
+        className={`absolute inset-0 w-full h-full object-cover z-0 ${
+          errored ? "invisible" : ""
+        }`}
+      />
     </>
   );
 }

@@ -59,6 +59,7 @@ export function AuthHero({ heading, tagline, steps }: AuthHeroProps) {
     <div className="relative hidden lg:flex w-[52%] flex-col items-center justify-end pb-32 px-12 rounded-3xl overflow-hidden shadow-2xl h-full">
       <LoopVideo
         src={VIDEOS.signup}
+        eager
         placeholderClass="placeholder-video"
         className="absolute inset-0 w-full h-full object-cover"
       />

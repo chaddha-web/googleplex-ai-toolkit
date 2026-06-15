@@ -8,31 +8,16 @@ import { getCookie, setCookie } from "@/lib/cookies";
 // Bumped any time the asset list changes — invalidates the warm-cache cookie
 // so visitors re-preload when we ship new videos.
 const WARM_COOKIE = "gplex.videos_warm";
-const WARM_VERSION = "2"; // bumped: loader now also preloads images
+const WARM_VERSION = "3"; // bumped: splash now gates on the hero only
 
-// Videos actually used on the landing page.
-const VIDEO_ASSETS = [
-  VIDEOS.hero,
-  VIDEOS.featured,
-  VIDEOS.philosophy,
-  VIDEOS.serviceStrategy,
-  VIDEOS.serviceCraft,
-  VIDEOS.footer
-];
+// The splash only blocks on what's actually above the fold: the hero video
+// and the brand logo. Every other video now lazy-loads as it scrolls into
+// view (see components/video.tsx), so the page reveals as soon as the hero
+// is ready instead of waiting on five invisible below-the-fold videos that
+// would otherwise steal the hero's bandwidth.
+const VIDEO_ASSETS = [VIDEOS.hero];
 
-// Images the landing relies on — brand logo + partner marquee logos. The
-// loader holds until these resolve (loaded or errored) so the page never
-// pops in with half-loaded imagery.
-const IMAGE_ASSETS = [
-  "/logo.png",
-  "https://i.ibb.co/FGYbCDx/1.png",
-  "https://i.ibb.co/7JFb8tGY/2.png",
-  "https://i.ibb.co/JRH4Yw4m/3.png",
-  "https://i.ibb.co/nt3gG3w/4.png",
-  "https://i.ibb.co/0jvxfdrv/5.png",
-  "https://i.ibb.co/WWR8GsSZ/6.png",
-  "https://i.ibb.co/7J5jyrDQ/7.png"
-];
+const IMAGE_ASSETS = ["/logo.png"];
 
 const ASSETS = [...VIDEO_ASSETS, ...IMAGE_ASSETS];
 
