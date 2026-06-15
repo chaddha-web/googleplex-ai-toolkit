@@ -9,6 +9,75 @@ type FadeProps = {
 };
 
 /**
+ * Shared resilience for the background videos.
+ *
+ * The old behaviour gave up permanently after a 4.5s timeout: any connection
+ * slower than that flipped to a static placeholder for the whole session and
+ * never recovered — which is why the hero "didn't load half the time". The
+ * media files are large (16MB hero), so on mobile the first frame routinely
+ * crossed that deadline.
+ *
+ * New behaviour:
+ *   - The branded placeholder sits BEHIND the <video> and shows only until
+ *     playback actually starts. No black flash while buffering.
+ *   - We only treat a real `error` event as a hard failure (404 / decode).
+ *   - We keep nudging play() so a slow buffer just appears late instead of
+ *     being abandoned.
+ *
+ * Pair this with `-movflags +faststart` on the source files so the moov atom
+ * is at the front and the browser can render the first frame after a few
+ * hundred KB instead of the whole file.
+ */
+function useResilientVideo(src: string) {
+  const vidRef = useRef<HTMLVideoElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [errored, setErrored] = useState(false);
+
+  useEffect(() => {
+    const v = vidRef.current;
+    if (!v) return;
+    setPlaying(false);
+    setErrored(false);
+
+    const tryPlay = () => {
+      v.play().catch(() => {});
+    };
+    const onPlaying = () => {
+      setErrored(false);
+      setPlaying(true);
+    };
+    const onError = () => setErrored(true);
+
+    v.addEventListener("canplay", tryPlay);
+    v.addEventListener("loadeddata", tryPlay);
+    v.addEventListener("playing", onPlaying);
+    v.addEventListener("error", onError);
+    tryPlay();
+
+    // Re-arm a stalled autoplay without restarting the download (no load()):
+    // if it still isn't running, ask it to play again. Reflect the real
+    // element state so a video that quietly started gets un-placeholdered.
+    const nudge = window.setInterval(() => {
+      const el = vidRef.current;
+      if (!el) return;
+      const running = !el.paused && el.readyState >= 2 && el.currentTime > 0;
+      if (running) setPlaying(true);
+      else if (!el.error) tryPlay();
+    }, 3000);
+
+    return () => {
+      clearInterval(nudge);
+      v.removeEventListener("canplay", tryPlay);
+      v.removeEventListener("loadeddata", tryPlay);
+      v.removeEventListener("playing", onPlaying);
+      v.removeEventListener("error", onError);
+    };
+  }, [src]);
+
+  return { vidRef, playing, errored };
+}
+
+/**
  * Hero-style video that crossfades to black at the end of every loop.
  * Vanilla rAF opacity animation — no CSS transitions, no flicker.
  */
@@ -19,11 +88,14 @@ export function FadeLoopVideo({
 }: FadeProps) {
   const vidRef = useRef<HTMLVideoElement | null>(null);
   const rafRef = useRef<number | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [errored, setErrored] = useState(false);
 
   useEffect(() => {
     const v = vidRef.current;
     if (!v) return;
+    setPlaying(false);
+    setErrored(false);
 
     v.style.opacity = "0";
 
@@ -41,6 +113,7 @@ export function FadeLoopVideo({
 
     const onCanPlay = () => {
       v.play().catch(() => {});
+      setPlaying(true);
       animateOpacity(0, 1, 500);
     };
     const onTimeUpdate = () => {
@@ -59,20 +132,15 @@ export function FadeLoopVideo({
         animateOpacity(0, 1, 500);
       }, 100);
     };
-    const onError = () => setFailed(true);
+    const onError = () => setErrored(true);
 
     v.addEventListener("canplay", onCanPlay);
     v.addEventListener("timeupdate", onTimeUpdate);
     v.addEventListener("ended", onEnded);
     v.addEventListener("error", onError);
 
-    const tm = window.setTimeout(() => {
-      if (v.readyState < 2) setFailed(true);
-    }, 4500);
-
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      clearTimeout(tm);
       v.removeEventListener("canplay", onCanPlay);
       v.removeEventListener("timeupdate", onTimeUpdate);
       v.removeEventListener("ended", onEnded);
@@ -82,109 +150,76 @@ export function FadeLoopVideo({
 
   return (
     <>
-      {failed && <div className={`${placeholderClass} absolute inset-0 ${className}`} />}
-      <video
-        ref={vidRef}
-        src={src}
-        muted
-        autoPlay
-        playsInline
-        preload="auto"
-        className={`${className} ${failed ? "hidden" : ""}`}
-        style={{ opacity: 0 }}
-      />
+      {(!playing || errored) && (
+        <div className={`${placeholderClass} absolute inset-0 ${className}`} />
+      )}
+      {!errored && (
+        <video
+          ref={vidRef}
+          src={src}
+          muted
+          autoPlay
+          playsInline
+          preload="auto"
+          className={className}
+          style={{ opacity: 0 }}
+        />
+      )}
     </>
   );
 }
 
-/** Simple looping video (no crossfade) — used inside the section cards. */
+/** Simple looping video (no crossfade) — used for hero + section cards. */
 export function LoopVideo({
   src,
   placeholderClass = "placeholder-video",
   className = ""
 }: FadeProps) {
-  const vidRef = useRef<HTMLVideoElement | null>(null);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    const v = vidRef.current;
-    if (!v) return;
-    const tryPlay = () => {
-      v.play().catch(() => {});
-    };
-    const onError = () => setFailed(true);
-    v.addEventListener("error", onError);
-    v.addEventListener("canplay", tryPlay);
-    v.addEventListener("loadeddata", tryPlay);
-    tryPlay();
-    const tm = window.setTimeout(() => {
-      if (v.readyState < 2) setFailed(true);
-    }, 4500);
-    return () => {
-      v.removeEventListener("error", onError);
-      v.removeEventListener("canplay", tryPlay);
-      v.removeEventListener("loadeddata", tryPlay);
-      clearTimeout(tm);
-    };
-  }, [src]);
+  const { vidRef, playing, errored } = useResilientVideo(src);
 
   return (
     <>
-      {failed && <div className={`${placeholderClass} absolute inset-0 ${className}`} />}
-      <video
-        ref={vidRef}
-        src={src}
-        muted
-        autoPlay
-        loop
-        playsInline
-        preload="auto"
-        className={`${className} ${failed ? "hidden" : ""}`}
-      />
+      {/* Placeholder sits behind the video and clears once it starts playing. */}
+      {(!playing || errored) && (
+        <div className={`${placeholderClass} absolute inset-0 ${className}`} />
+      )}
+      {!errored && (
+        <video
+          ref={vidRef}
+          src={src}
+          muted
+          autoPlay
+          loop
+          playsInline
+          preload="auto"
+          className={className}
+        />
+      )}
     </>
   );
 }
 
 /** Absolute-filled background video for the footer / CTA section. */
 export function FooterBgVideo({ src }: { src: string }) {
-  const vidRef = useRef<HTMLVideoElement | null>(null);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    const v = vidRef.current;
-    if (!v) return;
-    const tryPlay = () => {
-      v.play().catch(() => {});
-    };
-    const onError = () => setFailed(true);
-    v.addEventListener("error", onError);
-    v.addEventListener("canplay", tryPlay);
-    v.addEventListener("loadeddata", tryPlay);
-    tryPlay();
-    const tm = window.setTimeout(() => {
-      if (v.readyState < 2) setFailed(true);
-    }, 4500);
-    return () => {
-      v.removeEventListener("error", onError);
-      v.removeEventListener("canplay", tryPlay);
-      v.removeEventListener("loadeddata", tryPlay);
-      clearTimeout(tm);
-    };
-  }, [src]);
+  const { vidRef, playing, errored } = useResilientVideo(src);
 
   return (
     <>
-      {failed && <div className="absolute inset-0 w-full h-full placeholder-video z-0" />}
-      <video
-        ref={vidRef}
-        src={src}
-        muted
-        autoPlay
-        loop
-        playsInline
-        preload="auto"
-        className={`absolute inset-0 w-full h-full object-cover z-0 ${failed ? "hidden" : ""}`}
-      />
+      {(!playing || errored) && (
+        <div className="absolute inset-0 w-full h-full placeholder-video z-0" />
+      )}
+      {!errored && (
+        <video
+          ref={vidRef}
+          src={src}
+          muted
+          autoPlay
+          loop
+          playsInline
+          preload="auto"
+          className="absolute inset-0 w-full h-full object-cover z-0"
+        />
+      )}
     </>
   );
 }
