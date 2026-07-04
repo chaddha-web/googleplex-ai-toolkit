@@ -170,6 +170,9 @@ body > * { position: relative; z-index: 1; }
    dark-native design again — light text on dark glass — which is what actually
    fits a dark cosmic backdrop. Scoped to apps/web <main> only; sidebar, top
    bar, and every other app stay light. */
+/* Base text colour for the scope — so elements WITHOUT an explicit text-* class
+   (e.g. the "Welcome," heading) render light instead of inheriting dark ink. */
+.cosmic { color: rgba(255, 255, 255, 0.94); }
 .cosmic .liquid-glass {
   background: rgba(17, 15, 38, 0.44) !important;
   -webkit-backdrop-filter: blur(20px) saturate(1.25);
