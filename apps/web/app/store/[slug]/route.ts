@@ -27,7 +27,13 @@ export async function GET(
     status: 200,
     headers: {
       "content-type": "text/html; charset=utf-8",
-      "cache-control": "no-store"
+      "cache-control": "no-store",
+      // Stores are member-authored/AI-generated HTML. `sandbox` gives the
+      // document an opaque origin: its scripts still run, but it cannot read
+      // the app origin's localStorage/cookies (auth tokens) — closes stored
+      // XSS via a malicious store page.
+      "content-security-policy":
+        "sandbox allow-scripts allow-forms allow-popups"
     }
   });
 }

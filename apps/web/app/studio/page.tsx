@@ -63,9 +63,6 @@ type StudioResult = {
   slug: string;
   url: string;
   brandKit: string;
-  logoSvg?: string;
-  logoGlyphSvg?: string;
-  logoNote?: string;
   founder?: { name: string; role: string; vision: string };
   guidelines?: {
     palette: { hex: string; name: string }[];
@@ -189,13 +186,15 @@ function BuildForm({
           <section className="liquid-glass rounded-2xl p-6">
             <StepHead n={1} label="The logo" />
             <div className="grid sm:grid-cols-[180px_1fr] gap-6 items-center">
+              {/* Monogram stage — the real logo mark lives on the generated
+                  site itself; we never inject AI-produced SVG into this page. */}
               <div className="aspect-square rounded-2xl bg-white ring-1 ring-white/10 flex items-center justify-center p-8">
-                {result.logoSvg && (
-                  <span
-                    className="w-full h-full [&_svg]:w-full [&_svg]:h-full block"
-                    dangerouslySetInnerHTML={{ __html: result.logoSvg }}
-                  />
-                )}
+                <span
+                  className="text-7xl leading-none text-[#18211E]"
+                  style={{ fontFamily: "Fraunces, Georgia, serif" }}
+                >
+                  {result.storeName.charAt(0).toUpperCase()}
+                </span>
               </div>
               <div>
                 <p
@@ -208,28 +207,9 @@ function BuildForm({
                   <p className="text-white/50 text-sm italic mt-1">{result.tagline}</p>
                 )}
                 <p className="text-white/70 text-sm leading-relaxed mt-3">
-                  {result.logoNote ??
-                    "A custom mark generated from your business description."}
+                  A custom mark generated from your business description — see it
+                  in place on your live site below.
                 </p>
-                {result.logoGlyphSvg && (
-                  <div className="flex gap-2.5 mt-4">
-                    <span
-                      className="w-11 h-11 rounded-xl flex items-center justify-center p-2 [&_svg]:w-full [&_svg]:h-full"
-                      style={{ background: "#20453B" }}
-                      dangerouslySetInnerHTML={{ __html: result.logoGlyphSvg }}
-                    />
-                    <span
-                      className="w-11 h-11 rounded-xl flex items-center justify-center p-2 ring-1 ring-black/10 [&_svg]:w-full [&_svg]:h-full"
-                      style={{ background: "#F6F2E9" }}
-                      dangerouslySetInnerHTML={{ __html: result.logoSvg ?? "" }}
-                    />
-                    <span
-                      className="w-11 h-11 rounded-xl flex items-center justify-center p-2 [&_svg]:w-full [&_svg]:h-full"
-                      style={{ background: "#18211E" }}
-                      dangerouslySetInnerHTML={{ __html: result.logoGlyphSvg }}
-                    />
-                  </div>
-                )}
               </div>
             </div>
           </section>
