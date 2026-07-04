@@ -215,6 +215,41 @@ body > * { position: relative; z-index: 1; }
 .cosmic .ring-amber-300\/20 { --tw-ring-color: rgba(252,211,77,0.35) !important; }
 .cosmic .ring-amber-300\/40 { --tw-ring-color: rgba(252,211,77,0.6)  !important; }
 
+/* Immersive shell — sidebar + top bar become dark glass over the starfield. */
+.cosmic .dashboard-sidebar {
+  background: rgba(13, 11, 32, 0.5) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.2);
+  backdrop-filter: blur(22px) saturate(1.2) !important;
+  border-right: 1px solid rgba(255,255,255,0.08) !important;
+  box-shadow: 1px 0 44px -22px rgba(0,0,0,0.85);
+}
+.cosmic .nav-item { color: rgba(255,255,255,0.62); }
+.cosmic .nav-item:hover { background: rgba(255,255,255,0.07); color: #fff; }
+.cosmic .nav-item-active {
+  background: linear-gradient(135deg, rgba(138,104,255,0.92), rgba(96,64,200,0.85)) !important;
+  color: #fff !important;
+  box-shadow: 0 12px 28px -12px rgba(96,64,200,0.75);
+}
+.cosmic .nav-item-active .nav-dot { background: #E9DBFF; opacity: 1; }
+.cosmic .nav-foot { color: rgba(255,255,255,0.32) !important; }
+
+.cosmic header.bg-black\/60 {
+  background: rgba(10, 9, 26, 0.42) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  backdrop-filter: blur(20px) saturate(1.2) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+  box-shadow: 0 22px 54px -32px rgba(0,0,0,0.85);
+}
+/* Undo the light-bar dark-ink forcing — text goes light on the dark glass bar. */
+.cosmic header.bg-black\/60 span,
+.cosmic header.bg-black\/60 .text-white,
+.cosmic header.bg-black\/60 .hover\:text-white:hover { color: #fff !important; }
+.cosmic header.bg-black\/60 .text-white\/70 { color: rgba(255,255,255,0.72) !important; }
+.cosmic header.bg-black\/60 .text-white\/50,
+.cosmic header.bg-black\/60 .text-white\/40 { color: rgba(255,255,255,0.5) !important; }
+.cosmic header.bg-black\/60 .hover\:bg-white\/5:hover { background-color: rgba(255,255,255,0.08) !important; }
+.cosmic header.bg-black\/60 .border-white\/5 { border-color: rgba(255,255,255,0.08) !important; }
+
 /* Shell surfaces */
 /* Polished sidebar — clean white→lavender panel with a soft right edge. */
 .dashboard-sidebar {

@@ -87,9 +87,22 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   if (user?.role === "admin") return null;
 
   return (
-    <div className="flex min-h-screen w-full">
-      {/* Full-height sidebar on the left — the white panel runs the whole
-          length of the page. */}
+    <div
+      className="cosmic flex min-h-screen w-full"
+      style={{
+        // Celestial-Lion starfield behind the ENTIRE app (fixed, so it stays put
+        // while scrolling). The `.cosmic` scope flips the whole shell to its
+        // dark-native design; sidebar + top bar render as dark glass over this,
+        // so it reads as one immersive cosmic surface. A gentle dark scrim keeps
+        // everything legible.
+        backgroundImage: `linear-gradient(180deg, rgba(7,8,20,0.74) 0%, rgba(7,8,20,0.5) 28%, rgba(7,8,20,0.48) 62%, rgba(7,8,20,0.72) 100%), url(${DASH_BG_URL})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center top",
+        backgroundAttachment: "fixed",
+        backgroundColor: "#0a0b1a"
+      }}
+    >
+      {/* Full-height sidebar on the left — dark glass rail over the cosmos. */}
       <Sidebar pathname={pathname} className="hidden md:flex" />
 
       {/* Mobile drawer + backdrop */}
@@ -121,22 +134,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             router.refresh();
           }}
         />
-        <main
-          className="cosmic flex-1 px-6 md:px-10 py-10"
-          style={{
-            // Cosmic art fixed behind the content, kept rich (the `.cosmic`
-            // scope flips the UI to dark glass + light text so it fits). A gentle
-            // dark scrim — deeper top/bottom, open in the middle — adds depth and
-            // guarantees text/cards read over the busiest part of the art.
-            backgroundImage: `linear-gradient(180deg, rgba(8,9,22,0.66) 0%, rgba(8,9,22,0.34) 26%, rgba(8,9,22,0.30) 55%, rgba(8,9,22,0.60) 100%), url(${DASH_BG_URL})`,
-            backgroundSize: "cover",
-            backgroundPosition: "center top",
-            backgroundAttachment: "fixed",
-            backgroundColor: "#0a0b1a"
-          }}
-        >
-          {children}
-        </main>
+        {/* Transparent — the app-wide cosmos (on the outer container) shows
+            through behind the content. */}
+        <main className="flex-1 px-6 md:px-10 py-10">{children}</main>
       </div>
 
       {/* Drawer slide-in keyframe (scoped, no global CSS needed). */}
