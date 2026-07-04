@@ -426,6 +426,23 @@ export type InboxMessage = InboxRow & {
   body_html: string | null;
 };
 
+export type SentRow = {
+  id: string;
+  from_email: string;
+  to_email: string;
+  subject: string | null;
+  kind: string | null;
+  status: "sent" | "failed" | "dev";
+  sent_at: number;
+};
+
+export type SentMessage = SentRow & {
+  body_text: string | null;
+  body_html: string | null;
+  resend_id: string | null;
+  error: string | null;
+};
+
 async function authedJson<T>(input: string, init: RequestInit = {}): Promise<T> {
   const res = await authedFetch(input, init);
   const data = await res.json().catch(() => ({} as any));
@@ -485,7 +502,11 @@ export const email = {
   getInbox: (id: string) =>
     authedJson<{ message: InboxMessage }>(`${AUTH_BASE}/auth/admin/inbox/${id}`).then((r) => r.message),
   archiveInbox: (id: string) =>
-    authedJson<{ ok: true }>(`${AUTH_BASE}/auth/admin/inbox/${id}/archive`, { method: "POST" })
+    authedJson<{ ok: true }>(`${AUTH_BASE}/auth/admin/inbox/${id}/archive`, { method: "POST" }),
+  // Sent
+  listSent: () => authedJson<{ messages: SentRow[] }>(`${AUTH_BASE}/auth/admin/sent`).then((r) => r.messages),
+  getSent: (id: string) =>
+    authedJson<{ message: SentMessage }>(`${AUTH_BASE}/auth/admin/sent/${id}`).then((r) => r.message)
 };
 
 // ────────────────────────────────────────────────────────────────────────────

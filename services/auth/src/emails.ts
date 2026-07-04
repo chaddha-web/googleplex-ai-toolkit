@@ -13,6 +13,7 @@
  */
 
 import { Resend } from "resend";
+import { recordOutbound } from "./db.js";
 
 const DOMAIN = "ggakingclub.com";
 const BRAND = "GoogolPlex";
@@ -95,17 +96,24 @@ async function deliver(opts: {
   if (!apiKey) {
     // eslint-disable-next-line no-console
     console.log(`[dev email] ${opts.from} → ${opts.to} · ${opts.subject}`);
+    recordOutbound({ ...opts, status: "dev" });
     return;
   }
   const resend = new Resend(apiKey);
-  const res = await resend.emails.send({
-    from: opts.from,
-    to: opts.to,
-    subject: opts.subject,
-    html: opts.html,
-    text: opts.text
-  });
-  if ((res as any)?.error) throw new Error((res as any).error.message || "Resend error");
+  try {
+    const res = await resend.emails.send({
+      from: opts.from,
+      to: opts.to,
+      subject: opts.subject,
+      html: opts.html,
+      text: opts.text
+    });
+    if ((res as any)?.error) throw new Error((res as any).error.message || "Resend error");
+    recordOutbound({ ...opts, resendId: (res as any)?.data?.id, status: "sent" });
+  } catch (e) {
+    recordOutbound({ ...opts, status: "failed", error: (e as Error).message });
+    throw e;
+  }
 }
 
 // ── Templates ───────────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { recordOutbound } from "./db.js";
 
 /**
  * Sends a GoogolPlex 6-digit sign-in code via Resend. Falls back to a
@@ -17,9 +18,11 @@ export async function sendOtpEmail({
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM || "GoogolPlex <onboarding@resend.dev>";
 
+  const resend2From = from;
   if (!apiKey) {
     // eslint-disable-next-line no-console
     console.log(`[dev] OTP for ${to}: ${code}`);
+    recordOutbound({ from: resend2From, to, subject: "Your GoogolPlex sign-in code", kind: "login_otp", status: "dev" });
     return;
   }
 
@@ -58,7 +61,14 @@ export async function sendOtpEmail({
   </body>
 </html>`;
 
-  await resend.emails.send({ from, to, subject, text, html });
+  try {
+    const res = await resend.emails.send({ from, to, subject, text, html });
+    if ((res as any)?.error) throw new Error((res as any).error.message || "Resend error");
+    recordOutbound({ from, to, subject, html, text, kind: "login_otp", resendId: (res as any)?.data?.id, status: "sent" });
+  } catch (e) {
+    recordOutbound({ from, to, subject, html, text, kind: "login_otp", status: "failed", error: (e as Error).message });
+    throw e;
+  }
 }
 
 /**
@@ -78,20 +88,28 @@ export async function sendRawEmail(opts: {
   if (!apiKey) {
     // eslint-disable-next-line no-console
     console.log(`[dev] email → ${opts.to} · ${opts.subject}`);
+    recordOutbound({ from, to: opts.to, subject: opts.subject, html: opts.html, text: opts.text, kind: "generic", status: "dev" });
     return "dev-" + Math.random().toString(36).slice(2, 10);
   }
   const resend = new Resend(apiKey);
-  const res = await resend.emails.send({
-    from,
-    to: opts.to,
-    subject: opts.subject,
-    text: opts.text,
-    html: opts.html,
-    ...(opts.replyTo ? { replyTo: opts.replyTo } : {})
-  });
-  // Resend SDK returns { data: { id }, error } — surface whichever is set.
-  if ((res as any)?.error) {
-    throw new Error((res as any).error.message || "Resend error");
+  try {
+    const res = await resend.emails.send({
+      from,
+      to: opts.to,
+      subject: opts.subject,
+      text: opts.text,
+      html: opts.html,
+      ...(opts.replyTo ? { replyTo: opts.replyTo } : {})
+    });
+    // Resend SDK returns { data: { id }, error } — surface whichever is set.
+    if ((res as any)?.error) {
+      throw new Error((res as any).error.message || "Resend error");
+    }
+    const id = (res as any)?.data?.id || "";
+    recordOutbound({ from, to: opts.to, subject: opts.subject, html: opts.html, text: opts.text, kind: "generic", resendId: id, status: "sent" });
+    return id;
+  } catch (e) {
+    recordOutbound({ from, to: opts.to, subject: opts.subject, html: opts.html, text: opts.text, kind: "generic", status: "failed", error: (e as Error).message });
+    throw e;
   }
-  return (res as any)?.data?.id || "";
 }

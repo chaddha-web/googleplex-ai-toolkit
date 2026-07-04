@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { randomUUID } from "node:crypto";
 
 /**
  * SQLite-backed storage for the auth service. The schema is auto-migrated
@@ -210,6 +211,22 @@ db.exec(`
     archived_at  INTEGER
   );
   CREATE INDEX IF NOT EXISTS idx_email_inbound_received ON email_inbound (received_at);
+
+  -- Every email the platform sends (transactional + campaigns) — the "Sent" tab.
+  CREATE TABLE IF NOT EXISTS email_outbound (
+    id           TEXT PRIMARY KEY,
+    from_email   TEXT NOT NULL,
+    to_email     TEXT NOT NULL,
+    subject      TEXT,
+    kind         TEXT,
+    body_text    TEXT,
+    body_html    TEXT,
+    resend_id    TEXT,
+    status       TEXT NOT NULL,   -- 'sent' | 'failed' | 'dev'
+    error        TEXT,
+    sent_at      INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_email_outbound_sent ON email_outbound (sent_at);
 `);
 
 // Seed a few starter proposals once.
@@ -514,9 +531,50 @@ export const stmts = {
     inboxList: db.prepare(`SELECT id, from_email, from_name, to_email, subject, received_at, read_at, archived_at FROM email_inbound WHERE archived_at IS NULL ORDER BY received_at DESC LIMIT 200`),
     inboxById: db.prepare(`SELECT * FROM email_inbound WHERE id = ?`),
     inboxMarkRead: db.prepare(`UPDATE email_inbound SET read_at = ? WHERE id = ? AND read_at IS NULL`),
-    inboxArchive: db.prepare(`UPDATE email_inbound SET archived_at = ? WHERE id = ?`)
+    inboxArchive: db.prepare(`UPDATE email_inbound SET archived_at = ? WHERE id = ?`),
+    // Sent (outbound)
+    outboxInsert: db.prepare(`
+      INSERT INTO email_outbound (id, from_email, to_email, subject, kind, body_text, body_html, resend_id, status, error, sent_at)
+      VALUES (@id, @from_email, @to_email, @subject, @kind, @body_text, @body_html, @resend_id, @status, @error, @sent_at)
+    `),
+    outboxList: db.prepare(`SELECT id, from_email, to_email, subject, kind, status, sent_at FROM email_outbound ORDER BY sent_at DESC LIMIT 200`),
+    outboxById: db.prepare(`SELECT * FROM email_outbound WHERE id = ?`)
   }
 };
+
+/**
+ * Record one sent email for the admin "Sent" view. Best-effort — never throws,
+ * so a logging hiccup can't break the actual send.
+ */
+export function recordOutbound(row: {
+  from: string;
+  to: string;
+  subject: string;
+  html?: string | null;
+  text?: string | null;
+  kind?: string | null;
+  resendId?: string | null;
+  status: "sent" | "failed" | "dev";
+  error?: string | null;
+}): void {
+  try {
+    stmts.email.outboxInsert.run({
+      id: randomUUID(),
+      from_email: row.from,
+      to_email: row.to,
+      subject: row.subject ?? "",
+      kind: row.kind ?? null,
+      body_text: row.text ?? null,
+      body_html: row.html ?? null,
+      resend_id: row.resendId ?? null,
+      status: row.status,
+      error: row.error ?? null,
+      sent_at: Date.now()
+    });
+  } catch {
+    /* logging must never break the send path */
+  }
+}
 
 // Best-effort housekeeping every 5 min.
 setInterval(() => {

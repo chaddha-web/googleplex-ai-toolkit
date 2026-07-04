@@ -451,6 +451,18 @@ export async function emailRoutes(app: FastifyInstance) {
     return reply.send({ ok: true });
   });
 
+  // ── Sent (admin) — every email the platform has sent ────────────────────
+  app.get("/auth/admin/sent", async (req, reply) => {
+    if (!(await requireAdmin(req, reply))) return;
+    return reply.send({ messages: stmts.email.outboxList.all() });
+  });
+  app.get("/auth/admin/sent/:id", async (req: any, reply) => {
+    if (!(await requireAdmin(req, reply))) return;
+    const m = stmts.email.outboxById.get(req.params.id);
+    if (!m) return reply.code(404).send({ error: "Not found." });
+    return reply.send({ message: m });
+  });
+
   // ── Resend inbound webhook ──────────────────────────────────────────────
   // Configure on resend.com → Inbound → set webhook URL to
   // https://auth.ggakingclub.com/auth/email/inbound and copy the signing
