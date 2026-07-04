@@ -83,3 +83,6 @@ apps/web/.published-sites/
 
 # Throwaway local verification scripts
 scripts/_*.ts
+
+# Obsidian workspace config (repo opened as a vault locally)
+.obsidian/
