@@ -122,18 +122,17 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           }}
         />
         <main
-          className="flex-1 px-6 md:px-10 py-10"
+          className="cosmic flex-1 px-6 md:px-10 py-10"
           style={{
-            // Cosmic art fixed behind the content. The veil is a warm luminous
-            // haze — brightest at the very top (so the "Welcome" heading reads),
-            // opening up through the middle so the lion / nebula glow / doves
-            // show, and a soft vignette at the sides via the radial. Cards are
-            // frosted glass (see .liquid-glass) so the cosmos shimmers through.
-            backgroundImage: `radial-gradient(120% 80% at 50% 8%, rgba(252,250,247,0.92) 0%, rgba(249,246,251,0.80) 32%, rgba(245,241,250,0.72) 62%, rgba(238,234,248,0.82) 100%), url(${DASH_BG_URL})`,
+            // Cosmic art fixed behind the content, kept rich (the `.cosmic`
+            // scope flips the UI to dark glass + light text so it fits). A gentle
+            // dark scrim — deeper top/bottom, open in the middle — adds depth and
+            // guarantees text/cards read over the busiest part of the art.
+            backgroundImage: `linear-gradient(180deg, rgba(8,9,22,0.66) 0%, rgba(8,9,22,0.34) 26%, rgba(8,9,22,0.30) 55%, rgba(8,9,22,0.60) 100%), url(${DASH_BG_URL})`,
             backgroundSize: "cover",
             backgroundPosition: "center top",
             backgroundAttachment: "fixed",
-            backgroundColor: "#0e0f1a"
+            backgroundColor: "#0a0b1a"
           }}
         >
           {children}
