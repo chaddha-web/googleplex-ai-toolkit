@@ -269,6 +269,18 @@ export async function walletRoutes(app: FastifyInstance) {
     return reply.send({ ok: true, walletStatus: nextStatus });
   });
 
+  // GET /internal/wallet/pending-deposit-users
+  // The wallet service's background deposit scanner polls this so it only
+  // reconciles members still awaiting their activation deposit — not the whole
+  // user base — each cycle.
+  app.get("/internal/wallet/pending-deposit-users", async (req: any, reply) => {
+    if (!requireInternal(req, reply)) return;
+    const rows = db
+      .prepare("SELECT id FROM users WHERE wallet_status = 'pending_initial_deposit'")
+      .all() as { id: string }[];
+    return reply.send({ userIds: rows.map((r) => r.id) });
+  });
+
   // POST /internal/users/:id/exit-liquidity
   // Called by the wallet service when a member's withdrawal drops their total
   // usable balance below the protected $1 floor. Forfeits their tokens to the

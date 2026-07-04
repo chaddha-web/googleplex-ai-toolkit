@@ -133,6 +133,154 @@ async function ensureUserWallet(userId: string): Promise<void> {
   return p;
 }
 
+type MiniLog = { info: (...a: any[]) => void; error: (...a: any[]) => void };
+
+// Core deposit reconcile+credit for one user. Reused by POST /wallet/refresh
+// (on-demand, when the member clicks Refresh) AND by the background deposit
+// scanner (so a member who deposits but never returns still gets activated).
+// Idempotent: only credits the positive on-chain delta over the ledger, and
+// dedupes indexed transfers by tx hash — safe to run every cycle.
+export async function refreshUserDeposits(
+  userId: string,
+  log: MiniLog
+): Promise<void> {
+  await ensureUserWallet(userId);
+  const addrs = await db
+    .select()
+    .from(userWalletAddresses)
+    .where(eq(userWalletAddresses.user_id, userId))
+    .limit(1);
+  if (addrs.length === 0) return;
+
+  const a = addrs[0]!;
+  const snap = await reconcile({ eth: a.eth, bsc: a.bsc, tron: a.tron, btc: a.btc });
+
+  // Diff against ledger and update BALANCES (authoritative on-chain via
+  // balanceOf). Detects the $1 activation deposit.
+  let initialDepositCreditedUsd = 0;
+  db.transaction((tx) => {
+    const existingBalances = tx.select().from(ledgerBalances).where(eq(ledgerBalances.user_id, userId)).all();
+
+    for (const t of TOKENS) {
+      const onChainRaw = snap.perChain[t.chain as keyof typeof snap.perChain]?.[t.symbol] || "0";
+      const ledgerRow = existingBalances.find(b => b.chain === t.chain && b.symbol === t.symbol);
+      const ledgerRaw = ledgerRow ? ledgerRow.raw : "0";
+
+      if (BigInt(onChainRaw) > BigInt(ledgerRaw)) {
+        const delta = BigInt(onChainRaw) - BigInt(ledgerRaw);
+
+        if (ledgerRow) {
+          tx.update(ledgerBalances)
+            .set({ raw: onChainRaw, updated_at: Date.now() })
+            .where(and(eq(ledgerBalances.user_id, userId), eq(ledgerBalances.chain, t.chain), eq(ledgerBalances.symbol, t.symbol)))
+            .run();
+        } else {
+          tx.insert(ledgerBalances).values({
+            user_id: userId,
+            chain: t.chain,
+            symbol: t.symbol,
+            raw: onChainRaw,
+            decimals: t.decimals
+          }).run();
+        }
+
+        // Initial deposit logic: USD = 1 for USDT/USDC on eth/bsc/tron
+        if (["USDT", "USDC"].includes(t.symbol) && ["eth", "bsc", "tron"].includes(t.chain)) {
+          const usdValue = Number(delta) / (10 ** t.decimals); // fixed $1
+          initialDepositCreditedUsd += usdValue;
+        }
+      }
+    }
+  });
+
+  if (initialDepositCreditedUsd > 0) {
+    try {
+      const authResp = await fetch(AUTH_BASE + "/internal/users/" + userId + "/wallet-status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + process.env.INTERNAL_SERVICE_TOKEN
+        },
+        body: JSON.stringify({
+          initialDepositCreditedUsd: initialDepositCreditedUsd
+          // The auth service handles the status flip if total >= 1.0
+        })
+      });
+      if (!authResp.ok) {
+        log.error(`Failed to update initial deposit for ${userId}: ${authResp.status}`);
+      }
+    } catch (e) {
+      log.error(e);
+    }
+  }
+
+  // Index individual incoming transfers (real tx hash + sender) for the
+  // transaction history. Best-effort + non-fatal. Dedupe by tx hash.
+  try {
+    const transfers = await scanIncomingTransfers({ eth: a.eth, bsc: a.bsc, tron: a.tron, btc: a.btc });
+    if (transfers.length > 0) {
+      const existing = db.select({ h: deposits.tx_hash }).from(deposits).where(eq(deposits.user_id, userId)).all();
+      const seen = new Set(existing.map((r) => r.h));
+      const fresh: typeof transfers = [];
+      db.transaction((tx) => {
+        for (const tr of transfers) {
+          if (seen.has(tr.txHash)) continue;
+          seen.add(tr.txHash);
+          fresh.push(tr);
+          const dId = ulid();
+          const ts = tr.ts ?? Date.now();
+          tx.insert(deposits).values({
+            id: dId,
+            user_id: userId,
+            chain: tr.chain,
+            symbol: tr.symbol,
+            amount_raw: tr.amountRaw,
+            tx_hash: tr.txHash,
+            from_address: tr.from,
+            block_number: tr.blockNumber,
+            confirmed_at: ts,
+            credited_at: Date.now()
+          }).run();
+          tx.insert(ledgerEntries).values({
+            id: ulid(),
+            user_id: userId,
+            chain: tr.chain,
+            symbol: tr.symbol,
+            delta_raw: tr.amountRaw, // positive = received
+            kind: "deposit",
+            ref_tx_hash: tr.txHash,
+            ref_id: dId,
+            created_at: ts
+          }).run();
+        }
+      });
+      // Email a branded confirmation for each newly-indexed deposit.
+      for (const tr of fresh) {
+        const tok = findToken(tr.chain as any, tr.symbol);
+        const human = Number(BigInt(tr.amountRaw)) / 10 ** (tok?.decimals ?? 18);
+        const price = priceUsd(tr.symbol as any) ?? null;
+        fetch(AUTH_BASE + "/internal/email/deposit", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + process.env.INTERNAL_SERVICE_TOKEN
+          },
+          body: JSON.stringify({
+            userId: userId,
+            amount: human.toLocaleString(undefined, { maximumFractionDigits: 8 }),
+            symbol: tr.symbol,
+            chain: tr.chain,
+            usd: price != null ? human * price : null,
+            txHash: tr.txHash
+          })
+        }).catch(() => {});
+      }
+    }
+  } catch (e) {
+    log.error({ err: e }, "transfer indexing failed (non-fatal)");
+  }
+}
+
 export async function walletRoutes(app: FastifyInstance) {
 
   // POST /wallet/users (internal service-to-service)
@@ -193,141 +341,9 @@ export async function walletRoutes(app: FastifyInstance) {
     if (!(await requireAuth(req, reply))) return;
     const user = req.user!;
 
-    await ensureUserWallet(user.sub);
-    const addrs = await db.select().from(userWalletAddresses).where(eq(userWalletAddresses.user_id, user.sub)).limit(1);
-    if (addrs.length === 0) return reply.code(404).send({ error: "No addresses found" });
-
-    const a = addrs[0]!;
-    const snap = await reconcile({ eth: a.eth, bsc: a.bsc, tron: a.tron, btc: a.btc });
-
-    // Diff against ledger and update BALANCES (authoritative on-chain via
-    // balanceOf). We no longer create history rows here — the real
-    // per-transfer history (with tx hash + sender) is indexed below from
-    // transfer events. This block only keeps ledger_balances current and
-    // detects the $1 activation deposit.
-    let initialDepositCreditedUsd = 0;
-    db.transaction((tx) => {
-      const existingBalances = tx.select().from(ledgerBalances).where(eq(ledgerBalances.user_id, user.sub)).all();
-
-      for (const t of TOKENS) {
-        const onChainRaw = snap.perChain[t.chain as keyof typeof snap.perChain]?.[t.symbol] || "0";
-        const ledgerRow = existingBalances.find(b => b.chain === t.chain && b.symbol === t.symbol);
-        const ledgerRaw = ledgerRow ? ledgerRow.raw : "0";
-
-        if (BigInt(onChainRaw) > BigInt(ledgerRaw)) {
-          const delta = BigInt(onChainRaw) - BigInt(ledgerRaw);
-
-          if (ledgerRow) {
-            tx.update(ledgerBalances)
-              .set({ raw: onChainRaw, updated_at: Date.now() })
-              .where(and(eq(ledgerBalances.user_id, user.sub), eq(ledgerBalances.chain, t.chain), eq(ledgerBalances.symbol, t.symbol)))
-              .run();
-          } else {
-            tx.insert(ledgerBalances).values({
-              user_id: user.sub,
-              chain: t.chain,
-              symbol: t.symbol,
-              raw: onChainRaw,
-              decimals: t.decimals
-            }).run();
-          }
-
-          // Initial deposit logic: USD = 1 for USDT/USDC on eth/bsc/tron
-          if (["USDT", "USDC"].includes(t.symbol) && ["eth", "bsc", "tron"].includes(t.chain)) {
-            const usdValue = Number(delta) / (10 ** t.decimals); // fixed $1
-            initialDepositCreditedUsd += usdValue;
-          }
-        }
-      }
-    });
-
-    if (initialDepositCreditedUsd > 0) {
-      try {
-        const authResp = await fetch(AUTH_BASE + "/internal/users/" + user.sub + "/wallet-status", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer " + process.env.INTERNAL_SERVICE_TOKEN
-          },
-          body: JSON.stringify({
-            initialDepositCreditedUsd: initialDepositCreditedUsd
-            // The auth service handles the status flip if total >= 1.0
-          })
-        });
-        if (!authResp.ok) {
-          app.log.error(`Failed to update initial deposit for ${user.sub}: ${authResp.status}`);
-        }
-      } catch (e) {
-        app.log.error(e);
-      }
-    }
-
-    // Index individual incoming transfers (real tx hash + sender) for the
-    // transaction history. Best-effort + non-fatal — the balance above is
-    // already authoritative. Dedupe by tx hash against existing deposits.
-    try {
-      const transfers = await scanIncomingTransfers({ eth: a.eth, bsc: a.bsc, tron: a.tron, btc: a.btc });
-      if (transfers.length > 0) {
-        const existing = db.select({ h: deposits.tx_hash }).from(deposits).where(eq(deposits.user_id, user.sub)).all();
-        const seen = new Set(existing.map((r) => r.h));
-        const fresh: typeof transfers = [];
-        db.transaction((tx) => {
-          for (const tr of transfers) {
-            if (seen.has(tr.txHash)) continue;
-            seen.add(tr.txHash);
-            fresh.push(tr);
-            const dId = ulid();
-            const ts = tr.ts ?? Date.now();
-            tx.insert(deposits).values({
-              id: dId,
-              user_id: user.sub,
-              chain: tr.chain,
-              symbol: tr.symbol,
-              amount_raw: tr.amountRaw,
-              tx_hash: tr.txHash,
-              from_address: tr.from,
-              block_number: tr.blockNumber,
-              confirmed_at: ts,
-              credited_at: Date.now()
-            }).run();
-            tx.insert(ledgerEntries).values({
-              id: ulid(),
-              user_id: user.sub,
-              chain: tr.chain,
-              symbol: tr.symbol,
-              delta_raw: tr.amountRaw, // positive = received
-              kind: "deposit",
-              ref_tx_hash: tr.txHash,
-              ref_id: dId,
-              created_at: ts
-            }).run();
-          }
-        });
-        // Email a branded confirmation for each newly-indexed deposit.
-        for (const tr of fresh) {
-          const tok = findToken(tr.chain as any, tr.symbol);
-          const human = Number(BigInt(tr.amountRaw)) / 10 ** (tok?.decimals ?? 18);
-          const price = priceUsd(tr.symbol as any) ?? null;
-          fetch(AUTH_BASE + "/internal/email/deposit", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": "Bearer " + process.env.INTERNAL_SERVICE_TOKEN
-            },
-            body: JSON.stringify({
-              userId: user.sub,
-              amount: human.toLocaleString(undefined, { maximumFractionDigits: 8 }),
-              symbol: tr.symbol,
-              chain: tr.chain,
-              usd: price != null ? human * price : null,
-              txHash: tr.txHash
-            })
-          }).catch(() => {});
-        }
-      }
-    } catch (e) {
-      app.log.error({ err: e }, "transfer indexing failed (non-fatal)");
-    }
+    // Detect + credit any new on-chain deposits (shared with the background
+    // scanner). Flips the member to 'active' if the $1 activation clears.
+    await refreshUserDeposits(user.sub, app.log);
 
     // Return the authoritative LEDGER view (same source as GET /wallet/balances).
     // reconcile() above already credited the ledger from any new on-chain

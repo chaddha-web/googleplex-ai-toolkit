@@ -4,6 +4,7 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import { walletRoutes } from "./routes.js";
 import { startPriceRefresh } from "./prices.js";
+import { startDepositScanner } from "./scanner.js";
 import { notify } from "./notify.js";
 
 const PORT = Number(process.env.PORT ?? 4201);
@@ -65,6 +66,10 @@ await app.register(walletRoutes);
 
 // Start the live price refresh loop (CoinGecko, 60s, best-effort).
 startPriceRefresh();
+
+// Start the background deposit scanner — auto-credits members who deposited
+// but never clicked Refresh, so activation isn't stuck on a manual step.
+startDepositScanner(app.log);
 
 try {
   await app.listen({ port: PORT, host: "0.0.0.0" });
