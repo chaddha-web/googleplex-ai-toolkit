@@ -498,10 +498,6 @@ export async function emailRoutes(app: FastifyInstance) {
       );
     }
     const data = (req.body ?? {}) as any;
-    // TEMP: log the real payload shape so we can map body/id fields exactly.
-    req.log.info("[inbound] raw " + JSON.stringify(data).slice(0, 4000));
-
-    // Extract regardless of exact field naming (the inbound API surface varies).
     const inner = data.data ?? data;
     const fromObj = inner.from ?? inner.envelope?.from ?? {};
     const fromEmail =
@@ -509,21 +505,13 @@ export async function emailRoutes(app: FastifyInstance) {
     const fromName = typeof fromObj === "object" ? fromObj?.name : null;
     const toObj = Array.isArray(inner.to) ? inner.to[0] : inner.to ?? {};
     const toEmail = typeof toObj === "string" ? toObj : toObj?.email || inner.to_email || "inbox@ggakingclub.com";
-    const subject = String(inner.subject || "(no subject)").slice(0, 500);
-    const text = String(
-      inner.text ?? inner.plain ?? inner.text_body ?? inner.TextBody ??
-        inner.body?.text ?? inner.content?.text ?? inner.email?.text ?? ""
-    ).slice(0, 200_000);
-    const html = String(
-      inner.html ?? inner.html_body ?? inner.HtmlBody ??
-        inner.body?.html ?? inner.content?.html ?? inner.email?.html ?? ""
-    ).slice(0, 500_000);
+    let subject = String(inner.subject || "(no subject)").slice(0, 500);
     const msgId =
       inner.id || inner.email_id || inner.message_id || inner.messageId || data.id || null;
 
-    // Dedupe: two webhooks (or a retry) can deliver the same email. Drop it if
-    // we already stored one with this id, or the same sender+subject in the
-    // last 30s.
+    // Dedupe: Resend can deliver the same event twice (retry / two webhooks).
+    // Drop it if we already stored one with this id, or the same sender+subject
+    // in the last 30s.
     const fromLc = String(fromEmail).toLowerCase();
     const dupe = msgId
       ? db.prepare("SELECT 1 FROM email_inbound WHERE resend_id = ?").get(msgId)
@@ -533,6 +521,28 @@ export async function emailRoutes(app: FastifyInstance) {
           )
           .get(fromLc, subject, Date.now() - 30_000);
     if (dupe) return reply.send({ ok: true, deduped: true });
+
+    // The email.received webhook is metadata-only by design — the body lives in
+    // Resend's Received Emails API. Fetch it by id.
+    let text = "";
+    let html = "";
+    if (msgId && process.env.RESEND_API_KEY) {
+      try {
+        const r = await fetch(`https://api.resend.com/emails/inbound/${msgId}`, {
+          headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` }
+        });
+        if (r.ok) {
+          const full = (await r.json()) as any;
+          text = String(full.text || "").slice(0, 200_000);
+          html = String(full.html || "").slice(0, 500_000);
+          if (full.subject) subject = String(full.subject).slice(0, 500);
+        } else {
+          req.log.warn(`[inbound] body fetch ${r.status} for ${msgId}`);
+        }
+      } catch (e) {
+        req.log.warn({ err: e }, "[inbound] body fetch failed");
+      }
+    }
 
     const id = crypto.randomUUID();
     stmts.email.inboxInsert.run({
