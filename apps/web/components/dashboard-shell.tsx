@@ -13,6 +13,13 @@ const SIDEBAR_VIDEO_URL =
   process.env.NEXT_PUBLIC_SIDEBAR_VIDEO_URL ||
   "https://ggakingclub.com/media/final.mp4";
 
+// Celestial-lion cosmos behind the dashboard content. Served from the media
+// server (drop the file at /media/celestial-lion.jpg). A light veil keeps the
+// light-theme cards + dark text readable; tune the veil alpha to taste.
+const DASH_BG_URL =
+  process.env.NEXT_PUBLIC_DASH_BG_URL ||
+  "https://ggakingclub.com/media/celestial-lion.jpg";
+
 const NAV_ITEMS: { href: string; label: string }[] = [
   { href: "/", label: "Home" },
   { href: "/wallet", label: "Wallet" },
@@ -114,7 +121,20 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             router.refresh();
           }}
         />
-        <main className="flex-1 px-6 md:px-10 py-10">{children}</main>
+        <main
+          className="flex-1 px-6 md:px-10 py-10"
+          style={{
+            // Cosmic art fixed behind the content, under a light veil so the
+            // white cards + dark ink text stay legible. Slightly lighter at the
+            // top where the "Welcome" heading sits.
+            backgroundImage: `linear-gradient(180deg, rgba(250,247,242,0.86) 0%, rgba(250,247,242,0.74) 40%, rgba(250,247,242,0.70) 100%), url(${DASH_BG_URL})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center top",
+            backgroundAttachment: "fixed"
+          }}
+        >
+          {children}
+        </main>
       </div>
 
       {/* Drawer slide-in keyframe (scoped, no global CSS needed). */}
