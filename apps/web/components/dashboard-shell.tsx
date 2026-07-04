@@ -212,7 +212,7 @@ function Sidebar({
       </div>
 
       <p className="px-5 pb-6 text-[10px] tracking-[0.22em] uppercase nav-foot">
-        v0.1 · dashboard
+        v1.02 · dashboard
       </p>
     </aside>
   );
