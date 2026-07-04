@@ -75,14 +75,18 @@ body > * { position: relative; z-index: 1; }
 .font-serif    { font-family: "Instrument Serif", serif; }
 .font-serif-i  { font-family: "Instrument Serif", serif; font-style: italic; }
 
-/* Card primitive — overload .liquid-glass for light */
+/* Card primitive — overload .liquid-glass for light. Frosted translucent glass
+   so the cosmic dashboard background shimmers through the cards instead of them
+   sitting on it as flat white blocks. Blur keeps dark text readable. */
 .liquid-glass {
-  background: var(--surface-card);
+  background: rgba(255, 255, 255, 0.66);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  backdrop-filter: blur(16px) saturate(1.2);
   border-radius: inherit;
   border: none;
   box-shadow:
-    0 1px 0 rgba(14,19,38,0.04),
-    0 8px 24px -12px rgba(14,19,38,0.12);
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 20px 48px -24px rgba(24, 18, 52, 0.5);
   position: relative;
   overflow: hidden;
   color: var(--ink);
@@ -95,9 +99,9 @@ body > * { position: relative; z-index: 1; }
   padding: 1px;
   background: linear-gradient(
     160deg,
-    rgba(91,75,255,0.35) 0%,
-    rgba(200,207,227,0.4) 40%,
-    rgba(200,207,227,0.1) 100%
+    rgba(91,75,255,0.5) 0%,
+    rgba(200,207,227,0.55) 40%,
+    rgba(255,255,255,0.15) 100%
   );
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
