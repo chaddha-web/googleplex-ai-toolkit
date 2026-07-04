@@ -498,7 +498,10 @@ export async function emailRoutes(app: FastifyInstance) {
       );
     }
     const data = (req.body ?? {}) as any;
-    // Try to extract the email regardless of which exact field naming Resend uses.
+    // TEMP: log the real payload shape so we can map body/id fields exactly.
+    req.log.info("[inbound] raw " + JSON.stringify(data).slice(0, 4000));
+
+    // Extract regardless of exact field naming (the inbound API surface varies).
     const inner = data.data ?? data;
     const fromObj = inner.from ?? inner.envelope?.from ?? {};
     const fromEmail =
@@ -507,18 +510,40 @@ export async function emailRoutes(app: FastifyInstance) {
     const toObj = Array.isArray(inner.to) ? inner.to[0] : inner.to ?? {};
     const toEmail = typeof toObj === "string" ? toObj : toObj?.email || inner.to_email || "inbox@ggakingclub.com";
     const subject = String(inner.subject || "(no subject)").slice(0, 500);
-    const text = String(inner.text || inner.plain || "").slice(0, 200_000);
-    const html = String(inner.html || "").slice(0, 500_000);
+    const text = String(
+      inner.text ?? inner.plain ?? inner.text_body ?? inner.TextBody ??
+        inner.body?.text ?? inner.content?.text ?? inner.email?.text ?? ""
+    ).slice(0, 200_000);
+    const html = String(
+      inner.html ?? inner.html_body ?? inner.HtmlBody ??
+        inner.body?.html ?? inner.content?.html ?? inner.email?.html ?? ""
+    ).slice(0, 500_000);
+    const msgId =
+      inner.id || inner.email_id || inner.message_id || inner.messageId || data.id || null;
+
+    // Dedupe: two webhooks (or a retry) can deliver the same email. Drop it if
+    // we already stored one with this id, or the same sender+subject in the
+    // last 30s.
+    const fromLc = String(fromEmail).toLowerCase();
+    const dupe = msgId
+      ? db.prepare("SELECT 1 FROM email_inbound WHERE resend_id = ?").get(msgId)
+      : db
+          .prepare(
+            "SELECT 1 FROM email_inbound WHERE from_email = ? AND subject = ? AND received_at > ?"
+          )
+          .get(fromLc, subject, Date.now() - 30_000);
+    if (dupe) return reply.send({ ok: true, deduped: true });
+
     const id = crypto.randomUUID();
     stmts.email.inboxInsert.run({
       id,
-      from_email: String(fromEmail).toLowerCase(),
+      from_email: fromLc,
       from_name: fromName || null,
       to_email: String(toEmail).toLowerCase(),
       subject,
       body_text: text || null,
       body_html: html || null,
-      resend_id: inner.id || data.id || null,
+      resend_id: msgId,
       received_at: Date.now()
     });
     notify(`📥 <b>Email received</b>\nfrom ${fromEmail}\n<i>${subject}</i>`);
