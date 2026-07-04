@@ -86,3 +86,6 @@ scripts/_*.ts
 
 # Obsidian workspace config (repo opened as a vault locally)
 .obsidian/
+
+# Knowledge base (Obsidian vault, local notes — infra details, keep off GitHub)
+/knowledge/
