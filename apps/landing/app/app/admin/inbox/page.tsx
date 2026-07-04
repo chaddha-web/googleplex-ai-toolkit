@@ -60,6 +60,7 @@ export default function MailPage() {
   const [tab, setTab] = useState<Tab>("inbox");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Inbox state
   const [inList, setInList] = useState<InboxRow[] | null>(null);
@@ -89,6 +90,18 @@ export default function MailPage() {
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, tab]);
+
+  // Manual refresh — shows a spinner so it's clear the click did something
+  // (the 30s auto-poll uses load() directly, no spinner).
+  async function refresh() {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function openInbox(id: string) {
     setBusy(true);
@@ -157,10 +170,22 @@ export default function MailPage() {
         </div>
         <button
           type="button"
-          onClick={load}
-          className="rounded-full bg-white/10 text-white text-sm font-medium px-4 py-2 hover:bg-white/15"
+          onClick={refresh}
+          disabled={refreshing}
+          className="rounded-full bg-white/10 text-white text-sm font-medium px-4 py-2 hover:bg-white/15 disabled:opacity-70 inline-flex items-center gap-2"
         >
-          Refresh
+          <svg
+            viewBox="0 0 24 24"
+            className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          >
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+            <path d="M21 3v6h-6" />
+          </svg>
+          {refreshing ? "Refreshing…" : "Refresh"}
         </button>
       </header>
 
