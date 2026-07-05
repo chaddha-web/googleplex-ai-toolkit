@@ -244,24 +244,11 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_email_outbound_sent ON email_outbound (sent_at);
 `);
 
-// Seed a few starter proposals once.
-try {
-  const n = (db.prepare(`SELECT COUNT(*) c FROM community_proposals`).get() as { c: number }).c;
-  if (n === 0) {
-    const seed = db.prepare(
-      `INSERT INTO community_proposals (id, title, description, status, created_at) VALUES (@id,@title,@description,@status,@created_at)`
-    );
-    const now = Date.now();
-    const rows = [
-      { id: "p-treasury-usdc", title: "Treasury: diversify 50k USDT → USDC", description: "Reduce single-issuer risk by splitting stablecoin reserves.", status: "open", created_at: now },
-      { id: "p-hosting-cap", title: "Cap Q3 hosting subsidy at $12k/mo", description: "Keep platform infrastructure costs predictable for the quarter.", status: "open", created_at: now - 1 },
-      { id: "p-grants", title: "Open a community builder grants round", description: "Fund 5 member-led projects from the community pool.", status: "open", created_at: now - 2 }
-    ];
-    for (const r of rows) seed.run(r);
-  }
-} catch {
-  /* ignore seed errors */
-}
+// NOTE: The Circle is admin-authored only — questions are created via the
+// admin moderator panel (/app/admin/circle → POST /community/admin/proposals).
+// We intentionally do NOT seed starter proposals: auto-seeding re-inserted
+// demo questions on every empty-table startup, so members saw "options" the
+// admin never posted (and deletions came back after a redeploy).
 
 // ────────────────────────────────────────────────────────────────────────────
 // Types — kept colocated so the rest of the service only depends on this file.
