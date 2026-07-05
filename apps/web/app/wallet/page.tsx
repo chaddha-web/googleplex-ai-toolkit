@@ -984,18 +984,52 @@ const CHAIN_COIN: Record<Chain, string> = {
 };
 
 function DepositSection({ addrs }: { addrs: ChainAddrs | null }) {
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(null); // highlighted coin
+  const [render, setRender] = useState<string | null>(null); // mounted panel (lags for exit)
+  const [shown, setShown] = useState(false); // animate-in flag
   const [selChain, setSelChain] = useState<Chain | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [notchLeft, setNotchLeft] = useState<number | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const chipRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const ready = addrs && (addrs.eth || addrs.bsc || addrs.tron || addrs.btc);
 
-  const openAsset = DEPOSIT_ASSETS.find((a) => a.sym === open) ?? null;
-  const availChains = openAsset
-    ? openAsset.chains.filter((c) => addrs?.[c.key])
+  // Panel content follows `render` so it stays mounted through the exit anim.
+  const panelAsset = DEPOSIT_ASSETS.find((a) => a.sym === render) ?? null;
+  const availChains = panelAsset
+    ? panelAsset.chains.filter((c) => addrs?.[c.key])
     : [];
   const activeChain =
     availChains.find((c) => c.key === selChain) ?? availChains[0] ?? null;
   const address = activeChain ? addrs?.[activeChain.key] ?? "" : "";
+
+  // Open → mount + animate in; close → animate out then unmount.
+  useEffect(() => {
+    if (open) {
+      setRender(open);
+      const id = requestAnimationFrame(() => setShown(true));
+      return () => cancelAnimationFrame(id);
+    }
+    setShown(false);
+    const t = setTimeout(() => setRender(null), 240);
+    return () => clearTimeout(t);
+  }, [open]);
+
+  // Position the connecting notch under the selected chip.
+  useEffect(() => {
+    function measure() {
+      const chip = open ? chipRefs.current[open] : null;
+      const wrap = wrapRef.current;
+      if (chip && wrap) {
+        const c = chip.getBoundingClientRect();
+        const w = wrap.getBoundingClientRect();
+        setNotchLeft(c.left - w.left + c.width / 2);
+      }
+    }
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [open, shown]);
 
   function selectCoin(sym: string) {
     setMenuOpen(false);
@@ -1022,13 +1056,16 @@ function DepositSection({ addrs }: { addrs: ChainAddrs | null }) {
           Addresses not yet allocated — finish wallet setup to provision them.
         </p>
       ) : (
-        <>
+        <div ref={wrapRef} className="relative">
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
             {DEPOSIT_ASSETS.map((a) => {
               const active = open === a.sym;
               return (
                 <button
                   key={a.sym}
+                  ref={(el) => {
+                    chipRefs.current[a.sym] = el;
+                  }}
                   type="button"
                   onClick={() => selectCoin(a.sym)}
                   className={`rounded-2xl px-3 py-3 text-sm font-medium transition-colors flex flex-col items-center gap-1.5 ${
@@ -1044,11 +1081,30 @@ function DepositSection({ addrs }: { addrs: ChainAddrs | null }) {
             })}
           </div>
 
-          {openAsset && activeChain && address && (
-            // White panel matching the highlighted chip, full width, sitting
-            // tight under the grid so it reads as one connected surface.
-            <div className="mt-1.5 bg-white text-black rounded-3xl p-6 md:p-8 shadow-[0_28px_70px_-30px_rgba(0,0,0,0.7)]">
-              <div className="mx-auto w-full max-w-md">
+          {panelAsset && activeChain && address && (
+            // White panel matching the highlighted chip, full width, connected
+            // to the chip by a notch, with an open/close transition.
+            <div
+              className="relative mt-2 transition-[opacity,transform] duration-200 ease-out"
+              style={{
+                opacity: shown ? 1 : 0,
+                transform: shown ? "translateY(0)" : "translateY(-8px)",
+                pointerEvents: shown ? "auto" : "none"
+              }}
+            >
+              {notchLeft != null && (
+                <div
+                  className="absolute h-3.5 w-3.5 bg-white rounded-[3px] transition-[left] duration-200 ease-out"
+                  style={{
+                    top: -7,
+                    left: notchLeft,
+                    transform: "translateX(-50%) rotate(45deg)"
+                  }}
+                  aria-hidden="true"
+                />
+              )}
+              <div className="bg-white text-black rounded-3xl p-6 md:p-8 shadow-[0_28px_70px_-30px_rgba(0,0,0,0.7)]">
+                <div className="mx-auto w-full max-w-md">
                 {/* Network selector — dropdown (logo + name) when multi-chain. */}
                 {availChains.length > 1 ? (
                   <div className="relative">
@@ -1108,14 +1164,15 @@ function DepositSection({ addrs }: { addrs: ChainAddrs | null }) {
                 <FocusedAddress address={address} />
 
                 <p className="text-black/40 text-xs mt-4 text-center">
-                  Only send <span className="text-black/70">{openAsset.sym}</span> on{" "}
+                  Only send <span className="text-black/70">{panelAsset.sym}</span> on{" "}
                   <span className="text-black/70">{activeChain.label}</span>. Sending the
                   wrong asset or network can lose funds.
                 </p>
+                </div>
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
     </section>
   );
