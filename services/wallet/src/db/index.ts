@@ -28,6 +28,15 @@ sqlite.exec(`
     created_at INTEGER
   );
 
+  -- Monotonic counters (e.g. next HD derivation index). A persisted
+  -- high-water-mark so deleting a user NEVER lets a new user reuse a
+  -- derivation index — reuse would collide onto a live deposit address
+  -- and credit one member's on-chain funds to another.
+  CREATE TABLE IF NOT EXISTS wallet_meta (
+    key   TEXT PRIMARY KEY,
+    value INTEGER NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS ledger_balances (
     user_id    TEXT NOT NULL,
     chain      TEXT NOT NULL,

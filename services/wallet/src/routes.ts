@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { db } from "./db/index.js";
+import { db, rawDb } from "./db/index.js";
 import { 
   userWalletAddresses, 
   ledgerBalances, 
@@ -80,25 +80,12 @@ async function ensureUserWallet(userId: string): Promise<void> {
   if (inflight) return inflight;
 
   const p = (async () => {
-    // Allocate the next derivation index. (Count-based; fine for a single
-    // wallet instance. A dedicated sequence is the long-term fix.)
-    const allRows = await db
-      .select({ id: userWalletAddresses.user_id })
-      .from(userWalletAddresses);
-    const userIndex = allRows.length + 1;
-
-    const addrs = deriveUserAddresses({
-      userIndex,
-      evmXpub: EVM_XPUB,
-      btcXpub: BTC_XPUB,
-      tronXpub: TRON_XPUB
-    });
-
     // better-sqlite3 transactions are SYNCHRONOUS — the callback must not be
     // async / return a promise, and queries inside use sync terminals
     // (.run()/.all()/.get()), never await. (Async-callback transactions throw
     // "Transaction function cannot return a promise" and silently block
     // provisioning — which is what stopped deposits from ever crediting.)
+    // Index allocation happens INSIDE the tx so it's atomic with the insert.
     db.transaction((tx) => {
       // Re-check inside the tx to avoid a duplicate row on a race.
       const again = tx
@@ -108,6 +95,37 @@ async function ensureUserWallet(userId: string): Promise<void> {
         .limit(1)
         .all();
       if (again.length > 0) return;
+
+      // Allocate the next derivation index from a persistent monotonic
+      // counter. NEVER count-based: a deleted user used to drop the count,
+      // so the next signup reused a live index → same derived address →
+      // one member's deposit credited to another. The counter only ever
+      // grows; we also floor it at MAX(existing index)+1 so it self-heals
+      // from legacy data on first run.
+      const meta = rawDb
+        .prepare(`SELECT value FROM wallet_meta WHERE key = 'next_user_index'`)
+        .get() as { value: number } | undefined;
+      const maxRow = rawDb
+        .prepare(`SELECT MAX(user_index) AS mx FROM user_wallet_addresses`)
+        .get() as { mx: number | null };
+      const userIndex = Math.max(
+        Number(meta?.value ?? 0),
+        Number(maxRow?.mx ?? 0) + 1,
+        1
+      );
+      rawDb
+        .prepare(
+          `INSERT INTO wallet_meta (key, value) VALUES ('next_user_index', ?)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+        )
+        .run(userIndex + 1);
+
+      const addrs = deriveUserAddresses({
+        userIndex,
+        evmXpub: EVM_XPUB,
+        btcXpub: BTC_XPUB,
+        tronXpub: TRON_XPUB
+      });
 
       tx.insert(userWalletAddresses).values({
         user_id: userId,
