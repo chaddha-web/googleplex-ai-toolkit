@@ -253,13 +253,13 @@ function Sidebar({
         {/* Brand — the logo IS the collapse/expand control on desktop: hover it
             and it morphs into a chevron ( < collapse / > expand ). On the mobile
             drawer there's no toggle, so the logo links home instead. */}
-        <div className={`flex items-center gap-2.5 px-2.5 py-2 ${collapsed ? "justify-center" : ""}`}>
+        <div className={`flex items-center gap-2.5 py-2 ${collapsed ? "justify-center px-0" : "px-2.5"}`}>
           {onToggle ? (
             <button
               type="button"
               onClick={onToggle}
               aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              className="group flex items-center gap-2.5 min-w-0"
+              className={`group flex items-center gap-2.5 min-w-0 ${collapsed ? "w-full justify-center" : ""}`}
             >
               <span className="relative h-11 w-11 shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
