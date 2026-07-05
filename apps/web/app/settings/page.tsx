@@ -192,21 +192,22 @@ function Toggle({
       aria-checked={checked}
       disabled={disabled}
       onClick={onChange}
-      className={`relative h-7 w-[58px] rounded-full shrink-0 transition-colors duration-200 shadow-inner ${
+      className={`relative h-8 w-[62px] rounded-full shrink-0 transition-colors duration-200 shadow-inner ${
         checked ? "bg-emerald-500" : "bg-slate-600"
       } ${onChange ? "cursor-pointer" : "cursor-default"}`}
     >
       {/* State label sits opposite the knob, like a hardware switch. */}
       <span
-        className={`absolute top-0 h-7 flex items-center text-[10px] font-bold tracking-wider select-none transition-all duration-200 ${
-          checked ? "left-2.5 text-white/90" : "right-2.5 text-white/60"
+        className={`absolute top-0 h-8 flex items-center text-[10px] font-bold tracking-wider select-none transition-all duration-200 ${
+          checked ? "left-3 text-white/90" : "right-3 text-white/60"
         }`}
       >
         {checked ? "ON" : "OFF"}
       </span>
+      {/* Knob inset 4px on every side so it sits fully inside the pill. */}
       <span
-        className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow-[0_2px_5px_rgba(0,0,0,0.35)] transition-transform duration-200 ${
-          checked ? "translate-x-[32px]" : "translate-x-0.5"
+        className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow-[0_2px_5px_rgba(0,0,0,0.35)] transition-transform duration-200 ${
+          checked ? "translate-x-[34px]" : "translate-x-1"
         }`}
       />
     </button>
