@@ -290,6 +290,7 @@ export type AdminUserRow = {
   firstName: string;
   lastName: string;
   role: Role;
+  avatarUrl: string | null;
   age: number | null;
   country: string | null;
   gender: string | null;

@@ -159,6 +159,7 @@ export default function AdminHome() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-[10px] tracking-[0.2em] uppercase text-white/40 border-b border-white/10">
+                  <Th>Avatar</Th>
                   <Th>Member ID</Th>
                   <Th>Name</Th>
                   <Th>Email</Th>
@@ -178,13 +179,13 @@ export default function AdminHome() {
               <tbody>
                 {users === null ? (
                   <tr>
-                    <td colSpan={14} className="px-4 py-12 text-center text-white/40">
+                    <td colSpan={15} className="px-4 py-12 text-center text-white/40">
                       Loading users…
                     </td>
                   </tr>
                 ) : users.length === 0 ? (
                   <tr>
-                    <td colSpan={14} className="px-4 py-12 text-center text-white/40">
+                    <td colSpan={15} className="px-4 py-12 text-center text-white/40">
                       No users registered yet.
                     </td>
                   </tr>
@@ -194,6 +195,9 @@ export default function AdminHome() {
                       key={u.id}
                       className="border-b border-white/5 hover:bg-white/[0.02] transition-colors"
                     >
+                      <Td>
+                        <Avatar url={u.avatarUrl} name={u.firstName} id={u.id} />
+                      </Td>
                       <Td mono>{u.code11}</Td>
                       <Td>
                         {u.firstName} {u.lastName}
@@ -413,6 +417,28 @@ function ConsentModal({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function Avatar({ url, name, id }: { url: string | null; name: string; id: string }) {
+  const initial = (name || "?").charAt(0).toUpperCase();
+  // The internal user id rides along as a tooltip / copyable title.
+  return url ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt={name}
+      title={id}
+      className="h-8 w-8 rounded-full object-cover ring-1 ring-white/15"
+    />
+  ) : (
+    <div
+      title={id}
+      className="h-8 w-8 rounded-full grid place-items-center text-xs font-semibold ring-1 ring-white/10"
+      style={{ background: "linear-gradient(160deg,#8A68FF,#5A3CC8)", color: "#fff" }}
+    >
+      {initial}
     </div>
   );
 }

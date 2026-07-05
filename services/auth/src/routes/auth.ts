@@ -472,6 +472,7 @@ export async function authRoutes(app: FastifyInstance) {
       first_name: string;
       last_name: string;
       role: "admin" | "user";
+      avatar_url: string | null;
       age: number | null;
       country: string | null;
       gender: string | null;
@@ -494,6 +495,7 @@ export async function authRoutes(app: FastifyInstance) {
         firstName: u.first_name,
         lastName: u.last_name,
         role: u.role,
+        avatarUrl: u.avatar_url,
         age: u.age,
         country: u.country,
         gender: u.gender,
