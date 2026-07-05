@@ -193,15 +193,13 @@ function Toggle({
       disabled={disabled}
       onClick={onChange}
       className={`relative h-7 w-[58px] rounded-full shrink-0 transition-colors duration-200 shadow-inner ${
-        checked ? "bg-emerald-500" : "bg-rose-500"
-      } ${onChange ? "cursor-pointer" : "cursor-default"} ${
-        disabled ? "opacity-100" : ""
-      }`}
+        checked ? "bg-emerald-500" : "bg-slate-600"
+      } ${onChange ? "cursor-pointer" : "cursor-default"}`}
     >
       {/* State label sits opposite the knob, like a hardware switch. */}
       <span
-        className={`absolute top-0 h-7 flex items-center text-[10px] font-bold tracking-wider text-white/90 select-none transition-all duration-200 ${
-          checked ? "left-2.5" : "right-2.5"
+        className={`absolute top-0 h-7 flex items-center text-[10px] font-bold tracking-wider select-none transition-all duration-200 ${
+          checked ? "left-2.5 text-white/90" : "right-2.5 text-white/60"
         }`}
       >
         {checked ? "ON" : "OFF"}
