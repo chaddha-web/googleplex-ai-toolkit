@@ -204,10 +204,12 @@ function Toggle({
       >
         {checked ? "ON" : "OFF"}
       </span>
-      {/* Knob inset 4px on every side so it sits fully inside the pill. */}
+      {/* Knob inset 4px on every side so it sits fully inside the pill.
+          Anchored with explicit left values — an un-anchored absolute span
+          keeps its static position and drifts outside the track. */}
       <span
-        className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow-[0_2px_5px_rgba(0,0,0,0.35)] transition-transform duration-200 ${
-          checked ? "translate-x-[34px]" : "translate-x-1"
+        className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow-[0_2px_5px_rgba(0,0,0,0.35)] transition-[left] duration-200 ${
+          checked ? "left-[34px]" : "left-1"
         }`}
       />
     </button>
