@@ -309,6 +309,14 @@ try { db.exec(`ALTER TABLE users ADD COLUMN tokens_minted INTEGER NOT NULL DEFAU
 try { db.exec(`ALTER TABLE users ADD COLUMN tokens_minted_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN studio_unlocked_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE community_comments ADD COLUMN parent_id TEXT`); } catch {}
+// Circle DAO: proposal scheduling + comment moderation (additive).
+try { db.exec(`ALTER TABLE community_proposals ADD COLUMN closes_at INTEGER`); } catch {}
+try { db.exec(`ALTER TABLE community_proposals ADD COLUMN quorum INTEGER NOT NULL DEFAULT 0`); } catch {}
+try { db.exec(`ALTER TABLE community_proposals ADD COLUMN created_by TEXT`); } catch {}
+try { db.exec(`ALTER TABLE community_comments ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0`); } catch {}
+try { db.exec(`ALTER TABLE community_comments ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0`); } catch {}
+try { db.exec(`ALTER TABLE community_comments ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0`); } catch {}
+try { db.exec(`ALTER TABLE community_comments ADD COLUMN edited_at INTEGER`); } catch {}
 
 export type OtpRow = {
   id: string;
