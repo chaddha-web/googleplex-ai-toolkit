@@ -1,11 +1,15 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-context";
-import { uploadAvatar } from "@/lib/auth-client";
+import { setNotifications, uploadAvatar } from "@/lib/auth-client";
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
+  // Wallet status (and other fields) can go stale in context — refresh on open.
+  useEffect(() => {
+    refreshUser();
+  }, [refreshUser]);
   if (!user) return null;
 
   return (
@@ -27,16 +31,7 @@ export default function SettingsPage() {
         <Row label="Gender" value={user.gender ?? "—"} />
       </Section>
 
-      <Section title="Notifications">
-        <Row
-          label="Product & account emails"
-          value={user.notificationsOptIn ? "On" : "Off"}
-        />
-        <p className="text-white/40 text-xs mt-3">
-          Toggle endpoint coming next — for now, manage from your initial
-          onboarding form.
-        </p>
-      </Section>
+      <NotificationsSection />
 
       <Section title="Wallet">
         <Row label="Status" value={prettyWallet(user.walletStatus)} />
@@ -59,15 +54,23 @@ export default function SettingsPage() {
       </Section>
 
       <Section title="Security">
-        <Row label="Wallet password" value={user.walletStatus === "pending_password" ? "Not set yet" : "Set"} />
-        <Row label="Wallet lock" value={user.walletStatus === "locked" ? "Frozen" : "Active"} />
-        <p className="text-white/60 text-sm mt-3 leading-relaxed">
-          Change your wallet password, freeze/unlock your wallet, and review
-          signed-in devices on the{" "}
-          <a href="/account/security" className="text-white hover:underline">
-            Security
-          </a>{" "}
-          page. Sign out of this session from the sidebar account row.
+        <Row
+          label="Wallet password"
+          value={user.walletStatus === "pending_password" ? "Not set yet" : "Set"}
+        />
+        <Row
+          label="Wallet lock"
+          value={user.walletStatus === "locked" ? "Frozen" : "Active"}
+        />
+        <a
+          href="/account/security"
+          className="inline-block mt-4 rounded-full bg-white text-black text-sm font-medium px-5 py-2.5 hover:bg-white/90 transition-colors"
+        >
+          Manage security →
+        </a>
+        <p className="text-white/40 text-xs mt-3">
+          Change your wallet password, freeze / unlock your wallet, and review
+          signed-in devices.
         </p>
       </Section>
     </div>
@@ -169,6 +172,113 @@ function AvatarSection() {
           {err && <p className="text-rose-300 text-sm mt-2">{err}</p>}
         </div>
       </div>
+    </Section>
+  );
+}
+
+function Toggle({
+  checked,
+  disabled,
+  onChange
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={onChange}
+      className={`relative h-6 w-11 rounded-full shrink-0 transition-colors ${
+        checked ? "bg-emerald-400" : "bg-white/15"
+      } ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+    >
+      <span
+        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+          checked ? "translate-x-[22px]" : "translate-x-0.5"
+        }`}
+      />
+    </button>
+  );
+}
+
+function ToggleRow({
+  label,
+  desc,
+  checked,
+  disabled,
+  locked,
+  onChange
+}: {
+  label: string;
+  desc: string;
+  checked: boolean;
+  disabled?: boolean;
+  locked?: boolean;
+  onChange?: () => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-1.5">
+      <div className="min-w-0">
+        <p className="text-white text-sm flex items-center gap-2">
+          {label}
+          {locked && (
+            <span className="text-white/30 text-[10px] uppercase tracking-wider">
+              Always on
+            </span>
+          )}
+        </p>
+        <p className="text-white/40 text-xs mt-0.5 leading-relaxed">{desc}</p>
+      </div>
+      <Toggle checked={checked} disabled={disabled || locked} onChange={onChange} />
+    </div>
+  );
+}
+
+function NotificationsSection() {
+  const { user, refreshUser } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const on = !!user?.notificationsOptIn;
+
+  async function toggle() {
+    setBusy(true);
+    setErr(null);
+    try {
+      await setNotifications(!on);
+      await refreshUser();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Section title="Notifications">
+      <ToggleRow
+        label="Sign-in & security codes"
+        desc="One-time codes for login, wallet actions, and withdrawals. Required to keep your account secure."
+        checked
+        locked
+      />
+      <ToggleRow
+        label="Deposit & withdrawal alerts"
+        desc="Confirmation emails whenever funds move in or out."
+        checked
+        locked
+      />
+      <ToggleRow
+        label="Product & account emails"
+        desc="Announcements, updates, and non-critical account notices."
+        checked={on}
+        disabled={busy}
+        onChange={toggle}
+      />
+      {err && <p className="text-rose-300 text-sm mt-2">{err}</p>}
     </Section>
   );
 }

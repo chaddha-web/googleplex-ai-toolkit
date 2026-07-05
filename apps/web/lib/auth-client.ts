@@ -299,6 +299,17 @@ export async function confirmWalletPasswordChange(code: string): Promise<void> {
   if (!res.ok) throw new Error(data.error || "Could not verify the code.");
 }
 
+/** Toggle the product/account email opt-in. */
+export async function setNotifications(optIn: boolean): Promise<void> {
+  const res = await authedFetch(`${AUTH_BASE}/auth/notifications`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ optIn })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not update notifications.");
+}
+
 /** Upload a profile image (data URL) → media bucket. Returns the new URL. */
 export async function uploadAvatar(dataUrl: string): Promise<string> {
   const res = await authedFetch(`${AUTH_BASE}/auth/profile/avatar`, {

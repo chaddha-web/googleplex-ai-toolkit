@@ -192,6 +192,25 @@ export async function authRoutes(app: FastifyInstance) {
     }
   );
 
+  // POST /auth/notifications — toggle the product/account email opt-in.
+  app.post("/auth/notifications", async (req, reply) => {
+    const header = req.headers.authorization;
+    if (!header || !header.startsWith("Bearer ")) {
+      return reply.code(401).send({ error: "Missing bearer token." });
+    }
+    const claims = await verifyAccessToken(header.slice("Bearer ".length).trim());
+    if (!claims) return reply.code(401).send({ error: "Invalid or expired access token." });
+    const user = stmts.user.byId.get(claims.sub);
+    if (!user) return reply.code(401).send({ error: "User no longer exists." });
+
+    const optIn = (req.body as { optIn?: unknown } | undefined)?.optIn === true;
+    const now = Date.now();
+    db.prepare(
+      "UPDATE users SET notifications_opt_in = ?, notifications_opt_in_at = ?, updated_at = ? WHERE id = ?"
+    ).run(optIn ? 1 : 0, optIn ? now : null, now, user.id);
+    return reply.send({ ok: true, notificationsOptIn: optIn });
+  });
+
   // ────────────────────────────────────────────────────────────────────────
   // POST /auth/profile — onboarding form after first OTP signup.
   // Required: age (>=18), country, consent to T&C + privacy.
