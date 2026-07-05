@@ -243,51 +243,51 @@ function Sidebar({
   onClose?: () => void;
 }) {
   const initial = (firstName || "G").charAt(0).toUpperCase();
-  const [showToggle, setShowToggle] = useState(false);
   return (
     <aside className={className}>
-      {/* Collapse / expand toggle — revealed only on hover of the brand/logo.
-          Sits OUTSIDE the glass (which clips overflow) so it hangs off the edge
-          without being cut off, aligned with the logo. */}
-      {onToggle && (
-        <button
-          type="button"
-          onClick={onToggle}
-          onMouseEnter={() => setShowToggle(true)}
-          onMouseLeave={() => setShowToggle(false)}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className={`hidden md:grid place-items-center absolute -right-3.5 top-7 z-50 h-8 w-8 rounded-full text-white/80 hover:text-white shadow-lg transition-opacity duration-200 ${
-            showToggle ? "opacity-100" : "opacity-0 pointer-events-none"
-          }`}
-          style={{
-            background: "rgba(22,20,46,0.92)",
-            backdropFilter: "blur(12px)",
-            border: "1px solid rgba(255,255,255,0.12)"
-          }}
-        >
-          <svg
-            width="15" height="15" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
-            className={`transition-transform duration-300 ${collapsed ? "" : "rotate-180"}`}
-          >
-            <path d="m9 6 6 6-6 6" />
-          </svg>
-        </button>
-      )}
       <div className="liquid-glass rounded-[32px] p-3 flex flex-col w-full h-full">
-        {/* Brand — hovering here reveals the collapse/expand toggle. */}
-        <div
-          className={`flex items-center gap-2.5 px-2.5 py-2 ${collapsed ? "justify-center" : ""}`}
-          onMouseEnter={() => setShowToggle(true)}
-          onMouseLeave={() => setShowToggle(false)}
-        >
-          <Link href="/" onClick={onNavigate} className="flex items-center gap-2.5 min-w-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="GoogolPlex" className="h-11 w-11 object-contain rounded-full shrink-0" />
-            {!collapsed && (
+        {/* Brand — the logo IS the collapse/expand control on desktop: hover it
+            and it morphs into a chevron ( < collapse / > expand ). On the mobile
+            drawer there's no toggle, so the logo links home instead. */}
+        <div className={`flex items-center gap-2.5 px-2.5 py-2 ${collapsed ? "justify-center" : ""}`}>
+          {onToggle ? (
+            <button
+              type="button"
+              onClick={onToggle}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              className="group flex items-center gap-2.5 min-w-0"
+            >
+              <span className="relative h-11 w-11 shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/logo.png"
+                  alt="GoogolPlex"
+                  className="absolute inset-0 h-11 w-11 object-contain rounded-full transition-opacity duration-200 group-hover:opacity-0"
+                />
+                <span
+                  className="absolute inset-0 grid place-items-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-white"
+                  style={{ background: "rgba(22,20,46,0.95)", border: "1px solid rgba(255,255,255,0.14)" }}
+                >
+                  <svg
+                    width="20" height="20" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"
+                    className={`transition-transform duration-300 ${collapsed ? "" : "rotate-180"}`}
+                  >
+                    <path d="m9 6 6 6-6 6" />
+                  </svg>
+                </span>
+              </span>
+              {!collapsed && (
+                <span className="font-medium tracking-tight text-[16px] whitespace-nowrap">GoogolPlex</span>
+              )}
+            </button>
+          ) : (
+            <Link href="/" onClick={onNavigate} className="flex items-center gap-2.5 min-w-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo.png" alt="GoogolPlex" className="h-11 w-11 object-contain rounded-full shrink-0" />
               <span className="font-medium tracking-tight text-[16px] whitespace-nowrap">GoogolPlex</span>
-            )}
-          </Link>
+            </Link>
+          )}
           {showClose && (
             <button
               type="button"
