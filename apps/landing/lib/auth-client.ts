@@ -276,6 +276,7 @@ export type ProfilePayload = {
   gender?: string | null;
   consentTerms: true;
   consentPrivacy: true;
+  consentConsultation: true;
   notificationsOptIn?: boolean;
 };
 

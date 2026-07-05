@@ -124,6 +124,7 @@ export async function authRoutes(app: FastifyInstance) {
         gender: user.gender,
         consentedTermsAt: user.consented_terms_at,
         consentedPrivacyAt: user.consented_privacy_at,
+        consentedConsultationAt: user.consented_consultation_at,
         notificationsOptIn: user.notifications_opt_in === 1,
         profileCompletedAt: user.profile_completed_at,
         walletStatus: user.wallet_status,
@@ -233,6 +234,7 @@ export async function authRoutes(app: FastifyInstance) {
       gender?: unknown;
       consentTerms?: unknown;
       consentPrivacy?: unknown;
+      consentConsultation?: unknown;
       notificationsOptIn?: unknown;
     };
 
@@ -246,6 +248,11 @@ export async function authRoutes(app: FastifyInstance) {
     if (body.consentTerms !== true || body.consentPrivacy !== true) {
       return reply.code(400).send({ error: "You must accept the Terms and Privacy Policy." });
     }
+    if (body.consentConsultation !== true) {
+      return reply
+        .code(400)
+        .send({ error: "You must acknowledge the consultation-fee terms to continue." });
+    }
     const gender =
       typeof body.gender === "string" && body.gender.trim() ? body.gender.trim() : null;
     const notif = body.notificationsOptIn === true;
@@ -258,6 +265,7 @@ export async function authRoutes(app: FastifyInstance) {
       gender,
       consented_terms_at: now,
       consented_privacy_at: now,
+      consented_consultation_at: now,
       notifications_opt_in: notif ? 1 : 0,
       notifications_opt_in_at: notif ? now : null,
       profile_completed_at: now,

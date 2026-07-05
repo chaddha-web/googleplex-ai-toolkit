@@ -265,6 +265,7 @@ export type UserRow = {
   gender: string | null;
   consented_terms_at: number | null;
   consented_privacy_at: number | null;
+  consented_consultation_at: number | null;
   notifications_opt_in: number;
   notifications_opt_in_at: number | null;
   profile_completed_at: number | null;
@@ -302,6 +303,7 @@ try { db.exec(`ALTER TABLE users ADD COLUMN country TEXT`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN gender TEXT`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN consented_terms_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN consented_privacy_at INTEGER`); } catch {}
+try { db.exec(`ALTER TABLE users ADD COLUMN consented_consultation_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN notifications_opt_in INTEGER NOT NULL DEFAULT 0`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN notifications_opt_in_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN profile_completed_at INTEGER`); } catch {}
@@ -404,6 +406,7 @@ export const stmts = {
         gender = @gender,
         consented_terms_at = @consented_terms_at,
         consented_privacy_at = @consented_privacy_at,
+        consented_consultation_at = @consented_consultation_at,
         notifications_opt_in = @notifications_opt_in,
         notifications_opt_in_at = @notifications_opt_in_at,
         profile_completed_at = @profile_completed_at,
