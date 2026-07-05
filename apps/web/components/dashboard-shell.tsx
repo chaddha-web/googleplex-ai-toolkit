@@ -243,16 +243,22 @@ function Sidebar({
   onClose?: () => void;
 }) {
   const initial = (firstName || "G").charAt(0).toUpperCase();
+  const [showToggle, setShowToggle] = useState(false);
   return (
     <aside className={className}>
-      {/* Collapse / expand toggle — sits OUTSIDE the glass (which clips overflow)
-          so it can hang off the rail's right edge without being cut off. */}
+      {/* Collapse / expand toggle — revealed only on hover of the brand/logo.
+          Sits OUTSIDE the glass (which clips overflow) so it hangs off the edge
+          without being cut off, aligned with the logo. */}
       {onToggle && (
         <button
           type="button"
           onClick={onToggle}
+          onMouseEnter={() => setShowToggle(true)}
+          onMouseLeave={() => setShowToggle(false)}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className="hidden md:grid place-items-center absolute -right-3.5 top-1/2 -translate-y-1/2 z-50 h-8 w-8 rounded-full text-white/80 hover:text-white shadow-lg"
+          className={`hidden md:grid place-items-center absolute -right-3.5 top-7 z-50 h-8 w-8 rounded-full text-white/80 hover:text-white shadow-lg transition-opacity duration-200 ${
+            showToggle ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
           style={{
             background: "rgba(22,20,46,0.92)",
             backdropFilter: "blur(12px)",
@@ -269,8 +275,12 @@ function Sidebar({
         </button>
       )}
       <div className="liquid-glass rounded-[32px] p-3 flex flex-col w-full h-full">
-        {/* Brand */}
-        <div className={`flex items-center gap-2.5 px-2.5 py-2 ${collapsed ? "justify-center" : ""}`}>
+        {/* Brand — hovering here reveals the collapse/expand toggle. */}
+        <div
+          className={`flex items-center gap-2.5 px-2.5 py-2 ${collapsed ? "justify-center" : ""}`}
+          onMouseEnter={() => setShowToggle(true)}
+          onMouseLeave={() => setShowToggle(false)}
+        >
           <Link href="/" onClick={onNavigate} className="flex items-center gap-2.5 min-w-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo.png" alt="GoogolPlex" className="h-8 w-8 object-contain rounded-full shrink-0" />
