@@ -8,10 +8,16 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# BuildKit is required for the Dockerfile's --mount=type=cache lines (warm npm +
+# Next incremental compile caches). Without these the build is minutes; with
+# them a code-only change is tens of seconds.
+export DOCKER_BUILDKIT=1
+export COMPOSE_DOCKER_CLI_BUILD=1
+
 echo "=== Pulling latest from origin/main"
 git pull --ff-only origin main
 
-echo "=== Building monorepo image (5-10 min on first run, ~1 min cached)"
+echo "=== Building monorepo image (BuildKit + cache mounts)"
 docker compose --env-file .env.prod -f docker-compose.prod.yml build
 
 echo "=== Restarting containers"

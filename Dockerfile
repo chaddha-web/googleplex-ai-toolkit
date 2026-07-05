@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # ─────────────────────────────────────────────────────────────────────────
 # Monorepo single-image build.
 #
@@ -38,7 +39,10 @@ COPY packages/ai/package.json packages/ai/package.json
 # packages/{analytics,db,email} are orphan dirs with src/ but no package.json
 # — npm install will skip them, full source still copied in build stage.
 
-RUN npm install --no-audit --no-fund
+# Cache-mount the npm download cache so a lockfile change re-installs from a warm
+# cache instead of re-downloading every package.
+RUN --mount=type=cache,target=/root/.npm \
+    npm install --no-audit --no-fund
 
 # ─────────────────────────────────────────────────────────────────────────
 # Build stage — bring in full source, build the three Next apps
@@ -64,8 +68,13 @@ ENV NEXT_PUBLIC_AUTH_BASE=$NEXT_PUBLIC_AUTH_BASE \
     NEXT_PUBLIC_GOV_BASE=$NEXT_PUBLIC_GOV_BASE
 
 # Build the three Next apps. Services run via tsx at runtime so no build
-# step needed for them.
-RUN npm run build --workspace @googolplex/landing && \
+# step needed for them. Cache-mount each app's .next/cache so Next only
+# recompiles the routes that actually changed — the big win for warm builds
+# (minutes → tens of seconds on a code-only change).
+RUN --mount=type=cache,target=/app/apps/landing/.next/cache \
+    --mount=type=cache,target=/app/apps/web/.next/cache \
+    --mount=type=cache,target=/app/apps/admin/.next/cache \
+    npm run build --workspace @googolplex/landing && \
     npm run build --workspace @googolplex/web && \
     npm run build --workspace @googolplex/admin
 
