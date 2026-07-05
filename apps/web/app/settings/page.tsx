@@ -193,11 +193,11 @@ function Toggle({
       disabled={disabled}
       onClick={onChange}
       className={`relative h-6 w-11 rounded-full shrink-0 transition-colors ${
-        checked ? "bg-emerald-400" : "bg-white/15"
-      } ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+        checked ? "bg-emerald-400" : "bg-white/20"
+      } ${onChange ? "cursor-pointer" : "cursor-default"}`}
     >
       <span
-        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
           checked ? "translate-x-[22px]" : "translate-x-0.5"
         }`}
       />
