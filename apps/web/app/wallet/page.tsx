@@ -1045,70 +1045,74 @@ function DepositSection({ addrs }: { addrs: ChainAddrs | null }) {
           </div>
 
           {openAsset && activeChain && address && (
-            <div className="mt-4 liquid-glass rounded-3xl p-5 max-w-md">
-              {/* Network selector — dropdown (logo + name) when multi-chain. */}
-              {availChains.length > 1 ? (
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setMenuOpen((v) => !v)}
-                    aria-haspopup="listbox"
-                    aria-expanded={menuOpen}
-                    className="w-full flex items-center gap-3 rounded-2xl bg-white/5 ring-1 ring-white/10 px-4 py-3 hover:bg-white/[0.07] transition-colors"
-                  >
-                    <CoinIcon sym={CHAIN_COIN[activeChain.key]} size={22} />
-                    <span className="text-white text-sm">{activeChain.label}</span>
-                    <svg
-                      width="16" height="16" viewBox="0 0 24 24" fill="none"
-                      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                      className={`ml-auto text-white/50 transition-transform ${menuOpen ? "rotate-180" : ""}`}
+            // White panel matching the highlighted chip, full width, sitting
+            // tight under the grid so it reads as one connected surface.
+            <div className="mt-1.5 bg-white text-black rounded-3xl p-6 md:p-8 shadow-[0_28px_70px_-30px_rgba(0,0,0,0.7)]">
+              <div className="mx-auto w-full max-w-md">
+                {/* Network selector — dropdown (logo + name) when multi-chain. */}
+                {availChains.length > 1 ? (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setMenuOpen((v) => !v)}
+                      aria-haspopup="listbox"
+                      aria-expanded={menuOpen}
+                      className="w-full flex items-center gap-3 rounded-2xl bg-black/[0.05] ring-1 ring-black/10 px-4 py-3 hover:bg-black/[0.08] transition-colors"
                     >
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
-                  </button>
-                  {menuOpen && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-30"
-                        onClick={() => setMenuOpen(false)}
-                        aria-hidden="true"
-                      />
-                      <div className="absolute z-40 left-0 right-0 mt-2 liquid-glass rounded-2xl p-1.5">
-                        {availChains.map((c) => (
-                          <button
-                            key={c.key}
-                            type="button"
-                            onClick={() => {
-                              setSelChain(c.key);
-                              setMenuOpen(false);
-                            }}
-                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/10 text-left transition-colors"
-                          >
-                            <CoinIcon sym={CHAIN_COIN[c.key]} size={20} />
-                            <span className="text-white text-sm">{c.label}</span>
-                            {c.key === activeChain.key && (
-                              <span className="ml-auto text-white/50 text-sm">✓</span>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              ) : (
-                <div className="flex items-center gap-3 rounded-2xl bg-white/5 ring-1 ring-white/10 px-4 py-3">
-                  <CoinIcon sym={CHAIN_COIN[activeChain.key]} size={22} />
-                  <span className="text-white text-sm">{activeChain.label}</span>
-                </div>
-              )}
+                      <CoinIcon sym={CHAIN_COIN[activeChain.key]} size={22} />
+                      <span className="text-black text-sm font-medium">{activeChain.label}</span>
+                      <svg
+                        width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                        className={`ml-auto text-black/40 transition-transform ${menuOpen ? "rotate-180" : ""}`}
+                      >
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    {menuOpen && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-30"
+                          onClick={() => setMenuOpen(false)}
+                          aria-hidden="true"
+                        />
+                        <div className="absolute z-40 left-0 right-0 mt-2 bg-white ring-1 ring-black/10 rounded-2xl shadow-xl p-1.5">
+                          {availChains.map((c) => (
+                            <button
+                              key={c.key}
+                              type="button"
+                              onClick={() => {
+                                setSelChain(c.key);
+                                setMenuOpen(false);
+                              }}
+                              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-black/[0.05] text-left transition-colors"
+                            >
+                              <CoinIcon sym={CHAIN_COIN[c.key]} size={20} />
+                              <span className="text-black text-sm">{c.label}</span>
+                              {c.key === activeChain.key && (
+                                <span className="ml-auto text-black/40 text-sm">✓</span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3 rounded-2xl bg-black/[0.05] ring-1 ring-black/10 px-4 py-3">
+                    <CoinIcon sym={CHAIN_COIN[activeChain.key]} size={22} />
+                    <span className="text-black text-sm font-medium">{activeChain.label}</span>
+                  </div>
+                )}
 
-              <FocusedAddress address={address} />
+                <FocusedAddress address={address} />
 
-              <p className="text-white/30 text-xs mt-3">
-                Only send <span className="text-white/60">{openAsset.sym}</span> on{" "}
-                <span className="text-white/60">{activeChain.label}</span>. Sending the
-                wrong asset or network can lose funds.
-              </p>
+                <p className="text-black/40 text-xs mt-4 text-center">
+                  Only send <span className="text-black/70">{openAsset.sym}</span> on{" "}
+                  <span className="text-black/70">{activeChain.label}</span>. Sending the
+                  wrong asset or network can lose funds.
+                </p>
+              </div>
             </div>
           )}
         </>
@@ -1130,18 +1134,18 @@ function FocusedAddress({ address }: { address: string }) {
     }
   }
   return (
-    <div className="mt-4 flex flex-col items-center">
-      <div className="p-3 bg-white rounded-2xl">
+    <div className="mt-5 flex flex-col items-center">
+      <div className="p-3 bg-white rounded-2xl ring-1 ring-black/10">
         <QrCode value={address} size={172} />
       </div>
       <button
         type="button"
         onClick={copy}
         title="Copy address"
-        className="mt-4 w-full group flex items-center gap-3 rounded-2xl bg-white/5 ring-1 ring-white/10 px-4 py-3 hover:bg-white/[0.07] transition-colors text-left"
+        className="mt-4 w-full group flex items-center gap-3 rounded-2xl bg-black/[0.05] ring-1 ring-black/10 px-4 py-3 hover:bg-black/[0.08] transition-colors text-left"
       >
-        <span className="font-mono text-xs text-white/85 break-all flex-1">{address}</span>
-        <span className="shrink-0 text-xs font-medium text-white/60 group-hover:text-white">
+        <span className="font-mono text-xs text-black/80 break-all flex-1">{address}</span>
+        <span className="shrink-0 text-xs font-medium text-black/50 group-hover:text-black">
           {copied ? "Copied ✓" : "Copy"}
         </span>
       </button>
