@@ -59,20 +59,15 @@ export default function SettingsPage() {
       </Section>
 
       <Section title="Security">
-        <Row label="Wallet password" value="Set via onboarding" />
-        <p className="text-white/40 text-xs mt-3">
-          Recovery flow (3-of-5 social guardians + delayed OTP fallback) lands
-          alongside the MPC wallet rollout — see ADR-001.
-        </p>
-      </Section>
-
-      <Section title="Sessions">
-        <p className="text-white/60 text-sm leading-relaxed">
-          Manage every device you're signed in on — and sign out of others — from{" "}
+        <Row label="Wallet password" value={user.walletStatus === "pending_password" ? "Not set yet" : "Set"} />
+        <Row label="Wallet lock" value={user.walletStatus === "locked" ? "Frozen" : "Active"} />
+        <p className="text-white/60 text-sm mt-3 leading-relaxed">
+          Change your wallet password, freeze/unlock your wallet, and review
+          signed-in devices on the{" "}
           <a href="/account/security" className="text-white hover:underline">
             Security
-          </a>
-          . Use the sign-out control in the sidebar account row to end this session.
+          </a>{" "}
+          page. Sign out of this session from the sidebar account row.
         </p>
       </Section>
     </div>
