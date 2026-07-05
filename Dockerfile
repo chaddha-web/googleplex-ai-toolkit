@@ -49,8 +49,6 @@ RUN --mount=type=cache,target=/root/.npm \
 # ─────────────────────────────────────────────────────────────────────────
 FROM deps AS build
 
-COPY . .
-
 # NEXT_PUBLIC_* must be present at *build* time — Next.js inlines them into
 # the client bundle. Passed in via compose build.args; default to the prod
 # domain so a bare `docker build` still produces working URLs.
@@ -67,16 +65,34 @@ ENV NEXT_PUBLIC_AUTH_BASE=$NEXT_PUBLIC_AUTH_BASE \
     NEXT_PUBLIC_LANDING_URL=$NEXT_PUBLIC_LANDING_URL \
     NEXT_PUBLIC_GOV_BASE=$NEXT_PUBLIC_GOV_BASE
 
-# Build the three Next apps. Services run via tsx at runtime so no build
-# step needed for them. Cache-mount each app's .next/cache so Next only
-# recompiles the routes that actually changed — the big win for warm builds
-# (minutes → tens of seconds on a code-only change).
+# ── Granular copy + per-app build layers ────────────────────────────────────
+# `COPY . .` invalidated on ANY file change, so all three apps rebuilt every
+# push. Instead we copy shared code, then each app's own source right before
+# its build, ordered least-changed → most-changed. Docker layer cache then
+# means a one-app edit only rebuilds THAT app; the others stay cached. Each
+# app also cache-mounts its .next/cache for incremental route compiles.
+
+# Shared workspace code (rarely changes — when it does, all apps rebuild).
+COPY packages ./packages
+COPY drizzle.config.ts ./
+
+COPY apps/landing ./apps/landing
 RUN --mount=type=cache,target=/app/apps/landing/.next/cache \
-    --mount=type=cache,target=/app/apps/web/.next/cache \
-    --mount=type=cache,target=/app/apps/admin/.next/cache \
-    npm run build --workspace @googolplex/landing && \
-    npm run build --workspace @googolplex/web && \
+    npm run build --workspace @googolplex/landing
+
+COPY apps/admin ./apps/admin
+RUN --mount=type=cache,target=/app/apps/admin/.next/cache \
     npm run build --workspace @googolplex/admin
+
+# web is edited most often — build it LAST so its changes never cascade into
+# the landing/admin layers above.
+COPY apps/web ./apps/web
+RUN --mount=type=cache,target=/app/apps/web/.next/cache \
+    npm run build --workspace @googolplex/web
+
+# Backend services run via tsx at runtime (no build step). Copied LAST so a
+# services-only change (auth/wallet) skips all three app rebuilds entirely.
+COPY services ./services
 
 # ─────────────────────────────────────────────────────────────────────────
 # Runtime stage — slim down by dropping build toolchain
