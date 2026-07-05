@@ -27,7 +27,7 @@ type ChainAddrs = { eth?: string; bsc?: string; tron?: string; btc?: string };
 const DECIMALS: Record<string, number> = {
   "eth:ETH": 18, "eth:USDC": 6, "eth:USDT": 6,
   "bsc:BNB": 18, "bsc:USDT": 18, "bsc:USDC": 18,
-  "tron:TRX": 6, "tron:USDT": 6, "tron:PARTY": 6,
+  "tron:TRX": 6, "tron:USDT": 6, "tron:USDC": 6, "tron:PARTY": 6,
   "btc:BTC": 8
 };
 const decimalsFor = (chain: string, symbol: string) =>
