@@ -2,9 +2,6 @@
 
 import { useAuth } from "@/components/auth-context";
 
-const LANDING_URL =
-  process.env.NEXT_PUBLIC_LANDING_URL || "http://localhost:3010";
-
 export default function SettingsPage() {
   const { user } = useAuth();
   if (!user) return null;
@@ -47,8 +44,8 @@ export default function SettingsPage() {
           <a
             href={
               user.walletStatus === "pending_password"
-                ? `${LANDING_URL}/app/setup/wallet`
-                : `${LANDING_URL}/app/setup/deposit`
+                ? "/setup/password"
+                : "/setup/deposit"
             }
             className="inline-block mt-3 text-white text-sm hover:underline"
           >
@@ -67,9 +64,11 @@ export default function SettingsPage() {
 
       <Section title="Sessions">
         <p className="text-white/60 text-sm leading-relaxed">
-          One device per browser. Use the Sign out button (top right) to revoke
-          this session. Revoke-all-sessions endpoint is in the auth service
-          roadmap.
+          Manage every device you're signed in on — and sign out of others — from{" "}
+          <a href="/account/security" className="text-white hover:underline">
+            Security
+          </a>
+          . Use the sign-out control in the sidebar account row to end this session.
         </p>
       </Section>
     </div>

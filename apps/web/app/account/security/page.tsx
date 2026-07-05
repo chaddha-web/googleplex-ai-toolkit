@@ -102,13 +102,14 @@ function SecurityInner() {
   });
 
   return (
-    <div className="max-w-3xl">
-      <header className="mb-8">
-        <h1 className="text-3xl md:text-4xl font-light italic tracking-tight mb-2">Security</h1>
-        <p className="text-white/60 text-sm">
-          Every device where you're signed in. Revoke any session if you don't recognize it.
-        </p>
-      </header>
+    <div className="max-w-3xl mx-auto">
+      <p className="text-white/40 text-xs tracking-[0.3em] uppercase">Security</p>
+      <h1 className="font-serif text-5xl md:text-6xl tracking-tight mt-2">
+        Your <em className="font-serif-i text-white/60">sessions</em>.
+      </h1>
+      <p className="text-white/60 text-sm mt-4 mb-8">
+        Every device where you're signed in. Revoke any session if you don't recognize it.
+      </p>
 
       {error && (
         <div className="mb-6 text-sm text-red-300 bg-red-950/40 border border-red-900/40 rounded-lg px-4 py-3">
@@ -116,7 +117,7 @@ function SecurityInner() {
         </div>
       )}
 
-      <div className="rounded-2xl border border-white/10 bg-white/[0.02]">
+      <div className="liquid-glass rounded-3xl overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <div>
             <div className="text-sm text-white">Active sessions</div>
