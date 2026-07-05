@@ -264,6 +264,39 @@ export async function confirmWalletPasswordOtp(code: string): Promise<User> {
   return data.user as User;
 }
 
+/**
+ * Change the wallet spending password. Verifies the current password, then
+ * emails a branded OTP; the new password only takes effect after
+ * confirmWalletPasswordChange().
+ */
+export async function changeWalletPassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<{ otpRequired: boolean }> {
+  const res = await authedFetch(`${AUTH_BASE}/auth/wallet-password/change`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ currentPassword, newPassword })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not change wallet password.");
+  return { otpRequired: !!data.otpRequired };
+}
+
+/** Confirm the wallet-password change OTP → commits the new password. */
+export async function confirmWalletPasswordChange(code: string): Promise<void> {
+  const res = await authedFetch(
+    `${AUTH_BASE}/auth/wallet-password/change/confirm`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code })
+    }
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not verify the code.");
+}
+
 export type ProfilePayload = {
   age: number;
   country: string;

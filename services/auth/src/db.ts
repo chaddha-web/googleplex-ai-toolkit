@@ -269,6 +269,7 @@ export type UserRow = {
   notifications_opt_in_at: number | null;
   profile_completed_at: number | null;
   wallet_password_hash: string | null;
+  pending_wallet_password_hash: string | null;
   wallet_password_set_at: number | null;
   wallet_status: "pending_password" | "pending_initial_deposit" | "active" | "locked";
   wallet_status_changed_at: number | null;
@@ -288,6 +289,7 @@ try {
   /* column already exists — fine */
 }
 try { db.exec(`ALTER TABLE users ADD COLUMN wallet_password_hash TEXT`); } catch {}
+try { db.exec(`ALTER TABLE users ADD COLUMN pending_wallet_password_hash TEXT`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN wallet_password_set_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN wallet_status TEXT NOT NULL DEFAULT 'pending_password'`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN wallet_status_changed_at INTEGER`); } catch {}

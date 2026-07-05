@@ -211,6 +211,97 @@ export async function walletRoutes(app: FastifyInstance) {
     return reply.send({ ok: true });
   });
 
+  // POST /auth/wallet-password/change — change the wallet spending password.
+  // Requires the current password, then confirms with a branded OTP (same
+  // password + OTP model as withdrawals). Stashes the new hash as pending; it
+  // only takes effect after /change/confirm.
+  app.post("/auth/wallet-password/change", async (req, reply) => {
+    const user = await requireAuth(req, reply);
+    if (!user) return;
+    if (!user.wallet_password_hash) {
+      return reply.code(400).send({ error: "No wallet password set yet." });
+    }
+    const b = (req.body ?? {}) as { currentPassword?: string; newPassword?: string };
+    const cur = b.currentPassword;
+    const next = b.newPassword;
+
+    if (!cur || !(await argon2.verify(user.wallet_password_hash, cur))) {
+      return reply.code(401).send({ error: "Current password is incorrect." });
+    }
+    if (!next || next.length < 12 || !/[a-zA-Z]/.test(next) || !/[0-9]/.test(next)) {
+      return reply.code(400).send({ error: "New password must be at least 12 characters and contain a letter and a number." });
+    }
+    if (await argon2.verify(user.wallet_password_hash, next)) {
+      return reply.code(400).send({ error: "New password must be different from the current one." });
+    }
+
+    const pendingHash = await argon2.hash(next, {
+      memoryCost: 65536,
+      timeCost: 3,
+      parallelism: 4
+    });
+    const now = Date.now();
+    db.prepare(
+      "UPDATE users SET pending_wallet_password_hash = ?, updated_at = ? WHERE id = ?"
+    ).run(pendingHash, now, user.id);
+
+    const code = generateCode();
+    stmts.otp.insert.run({
+      id: crypto.randomUUID(),
+      email: user.email,
+      code_hash: hashCode(code),
+      mode: "login", // satisfies the CHECK; email is the branded wallet one
+      first_name: null,
+      last_name: null,
+      expires_at: now + OTP_TTL_SECONDS * 1000,
+      attempts: 0,
+      idempotency_key: null,
+      created_at: now
+    });
+    try {
+      await sendWalletOtp({ to: user.email, code });
+    } catch (err) {
+      req.log.error({ err }, "[wallet-password/change] OTP send failed");
+      return reply.code(502).send({ error: "Couldn't send the verification code. Please try again." });
+    }
+    return reply.send({ ok: true, otpRequired: true });
+  });
+
+  // POST /auth/wallet-password/change/confirm — verify the OTP, commit the new
+  // password.
+  app.post("/auth/wallet-password/change/confirm", async (req, reply) => {
+    const user = await requireAuth(req, reply);
+    if (!user) return;
+    const pending = (user as any).pending_wallet_password_hash as string | null;
+    if (!pending) {
+      return reply.code(400).send({ error: "No pending password change — start again." });
+    }
+    const code = (req.body as { code?: string } | undefined)?.code;
+    if (typeof code !== "string" || !/^\d{6}$/.test(code)) {
+      return reply.code(400).send({ error: "Enter the 6-digit code." });
+    }
+    const session = stmts.otp.activeForEmail.get(user.email, Date.now());
+    if (!session) {
+      return reply.code(400).send({ error: "No pending code — start the change again." });
+    }
+    if (session.attempts >= MAX_OTP_ATTEMPTS) {
+      stmts.otp.delete.run(session.id);
+      return reply.code(429).send({ error: "Too many attempts — start the change again." });
+    }
+    if (!timingSafeEqualHex(hashCode(code), session.code_hash)) {
+      stmts.otp.bumpAttempts.run(session.id);
+      return reply.code(400).send({ error: "Incorrect code." });
+    }
+    stmts.otp.delete.run(session.id);
+
+    const now = Date.now();
+    db.prepare(
+      "UPDATE users SET wallet_password_hash = ?, pending_wallet_password_hash = NULL, wallet_password_set_at = ?, updated_at = ? WHERE id = ?"
+    ).run(pending, now, now, user.id);
+
+    return reply.send({ ok: true });
+  });
+
   // POST /internal/users/:id/wallet-status
   app.post("/internal/users/:id/wallet-status", async (req: any, reply) => {
     if (!requireInternal(req, reply)) return;

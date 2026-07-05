@@ -12,7 +12,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-context";
-import { mySessions, type MySessionRow, currentSessionId } from "@/lib/auth-client";
+import {
+  mySessions,
+  type MySessionRow,
+  currentSessionId,
+  changeWalletPassword,
+  confirmWalletPasswordChange
+} from "@/lib/auth-client";
 
 function relTime(ms: number): string {
   const s = Math.floor((Date.now() - ms) / 1000);
@@ -108,8 +114,12 @@ function SecurityInner() {
         Your <em className="font-serif-i text-white/60">sessions</em>.
       </h1>
       <p className="text-white/60 text-sm mt-4 mb-8">
-        Every device where you're signed in. Revoke any session if you don't recognize it.
+        Manage your wallet password and every device where you're signed in.
       </p>
+
+      <WalletPasswordCard walletStatus={user?.walletStatus} />
+
+      <div className="mt-10" />
 
       {error && (
         <div className="mb-6 text-sm text-red-300 bg-red-950/40 border border-red-900/40 rounded-lg px-4 py-3">
@@ -180,5 +190,186 @@ function SecurityInner() {
         was rotated (auto-renewed), revoking either form kills the whole chain.
       </p>
     </div>
+  );
+}
+
+/**
+ * Change the wallet spending password (the key that guards in-platform spend +
+ * withdrawals). Verify current → set new → confirm with a branded OTP.
+ */
+function WalletPasswordCard({ walletStatus }: { walletStatus?: string }) {
+  const [stage, setStage] = useState<"idle" | "form" | "otp" | "done">("idle");
+  const [cur, setCur] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Only meaningful once a wallet password exists (i.e. past pending_password).
+  if (!walletStatus || walletStatus === "pending_password") return null;
+
+  const reset = () => {
+    setCur("");
+    setNext("");
+    setConfirm("");
+    setCode("");
+    setErr(null);
+  };
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    if (next !== confirm) {
+      setErr("New passwords don't match.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await changeWalletPassword(cur, next);
+      setStage("otp");
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmChange(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    setBusy(true);
+    try {
+      await confirmWalletPasswordChange(code.trim());
+      reset();
+      setStage("done");
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const inputCls =
+    "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-white/20";
+
+  return (
+    <section className="liquid-glass rounded-3xl p-6 md:p-8">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase mb-1.5">
+            Wallet password
+          </p>
+          <p className="text-white text-base font-medium">
+            The password that authorizes spending &amp; withdrawals
+          </p>
+          <p className="text-white/50 text-sm mt-1 leading-relaxed">
+            Required for in-platform payments; withdrawals also need an emailed code.
+          </p>
+        </div>
+        {stage === "idle" && (
+          <button
+            type="button"
+            onClick={() => {
+              reset();
+              setStage("form");
+            }}
+            className="shrink-0 rounded-full bg-white text-black text-sm font-medium px-5 py-2.5 hover:bg-white/90 transition-colors"
+          >
+            Change
+          </button>
+        )}
+      </div>
+
+      {stage === "done" && (
+        <p className="text-emerald-300 text-sm mt-4">
+          ✓ Wallet password updated.
+        </p>
+      )}
+
+      {err && <p className="text-rose-300 text-sm mt-4">{err}</p>}
+
+      {stage === "form" && (
+        <form onSubmit={submit} className="mt-5 space-y-3 max-w-sm">
+          <input
+            type="password"
+            autoComplete="current-password"
+            value={cur}
+            onChange={(e) => setCur(e.target.value)}
+            placeholder="Current password"
+            className={inputCls}
+          />
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={next}
+            onChange={(e) => setNext(e.target.value)}
+            placeholder="New password (min 12, a letter + a number)"
+            className={inputCls}
+          />
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            placeholder="Confirm new password"
+            className={inputCls}
+          />
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              type="submit"
+              disabled={busy || !cur || next.length < 12 || !confirm}
+              className="rounded-full bg-white text-black text-sm font-medium px-5 py-2.5 hover:bg-white/90 disabled:opacity-40 transition-colors"
+            >
+              {busy ? "Sending code…" : "Continue"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                reset();
+                setStage("idle");
+              }}
+              className="text-white/50 hover:text-white text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
+      {stage === "otp" && (
+        <form onSubmit={confirmChange} className="mt-5 space-y-3 max-w-sm">
+          <p className="text-white/60 text-sm">
+            We emailed a 6-digit code to confirm the change.
+          </p>
+          <input
+            inputMode="numeric"
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            placeholder="6-digit code"
+            className={`${inputCls} tracking-[0.3em] font-mono`}
+          />
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              type="submit"
+              disabled={busy || code.length !== 6}
+              className="rounded-full bg-white text-black text-sm font-medium px-5 py-2.5 hover:bg-white/90 disabled:opacity-40 transition-colors"
+            >
+              {busy ? "Confirming…" : "Confirm change"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                reset();
+                setStage("idle");
+              }}
+              className="text-white/50 hover:text-white text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+    </section>
   );
 }
