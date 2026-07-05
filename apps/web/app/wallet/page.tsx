@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-context";
 import { authedFetch, exitLiquidity } from "@/lib/auth-client";
 import { QrCode } from "@/components/qr-code";
+import { QrScanner } from "@/components/qr-scanner";
 
 const WALLET_BASE =
   process.env.NEXT_PUBLIC_WALLET_BASE || "http://localhost:4201";
@@ -706,6 +707,7 @@ function WithdrawModal({
   const [chain, setChain] = useState<Chain | "">(fundedChains[0]?.chain ?? "");
   const chainRow = fundedChains.find((c) => c.chain === chain);
   const [dest, setDest] = useState("");
+  const [scanOpen, setScanOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -817,13 +819,40 @@ function WithdrawModal({
             </Field>
 
             <Field label="Recipient address">
-              <input
-                value={dest}
-                onChange={(e) => setDest(e.target.value)}
-                placeholder="Paste destination wallet address"
-                className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20 font-mono text-sm"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  value={dest}
+                  onChange={(e) => setDest(e.target.value)}
+                  placeholder="Paste or scan destination address"
+                  className="flex-1 min-w-0 bg-[#1A1A1A] rounded-xl h-11 px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20 font-mono text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setScanOpen(true)}
+                  aria-label="Scan QR code"
+                  title="Scan a QR code"
+                  className="shrink-0 h-11 px-3 rounded-xl ring-1 ring-white/15 text-white/80 hover:bg-white/5 inline-flex items-center gap-1.5 text-sm"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 9V5a2 2 0 0 1 2-2h4" />
+                    <path d="M21 9V5a2 2 0 0 0-2-2h-4" />
+                    <path d="M3 15v4a2 2 0 0 0 2 2h4" />
+                    <path d="M21 15v4a2 2 0 0 1-2 2h-4" />
+                    <path d="M7 12h10" />
+                  </svg>
+                  Scan
+                </button>
+              </div>
             </Field>
+            {scanOpen && (
+              <QrScanner
+                onResult={(addr) => {
+                  setDest(addr);
+                  setScanOpen(false);
+                }}
+                onClose={() => setScanOpen(false)}
+              />
+            )}
 
             <Field label="Amount">
               <div className="relative">
