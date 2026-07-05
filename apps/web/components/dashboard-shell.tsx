@@ -245,25 +245,30 @@ function Sidebar({
   const initial = (firstName || "G").charAt(0).toUpperCase();
   return (
     <aside className={className}>
-      <div className="liquid-glass rounded-[32px] p-3 flex flex-col w-full h-full relative">
-        {/* Collapse / expand toggle — a glass tab on the rail's right edge. */}
-        {onToggle && (
-          <button
-            type="button"
-            onClick={onToggle}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="hidden md:grid place-items-center absolute -right-3 top-8 z-10 h-7 w-7 rounded-full liquid-glass text-white/70 hover:text-white"
+      {/* Collapse / expand toggle — sits OUTSIDE the glass (which clips overflow)
+          so it can hang off the rail's right edge without being cut off. */}
+      {onToggle && (
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="hidden md:grid place-items-center absolute -right-3.5 top-1/2 -translate-y-1/2 z-50 h-8 w-8 rounded-full text-white/80 hover:text-white shadow-lg"
+          style={{
+            background: "rgba(22,20,46,0.92)",
+            backdropFilter: "blur(12px)",
+            border: "1px solid rgba(255,255,255,0.12)"
+          }}
+        >
+          <svg
+            width="15" height="15" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+            className={`transition-transform duration-300 ${collapsed ? "" : "rotate-180"}`}
           >
-            <svg
-              width="15" height="15" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
-              className={`transition-transform duration-300 ${collapsed ? "" : "rotate-180"}`}
-            >
-              <path d="m9 6 6 6-6 6" />
-            </svg>
-          </button>
-        )}
-
+            <path d="m9 6 6 6-6 6" />
+          </svg>
+        </button>
+      )}
+      <div className="liquid-glass rounded-[32px] p-3 flex flex-col w-full h-full">
         {/* Brand */}
         <div className={`flex items-center gap-2.5 px-2.5 py-2 ${collapsed ? "justify-center" : ""}`}>
           <Link href="/" onClick={onNavigate} className="flex items-center gap-2.5 min-w-0">
