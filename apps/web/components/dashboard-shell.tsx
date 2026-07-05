@@ -58,7 +58,7 @@ const LogoutIcon = (p: IconProps) => (
 const NAV_ITEMS: { href: string; label: string; Icon: (p: IconProps) => JSX.Element }[] = [
   { href: "/", label: "Home", Icon: HomeIcon },
   { href: "/wallet", label: "Wallet", Icon: WalletIcon },
-  { href: "/community", label: "Community", Icon: UsersIcon },
+  { href: "/community", label: "Circle", Icon: UsersIcon },
   { href: "/studio", label: "Studio", Icon: StudioIcon },
   { href: "/account/security", label: "Security", Icon: ShieldIcon },
   { href: "/settings", label: "Settings", Icon: GearIcon }

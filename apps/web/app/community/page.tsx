@@ -91,9 +91,9 @@ export default function CommunityPage() {
 
   return (
     <div className="max-w-5xl mx-auto">
-      <p className="text-white/40 text-xs tracking-[0.3em] uppercase">Community</p>
+      <p className="text-white/40 text-xs tracking-[0.3em] uppercase">Circle</p>
       <h1 className="font-serif text-5xl md:text-6xl tracking-tight mt-2">
-        The <em className="font-serif-i text-white/60">circle</em>.
+        The <em className="font-serif-i text-white/60">Circle</em>.
       </h1>
       <p className="text-white/70 text-base md:text-lg leading-relaxed mt-6 max-w-2xl">
         Discuss and react to proposals. Voting requires an active wallet

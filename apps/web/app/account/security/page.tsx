@@ -17,7 +17,9 @@ import {
   type MySessionRow,
   currentSessionId,
   changeWalletPassword,
-  confirmWalletPasswordChange
+  confirmWalletPasswordChange,
+  lockWallet,
+  unlockWallet
 } from "@/lib/auth-client";
 
 function relTime(ms: number): string {
@@ -118,6 +120,10 @@ function SecurityInner() {
       </p>
 
       <WalletPasswordCard walletStatus={user?.walletStatus} />
+
+      <div className="mt-6">
+        <LockWalletCard />
+      </div>
 
       <div className="mt-10" />
 
@@ -368,6 +374,115 @@ function WalletPasswordCard({ walletStatus }: { walletStatus?: string }) {
               Cancel
             </button>
           </div>
+        </form>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Freeze / unlock the wallet. Locking is instant (panic switch); unlocking
+ * requires the wallet password. A locked wallet blocks all spend + withdrawals
+ * (enforced server-side in /auth/wallet-password/verify).
+ */
+function LockWalletCard() {
+  const { user, refreshUser } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [pwd, setPwd] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+
+  const status = user?.walletStatus;
+  if (!user || (status !== "active" && status !== "locked")) return null;
+  const locked = status === "locked";
+
+  async function lock() {
+    if (
+      !window.confirm(
+        "Freeze your wallet? All spending and withdrawals stop until you unlock it."
+      )
+    )
+      return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await lockWallet();
+      await refreshUser();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function unlock(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr(null);
+    try {
+      await unlockWallet(pwd);
+      setPwd("");
+      await refreshUser();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const inputCls =
+    "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-white/20";
+
+  return (
+    <section
+      className={`liquid-glass rounded-3xl p-6 md:p-8 ${
+        locked ? "ring-1 ring-amber-300/30" : ""
+      }`}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase mb-1.5">
+            Wallet lock
+          </p>
+          <p className="text-white text-base font-medium">
+            {locked ? "Your wallet is frozen" : "Freeze your wallet"}
+          </p>
+          <p className="text-white/50 text-sm mt-1 leading-relaxed">
+            {locked
+              ? "Spending and withdrawals are blocked. Unlock with your wallet password to resume."
+              : "A panic switch — instantly blocks all spending and withdrawals if you suspect your account is at risk."}
+          </p>
+        </div>
+        {!locked && (
+          <button
+            type="button"
+            onClick={lock}
+            disabled={busy}
+            className="shrink-0 rounded-full bg-rose-500/90 text-white text-sm font-medium px-5 py-2.5 hover:bg-rose-500 disabled:opacity-40 transition-colors"
+          >
+            {busy ? "Locking…" : "Freeze wallet"}
+          </button>
+        )}
+      </div>
+
+      {err && <p className="text-rose-300 text-sm mt-4">{err}</p>}
+
+      {locked && (
+        <form onSubmit={unlock} className="mt-5 flex flex-col sm:flex-row gap-3 max-w-md">
+          <input
+            type="password"
+            autoComplete="current-password"
+            value={pwd}
+            onChange={(e) => setPwd(e.target.value)}
+            placeholder="Wallet password"
+            className={inputCls}
+          />
+          <button
+            type="submit"
+            disabled={busy || !pwd}
+            className="shrink-0 rounded-full bg-white text-black text-sm font-medium px-6 py-3 hover:bg-white/90 disabled:opacity-40 transition-colors"
+          >
+            {busy ? "Unlocking…" : "Unlock"}
+          </button>
         </form>
       )}
     </section>

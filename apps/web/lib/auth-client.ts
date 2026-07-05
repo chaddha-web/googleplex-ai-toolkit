@@ -297,6 +297,24 @@ export async function confirmWalletPasswordChange(code: string): Promise<void> {
   if (!res.ok) throw new Error(data.error || "Could not verify the code.");
 }
 
+/** Freeze the wallet — blocks all spending until unlocked. Instant, no password. */
+export async function lockWallet(): Promise<void> {
+  const res = await authedFetch(`${AUTH_BASE}/auth/wallet/lock`, { method: "POST" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not lock wallet.");
+}
+
+/** Unlock the wallet — requires the wallet password. */
+export async function unlockWallet(password: string): Promise<void> {
+  const res = await authedFetch(`${AUTH_BASE}/auth/wallet/unlock`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not unlock wallet.");
+}
+
 export type ProfilePayload = {
   age: number;
   country: string;

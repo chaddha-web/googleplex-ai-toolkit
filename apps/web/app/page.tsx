@@ -223,7 +223,7 @@ function WalletBanner({ status }: { status?: WalletStatus }) {
     ? "Finish wallet setup"
     : "Complete your $1 activation deposit";
   const sub = isPasswordPending
-    ? "Studio publishing and Community joining are locked until your wallet is active."
+    ? "Studio publishing and the Circle are locked until your wallet is active."
     : "We're waiting for your $1 USDT/USDC to land on-chain.";
   return (
     <a

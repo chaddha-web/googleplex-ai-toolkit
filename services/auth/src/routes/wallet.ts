@@ -196,6 +196,15 @@ export async function walletRoutes(app: FastifyInstance) {
     const user = await requireAuth(req, reply);
     if (!user) return;
 
+    // A locked wallet blocks all spending — this endpoint is the single gate
+    // the wallet service calls before withdrawals + Studio unlock, so failing
+    // here freezes both.
+    if (user.wallet_status === "locked") {
+      return reply.code(423).send({
+        error: "Your wallet is locked. Unlock it from Security to spend."
+      });
+    }
+
     const body = (req.body ?? {}) as WalletPasswordBody;
     const pwd = body.password;
 
@@ -300,6 +309,49 @@ export async function walletRoutes(app: FastifyInstance) {
     ).run(pending, now, now, user.id);
 
     return reply.send({ ok: true });
+  });
+
+  // POST /auth/wallet/lock — freeze the wallet (panic switch). Instant, no
+  // password, so a user who fears compromise can stop all spend immediately.
+  app.post("/auth/wallet/lock", async (req, reply) => {
+    const user = await requireAuth(req, reply);
+    if (!user) return;
+    if (user.wallet_status !== "active") {
+      return reply.code(400).send({ error: "Only an active wallet can be locked." });
+    }
+    const now = Date.now();
+    stmts.user.updateWalletStatus.run({
+      id: user.id,
+      wallet_status: "locked",
+      wallet_status_changed_at: now,
+      initial_deposit_credited_usd: user.initial_deposit_credited_usd,
+      initial_deposit_completed_at: user.initial_deposit_completed_at,
+      updated_at: now
+    });
+    return reply.send({ ok: true, walletStatus: "locked" });
+  });
+
+  // POST /auth/wallet/unlock — re-enable spending. Requires the wallet password.
+  app.post("/auth/wallet/unlock", async (req, reply) => {
+    const user = await requireAuth(req, reply);
+    if (!user) return;
+    if (user.wallet_status !== "locked") {
+      return reply.code(400).send({ error: "Wallet isn't locked." });
+    }
+    const pwd = (req.body as { password?: string } | undefined)?.password;
+    if (!pwd || !user.wallet_password_hash || !(await argon2.verify(user.wallet_password_hash, pwd))) {
+      return reply.code(401).send({ error: "Incorrect password." });
+    }
+    const now = Date.now();
+    stmts.user.updateWalletStatus.run({
+      id: user.id,
+      wallet_status: "active",
+      wallet_status_changed_at: now,
+      initial_deposit_credited_usd: user.initial_deposit_credited_usd,
+      initial_deposit_completed_at: user.initial_deposit_completed_at,
+      updated_at: now
+    });
+    return reply.send({ ok: true, walletStatus: "active" });
   });
 
   // POST /internal/users/:id/wallet-status
