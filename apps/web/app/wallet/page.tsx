@@ -975,9 +975,38 @@ const DEPOSIT_ASSETS: DepositAsset[] = [
   { sym: "PARTY", chains: [{ label: "Tron · TRC20", key: "tron" }] }
 ];
 
+// Chain → the coin whose logo represents that network in the picker.
+const CHAIN_COIN: Record<Chain, string> = {
+  eth: "ETH",
+  bsc: "BNB",
+  tron: "TRX",
+  btc: "BTC"
+};
+
 function DepositSection({ addrs }: { addrs: ChainAddrs | null }) {
   const [open, setOpen] = useState<string | null>(null);
+  const [selChain, setSelChain] = useState<Chain | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const ready = addrs && (addrs.eth || addrs.bsc || addrs.tron || addrs.btc);
+
+  const openAsset = DEPOSIT_ASSETS.find((a) => a.sym === open) ?? null;
+  const availChains = openAsset
+    ? openAsset.chains.filter((c) => addrs?.[c.key])
+    : [];
+  const activeChain =
+    availChains.find((c) => c.key === selChain) ?? availChains[0] ?? null;
+  const address = activeChain ? addrs?.[activeChain.key] ?? "" : "";
+
+  function selectCoin(sym: string) {
+    setMenuOpen(false);
+    if (open === sym) {
+      setOpen(null);
+      return;
+    }
+    setOpen(sym);
+    const a = DEPOSIT_ASSETS.find((x) => x.sym === sym);
+    setSelChain(a?.chains.find((c) => addrs?.[c.key])?.key ?? null);
+  }
 
   return (
     <section className="mt-12">
@@ -1001,7 +1030,7 @@ function DepositSection({ addrs }: { addrs: ChainAddrs | null }) {
                 <button
                   key={a.sym}
                   type="button"
-                  onClick={() => setOpen(active ? null : a.sym)}
+                  onClick={() => selectCoin(a.sym)}
                   className={`rounded-2xl px-3 py-3 text-sm font-medium transition-colors flex flex-col items-center gap-1.5 ${
                     active
                       ? "bg-white text-black"
@@ -1015,22 +1044,70 @@ function DepositSection({ addrs }: { addrs: ChainAddrs | null }) {
             })}
           </div>
 
-          {open && (
-            <div className="mt-4 space-y-2">
-              {DEPOSIT_ASSETS.find((a) => a.sym === open)!.chains.map((c) => {
-                const address = addrs[c.key];
-                if (!address) return null;
-                return (
-                  <AddressRow
-                    key={c.key}
-                    chain={`${open} · ${c.label}`}
-                    address={address}
-                  />
-                );
-              })}
-              <p className="text-white/30 text-xs mt-2">
-                Only send <span className="text-white/60">{open}</span> on the
-                selected network. Sending the wrong asset or network can lose funds.
+          {openAsset && activeChain && address && (
+            <div className="mt-4 liquid-glass rounded-3xl p-5 max-w-md">
+              {/* Network selector — dropdown (logo + name) when multi-chain. */}
+              {availChains.length > 1 ? (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setMenuOpen((v) => !v)}
+                    aria-haspopup="listbox"
+                    aria-expanded={menuOpen}
+                    className="w-full flex items-center gap-3 rounded-2xl bg-white/5 ring-1 ring-white/10 px-4 py-3 hover:bg-white/[0.07] transition-colors"
+                  >
+                    <CoinIcon sym={CHAIN_COIN[activeChain.key]} size={22} />
+                    <span className="text-white text-sm">{activeChain.label}</span>
+                    <svg
+                      width="16" height="16" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                      className={`ml-auto text-white/50 transition-transform ${menuOpen ? "rotate-180" : ""}`}
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </button>
+                  {menuOpen && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-30"
+                        onClick={() => setMenuOpen(false)}
+                        aria-hidden="true"
+                      />
+                      <div className="absolute z-40 left-0 right-0 mt-2 liquid-glass rounded-2xl p-1.5">
+                        {availChains.map((c) => (
+                          <button
+                            key={c.key}
+                            type="button"
+                            onClick={() => {
+                              setSelChain(c.key);
+                              setMenuOpen(false);
+                            }}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/10 text-left transition-colors"
+                          >
+                            <CoinIcon sym={CHAIN_COIN[c.key]} size={20} />
+                            <span className="text-white text-sm">{c.label}</span>
+                            {c.key === activeChain.key && (
+                              <span className="ml-auto text-white/50 text-sm">✓</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-3 rounded-2xl bg-white/5 ring-1 ring-white/10 px-4 py-3">
+                  <CoinIcon sym={CHAIN_COIN[activeChain.key]} size={22} />
+                  <span className="text-white text-sm">{activeChain.label}</span>
+                </div>
+              )}
+
+              <FocusedAddress address={address} />
+
+              <p className="text-white/30 text-xs mt-3">
+                Only send <span className="text-white/60">{openAsset.sym}</span> on{" "}
+                <span className="text-white/60">{activeChain.label}</span>. Sending the
+                wrong asset or network can lose funds.
               </p>
             </div>
           )}
@@ -1040,9 +1117,9 @@ function DepositSection({ addrs }: { addrs: ChainAddrs | null }) {
   );
 }
 
-function AddressRow({ chain, address }: { chain: string; address: string }) {
+// QR (always visible) + the address in a single click-to-copy box.
+function FocusedAddress({ address }: { address: string }) {
   const [copied, setCopied] = useState(false);
-  const [showQr, setShowQr] = useState(false);
   async function copy() {
     try {
       await navigator.clipboard.writeText(address);
@@ -1053,36 +1130,21 @@ function AddressRow({ chain, address }: { chain: string; address: string }) {
     }
   }
   return (
-    <div className="liquid-glass rounded-2xl p-4">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase mb-1">{chain}</p>
-          <p className="font-mono text-xs text-white/80 break-all">{address}</p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => setShowQr((v) => !v)}
-            className="text-xs text-white/70 hover:text-white transition-colors px-3 py-2 rounded-full ring-1 ring-white/10 hover:ring-white/30"
-          >
-            {showQr ? "Hide QR" : "Show QR"}
-          </button>
-          <button
-            type="button"
-            onClick={copy}
-            className="text-xs text-white/70 hover:text-white transition-colors px-3 py-2 rounded-full ring-1 ring-white/10 hover:ring-white/30"
-          >
-            {copied ? "Copied ✓" : "Copy"}
-          </button>
-        </div>
+    <div className="mt-4 flex flex-col items-center">
+      <div className="p-3 bg-white rounded-2xl">
+        <QrCode value={address} size={172} />
       </div>
-      {showQr && (
-        <div className="mt-4 flex justify-center">
-          <div className="p-3 bg-white rounded-2xl">
-            <QrCode value={address} size={176} />
-          </div>
-        </div>
-      )}
+      <button
+        type="button"
+        onClick={copy}
+        title="Copy address"
+        className="mt-4 w-full group flex items-center gap-3 rounded-2xl bg-white/5 ring-1 ring-white/10 px-4 py-3 hover:bg-white/[0.07] transition-colors text-left"
+      >
+        <span className="font-mono text-xs text-white/85 break-all flex-1">{address}</span>
+        <span className="shrink-0 text-xs font-medium text-white/60 group-hover:text-white">
+          {copied ? "Copied ✓" : "Copy"}
+        </span>
+      </button>
     </div>
   );
 }
