@@ -77,6 +77,23 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+
+  // Persist the collapsed rail preference.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setCollapsed(window.localStorage.getItem("gplex.nav_collapsed") === "1");
+  }, []);
+  const toggleCollapsed = () =>
+    setCollapsed((v) => {
+      const next = !v;
+      try {
+        window.localStorage.setItem("gplex.nav_collapsed", next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
 
   useEffect(() => {
     setMenuOpen(false);
@@ -126,13 +143,18 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         backgroundColor: "#0a0b1a"
       }}
     >
-      {/* Full-height sidebar — desktop */}
+      {/* Full-height sidebar — desktop. Width animates between the icon rail and
+          the full labelled rail. */}
       <Sidebar
         pathname={pathname}
         firstName={user?.firstName ?? ""}
         email={user?.email ?? ""}
         onSignOut={onSignOut}
-        className="hidden md:flex fixed inset-y-3 left-3 w-60 z-40"
+        collapsed={collapsed}
+        onToggle={toggleCollapsed}
+        className={`hidden md:flex fixed inset-y-3 left-3 z-40 transition-[width] duration-300 ease-out ${
+          collapsed ? "w-[76px]" : "w-60"
+        }`}
       />
 
       {/* Mobile: floating glass hamburger */}
@@ -162,6 +184,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             firstName={user?.firstName ?? ""}
             email={user?.email ?? ""}
             onSignOut={onSignOut}
+            collapsed={false}
             onNavigate={() => setMenuOpen(false)}
             showClose
             onClose={() => setMenuOpen(false)}
@@ -170,8 +193,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         </>
       )}
 
-      {/* Content — shifted right on desktop to clear the sidebar. */}
-      <div className="md:pl-[16.25rem]">
+      {/* Content — shifted right on desktop to clear the sidebar; the padding
+          animates with the rail width. */}
+      <div
+        className={`transition-[padding] duration-300 ease-out ${
+          collapsed ? "md:pl-[6.25rem]" : "md:pl-[16.25rem]"
+        }`}
+      >
         <main className="min-h-screen px-6 md:px-10 pt-20 md:pt-10 pb-10">
           {children}
         </main>
@@ -196,6 +224,8 @@ function Sidebar({
   firstName,
   email,
   onSignOut,
+  collapsed = false,
+  onToggle,
   className = "",
   onNavigate,
   showClose,
@@ -205,6 +235,8 @@ function Sidebar({
   firstName: string;
   email: string;
   onSignOut: () => void;
+  collapsed?: boolean;
+  onToggle?: () => void;
   className?: string;
   onNavigate?: () => void;
   showClose?: boolean;
@@ -213,13 +245,33 @@ function Sidebar({
   const initial = (firstName || "G").charAt(0).toUpperCase();
   return (
     <aside className={className}>
-      <div className="liquid-glass rounded-[28px] p-3 flex flex-col w-full h-full">
+      <div className="liquid-glass rounded-[32px] p-3 flex flex-col w-full h-full relative">
+        {/* Collapse / expand toggle — a glass tab on the rail's right edge. */}
+        {onToggle && (
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="hidden md:grid place-items-center absolute -right-3 top-8 z-10 h-7 w-7 rounded-full liquid-glass text-white/70 hover:text-white"
+          >
+            <svg
+              width="15" height="15" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+              className={`transition-transform duration-300 ${collapsed ? "" : "rotate-180"}`}
+            >
+              <path d="m9 6 6 6-6 6" />
+            </svg>
+          </button>
+        )}
+
         {/* Brand */}
-        <div className="flex items-center gap-2.5 px-2.5 py-2">
+        <div className={`flex items-center gap-2.5 px-2.5 py-2 ${collapsed ? "justify-center" : ""}`}>
           <Link href="/" onClick={onNavigate} className="flex items-center gap-2.5 min-w-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="GoogolPlex" className="h-8 w-8 object-contain rounded-full" />
-            <span className="font-medium tracking-tight text-[15px]">GoogolPlex</span>
+            <img src="/logo.png" alt="GoogolPlex" className="h-8 w-8 object-contain rounded-full shrink-0" />
+            {!collapsed && (
+              <span className="font-medium tracking-tight text-[15px] whitespace-nowrap">GoogolPlex</span>
+            )}
           </Link>
           {showClose && (
             <button
@@ -237,7 +289,7 @@ function Sidebar({
         </div>
 
         {/* Nav */}
-        <nav className="mt-2 flex flex-col gap-1 overflow-y-auto">
+        <nav className="mt-2 flex flex-col gap-1 overflow-y-auto overflow-x-hidden">
           {NAV_ITEMS.map(({ href, label, Icon }) => {
             const active =
               href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -246,12 +298,13 @@ function Sidebar({
                 key={href}
                 href={href}
                 onClick={onNavigate}
-                className={`nav-pill ${active ? "nav-pill-active" : ""}`}
+                title={collapsed ? label : undefined}
+                className={`nav-pill ${active ? "nav-pill-active" : ""} ${collapsed ? "justify-center px-0" : ""}`}
               >
                 <span className="nav-pill-icon">
                   <Icon />
                 </span>
-                {label}
+                {!collapsed && <span className="whitespace-nowrap">{label}</span>}
               </Link>
             );
           })}
@@ -260,42 +313,53 @@ function Sidebar({
         {/* Spacer pushes the loop + account row to the bottom. */}
         <div className="flex-1 min-h-4" />
 
-        {/* Ambient brand loop */}
-        <div className="px-1.5">
-          <div className="w-full aspect-[5/3] overflow-hidden rounded-2xl ring-1 ring-white/10">
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-            <video
-              src={SIDEBAR_VIDEO_URL}
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="h-full w-full object-cover"
-            />
+        {/* Ambient brand loop — hidden on the narrow rail. */}
+        {!collapsed && (
+          <div className="px-1.5">
+            <div className="w-full aspect-[5/3] overflow-hidden rounded-2xl ring-1 ring-white/10">
+              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+              <video
+                src={SIDEBAR_VIDEO_URL}
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="h-full w-full object-cover"
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Account row — replaces the old top bar. */}
-        <div className="mt-3 pt-3 border-t border-white/10 flex items-center gap-3 px-1.5">
+        <div
+          className={`mt-3 pt-3 border-t border-white/10 flex items-center gap-3 ${
+            collapsed ? "justify-center px-0" : "px-1.5"
+          }`}
+        >
           <div
             className="h-9 w-9 rounded-full grid place-items-center text-sm font-semibold shrink-0"
             style={{ background: "linear-gradient(160deg,#8A68FF,#5A3CC8)", color: "#fff" }}
+            title={collapsed ? `${firstName || "friend"} · ${email}` : undefined}
           >
             {initial}
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium truncate">{firstName || "friend"}</p>
-            <p className="text-white/45 text-xs truncate">{email}</p>
-          </div>
-          <button
-            type="button"
-            onClick={onSignOut}
-            aria-label="Sign out"
-            title="Sign out"
-            className="shrink-0 p-2 rounded-xl text-white/55 hover:text-white hover:bg-white/10 transition-colors"
-          >
-            <LogoutIcon />
-          </button>
+          {!collapsed && (
+            <>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium truncate">{firstName || "friend"}</p>
+                <p className="text-white/45 text-xs truncate">{email}</p>
+              </div>
+              <button
+                type="button"
+                onClick={onSignOut}
+                aria-label="Sign out"
+                title="Sign out"
+                className="shrink-0 p-2 rounded-xl text-white/55 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <LogoutIcon />
+              </button>
+            </>
+          )}
         </div>
       </div>
     </aside>
