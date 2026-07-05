@@ -33,6 +33,39 @@ const DECIMALS: Record<string, number> = {
 const decimalsFor = (chain: string, symbol: string) =>
   DECIMALS[`${chain}:${symbol}`] ?? 18;
 
+// Self-hosted coin logos (fetched once into the media bucket). PARTY reuses the
+// brand PNG; the rest are SVGs. Falls back to a text glyph if one is missing.
+const COIN_LOGO_BASE = "https://ggakingclub.com/media/coins";
+const COIN_LOGO_EXT: Record<string, string> = { PARTY: "png" };
+const coinLogoUrl = (sym: string) =>
+  `${COIN_LOGO_BASE}/${sym.toLowerCase()}.${COIN_LOGO_EXT[sym] ?? "svg"}`;
+
+function CoinIcon({ sym, size = 28 }: { sym: string; size?: number }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <span
+        className="rounded-full grid place-items-center bg-white/10 text-white/70 text-[9px] font-semibold shrink-0"
+        style={{ width: size, height: size }}
+      >
+        {sym.slice(0, 3)}
+      </span>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={coinLogoUrl(sym)}
+      alt={sym}
+      width={size}
+      height={size}
+      onError={() => setFailed(true)}
+      className="rounded-full shrink-0 object-contain"
+      style={{ width: size, height: size }}
+    />
+  );
+}
+
 const CHAIN_LABEL: Record<Chain, string> = {
   eth: "Ethereum (ERC20)",
   bsc: "BSC (BEP20)",
@@ -205,7 +238,10 @@ export default function WalletPage() {
                 {fundedAssets.map((a) => (
                   <li key={a.asset} className="liquid-glass rounded-2xl p-5">
                     <div className="flex items-center justify-between">
-                      <span className="text-white text-lg">{a.asset}</span>
+                      <span className="flex items-center gap-3 text-white text-lg">
+                        <CoinIcon sym={a.asset} />
+                        {a.asset}
+                      </span>
                       <span className="text-right">
                         <span className="block font-mono text-base text-white">
                           {fmt(a.total)} {a.asset}
@@ -966,12 +1002,13 @@ function DepositSection({ addrs }: { addrs: ChainAddrs | null }) {
                   key={a.sym}
                   type="button"
                   onClick={() => setOpen(active ? null : a.sym)}
-                  className={`rounded-2xl px-3 py-3 text-sm font-medium transition-colors ${
+                  className={`rounded-2xl px-3 py-3 text-sm font-medium transition-colors flex flex-col items-center gap-1.5 ${
                     active
                       ? "bg-white text-black"
                       : "liquid-glass text-white hover:bg-white/5"
                   }`}
                 >
+                  <CoinIcon sym={a.sym} size={22} />
                   {a.sym}
                 </button>
               );
