@@ -210,30 +210,21 @@ function ToggleRow({
   desc,
   checked,
   disabled,
-  locked,
   onChange
 }: {
   label: string;
   desc: string;
   checked: boolean;
   disabled?: boolean;
-  locked?: boolean;
   onChange?: () => void;
 }) {
   return (
     <div className="flex items-start justify-between gap-4 py-1.5">
       <div className="min-w-0">
-        <p className="text-white text-sm flex items-center gap-2">
-          {label}
-          {locked && (
-            <span className="text-white/30 text-[10px] uppercase tracking-wider">
-              Always on
-            </span>
-          )}
-        </p>
+        <p className="text-white text-sm">{label}</p>
         <p className="text-white/40 text-xs mt-0.5 leading-relaxed">{desc}</p>
       </div>
-      <Toggle checked={checked} disabled={disabled || locked} onChange={onChange} />
+      <Toggle checked={checked} disabled={disabled} onChange={onChange} />
     </div>
   );
 }
@@ -242,6 +233,8 @@ function NotificationsSection() {
   const { user, refreshUser } = useAuth();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [security, setSecurity] = useState(true);
+  const [funds, setFunds] = useState(true);
   const on = !!user?.notificationsOptIn;
 
   async function toggle() {
@@ -262,14 +255,14 @@ function NotificationsSection() {
       <ToggleRow
         label="Sign-in & security codes"
         desc="One-time codes for login, wallet actions, and withdrawals. Required to keep your account secure."
-        checked
-        locked
+        checked={security}
+        onChange={() => setSecurity((v) => !v)}
       />
       <ToggleRow
         label="Deposit & withdrawal alerts"
         desc="Confirmation emails whenever funds move in or out."
-        checked
-        locked
+        checked={funds}
+        onChange={() => setFunds((v) => !v)}
       />
       <ToggleRow
         label="Product & account emails"
