@@ -134,6 +134,21 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_cvotes_prop ON community_votes (proposal_id);
   CREATE INDEX IF NOT EXISTS idx_creactions_prop ON community_reactions (proposal_id);
 
+  -- ── Consent audit trail ───────────────────────────────────────────────
+  -- Append-only record of each agreement a member signs (consultation fee,
+  -- terms, privacy) with when, the device (user-agent), and the client IP.
+  -- The IP is encrypted at rest (AES-256-GCM) and never returned to clients.
+  CREATE TABLE IF NOT EXISTS consent_records (
+    id           TEXT PRIMARY KEY,
+    user_id      TEXT NOT NULL,
+    kind         TEXT NOT NULL,      -- consultation | terms | privacy
+    consented_at INTEGER NOT NULL,
+    ip_enc       TEXT,              -- encryptSecret(ip); decrypt only server-side
+    user_agent   TEXT,              -- device / browser string
+    created_at   INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_consent_user ON consent_records (user_id);
+
   -- ── Email marketing (admin campaigns) ─────────────────────────────────
   -- A campaign is the editable draft + the eventual send record. We keep
   -- the markdown source as the source of truth and re-render HTML at send
@@ -554,6 +569,17 @@ export const stmts = {
     `),
     outboxList: db.prepare(`SELECT id, from_email, to_email, subject, kind, status, sent_at FROM email_outbound ORDER BY sent_at DESC LIMIT 200`),
     outboxById: db.prepare(`SELECT * FROM email_outbound WHERE id = ?`)
+  },
+  consent: {
+    insert: db.prepare(`
+      INSERT INTO consent_records (id, user_id, kind, consented_at, ip_enc, user_agent, created_at)
+      VALUES (@id, @user_id, @kind, @consented_at, @ip_enc, @user_agent, @created_at)
+    `),
+    // Admin audit view: IP stays encrypted here; decrypt server-side only.
+    listForUser: db.prepare(`
+      SELECT id, kind, consented_at, ip_enc, user_agent, created_at
+        FROM consent_records WHERE user_id = ? ORDER BY consented_at DESC
+    `)
   }
 };
 

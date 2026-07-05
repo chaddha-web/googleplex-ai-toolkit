@@ -371,6 +371,22 @@ export async function adminUserOnchain(userId: string): Promise<number> {
   return Number(data.actualUsd ?? 0);
 }
 
+export type ConsentRecord = {
+  id: string;
+  kind: string;
+  consentedAt: number;
+  ip: string | null;
+  userAgent: string | null;
+};
+
+/** Admin: the consent audit trail (what/when/device/IP) for one member. */
+export async function adminUserConsents(userId: string): Promise<ConsentRecord[]> {
+  const res = await authedFetch(`${AUTH_BASE}/auth/admin/users/${userId}/consents`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not load consent records.");
+  return Array.isArray(data.consents) ? data.consents : [];
+}
+
 export async function promoteAdmin(code11: string): Promise<string> {
   const res = await authedFetch(`${AUTH_BASE}/auth/admin/promote`, {
     method: "POST",

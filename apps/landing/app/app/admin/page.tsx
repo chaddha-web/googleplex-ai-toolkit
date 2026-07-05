@@ -8,7 +8,9 @@ import {
   listAllUsers,
   adminWalletBalances,
   adminUserOnchain,
-  type AdminUserRow
+  adminUserConsents,
+  type AdminUserRow,
+  type ConsentRecord
 } from "@/lib/auth-client";
 
 function tierOf(u: AdminUserRow & { tokensMinted?: number }): {
@@ -33,6 +35,17 @@ export default function AdminHome() {
   // userId → usable (ledger) USD; userId → actual (on-chain) USD on demand.
   const [usable, setUsable] = useState<Record<string, number>>({});
   const [actual, setActual] = useState<Record<string, number | "loading">>({});
+  // Consent audit modal.
+  const [consentFor, setConsentFor] = useState<AdminUserRow | null>(null);
+  const [consents, setConsents] = useState<ConsentRecord[] | "loading" | null>(null);
+
+  function openConsents(u: AdminUserRow) {
+    setConsentFor(u);
+    setConsents("loading");
+    adminUserConsents(u.id)
+      .then(setConsents)
+      .catch(() => setConsents([]));
+  }
 
   // Role guard — non-admins get bounced to the user dashboard.
   useEffect(() => {
@@ -159,18 +172,19 @@ export default function AdminHome() {
                   <Th>Profile</Th>
                   <Th>Wallet</Th>
                   <Th>Joined</Th>
+                  <Th>Consent</Th>
                 </tr>
               </thead>
               <tbody>
                 {users === null ? (
                   <tr>
-                    <td colSpan={13} className="px-4 py-12 text-center text-white/40">
+                    <td colSpan={14} className="px-4 py-12 text-center text-white/40">
                       Loading users…
                     </td>
                   </tr>
                 ) : users.length === 0 ? (
                   <tr>
-                    <td colSpan={13} className="px-4 py-12 text-center text-white/40">
+                    <td colSpan={14} className="px-4 py-12 text-center text-white/40">
                       No users registered yet.
                     </td>
                   </tr>
@@ -244,6 +258,15 @@ export default function AdminHome() {
                         </span>
                       </Td>
                       <Td>{formatDate(u.createdAt)}</Td>
+                      <Td>
+                        <button
+                          type="button"
+                          onClick={() => openConsents(u)}
+                          className="text-[10px] text-white/50 hover:text-white underline decoration-dotted"
+                        >
+                          view
+                        </button>
+                      </Td>
                     </tr>
                   ))
                 )}
@@ -304,7 +327,93 @@ export default function AdminHome() {
           </button>
         </div>
       </section>
+
+      {consentFor && (
+        <ConsentModal
+          user={consentFor}
+          records={consents}
+          onClose={() => {
+            setConsentFor(null);
+            setConsents(null);
+          }}
+        />
+      )}
     </main>
+  );
+}
+
+function ConsentModal({
+  user,
+  records,
+  onClose
+}: {
+  user: AdminUserRow;
+  records: ConsentRecord[] | "loading" | null;
+  onClose: () => void;
+}) {
+  const KIND_LABEL: Record<string, string> = {
+    consultation: "Consultation fee (US$200,000)",
+    terms: "Terms & Conditions",
+    privacy: "Privacy Policy"
+  };
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6"
+      onClick={onClose}
+    >
+      <div
+        className="liquid-glass rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4 mb-1">
+          <div>
+            <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase">
+              Consent audit
+            </p>
+            <h3 className="text-lg font-medium mt-1">
+              {user.firstName} {user.lastName}
+            </h3>
+            <p className="text-white/50 text-xs">{user.email}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-white/50 hover:text-white text-sm"
+          >
+            Close
+          </button>
+        </div>
+
+        {records === "loading" || records === null ? (
+          <p className="text-white/40 text-sm mt-6">Loading…</p>
+        ) : records.length === 0 ? (
+          <p className="text-white/40 text-sm mt-6">
+            No consent records — this member signed up before the audit trail was added.
+          </p>
+        ) : (
+          <div className="mt-5 space-y-3">
+            {records.map((r) => (
+              <div key={r.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-white text-sm font-medium">
+                    {KIND_LABEL[r.kind] ?? r.kind}
+                  </span>
+                  <span className="text-white/50 text-xs font-mono">
+                    {new Date(r.consentedAt).toLocaleString()}
+                  </span>
+                </div>
+                <div className="mt-2 grid grid-cols-1 sm:grid-cols-[64px_1fr] gap-x-3 gap-y-1 text-xs">
+                  <span className="text-white/40">IP</span>
+                  <span className="text-white/70 font-mono">{r.ip ?? "—"}</span>
+                  <span className="text-white/40">Device</span>
+                  <span className="text-white/70 break-words">{r.userAgent ?? "—"}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

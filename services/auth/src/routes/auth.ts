@@ -15,6 +15,7 @@ import {
 } from "../jwt.js";
 import crypto from "node:crypto";
 import { notify } from "../notify.js";
+import { encryptSecret, decryptSecret } from "../crypto.js";
 
 // 10 billion GoogolPlex Seva Credit — generated once, on demand, by an active
 // member against their deposited $1 (see POST /auth/seva/generate).
@@ -272,6 +273,32 @@ export async function authRoutes(app: FastifyInstance) {
       updated_at: now
     });
 
+    // Consent audit trail — one immutable record per agreement, capturing the
+    // time, the device (user-agent), and the client IP (encrypted at rest,
+    // server-captured via trustProxy so it can't be spoofed by the client).
+    // Never surfaced to clients.
+    try {
+      const ua = String(req.headers["user-agent"] ?? "").slice(0, 500);
+      const ipEnc = req.ip ? encryptSecret(req.ip) : null;
+      const writeConsent = db.transaction((kinds: string[]) => {
+        for (const kind of kinds) {
+          stmts.consent.insert.run({
+            id: crypto.randomUUID(),
+            user_id: user.id,
+            kind,
+            consented_at: now,
+            ip_enc: ipEnc,
+            user_agent: ua || null,
+            created_at: now
+          });
+        }
+      });
+      writeConsent(["consultation", "terms", "privacy"]);
+    } catch (err) {
+      // Audit write must never block onboarding; log and move on.
+      req.log.error({ err }, "consent audit write failed");
+    }
+
     // Only fire on the FIRST completion — re-saving an edit shouldn't ping you.
     if (!user.profile_completed_at) {
       notify(
@@ -478,6 +505,49 @@ export async function authRoutes(app: FastifyInstance) {
         studioUnlocked: !!u.studio_unlocked_at,
         createdAt: u.created_at
       }))
+    });
+  });
+
+  // GET /auth/admin/users/:id/consents — the consent audit trail for a member:
+  // what they signed, when, on which device, and from which IP. Admin-only;
+  // the IP is decrypted here (server-side) and returned only to admins.
+  app.get("/auth/admin/users/:id/consents", async (req: any, reply) => {
+    const header = req.headers.authorization;
+    if (!header || !header.startsWith("Bearer ")) {
+      return reply.code(401).send({ error: "Missing bearer token." });
+    }
+    const claims = await verifyAccessToken(header.slice("Bearer ".length).trim());
+    if (!claims) return reply.code(401).send({ error: "Invalid or expired access token." });
+    const me = stmts.user.byId.get(claims.sub);
+    if (!me || me.role !== "admin") {
+      return reply.code(403).send({ error: "Admin access required." });
+    }
+
+    const rows = stmts.consent.listForUser.all(req.params.id) as Array<{
+      id: string;
+      kind: string;
+      consented_at: number;
+      ip_enc: string | null;
+      user_agent: string | null;
+      created_at: number;
+    }>;
+    return reply.send({
+      ok: true,
+      consents: rows.map((r) => {
+        let ip: string | null = null;
+        try {
+          ip = r.ip_enc ? decryptSecret(r.ip_enc) : null;
+        } catch {
+          ip = null; // key rotated or corrupt — surface as unavailable
+        }
+        return {
+          id: r.id,
+          kind: r.kind,
+          consentedAt: r.consented_at,
+          ip,
+          userAgent: r.user_agent
+        };
+      })
     });
   });
 }
