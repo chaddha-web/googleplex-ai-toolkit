@@ -197,27 +197,17 @@ export async function tryRestore(): Promise<User | null> {
     return me;
   }
   if (restoreInFlight) return restoreInFlight;
-  const refresh = loadRefresh();
-  if (!refresh) return null;
+  if (!loadRefresh()) return null;
   restoreInFlight = (async () => {
     try {
-      const res = await fetch(`${AUTH_BASE}/auth/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken: refresh })
-      });
-      if (!res.ok) {
-        persistRefresh(null);
-        return null;
-      }
-      const data = await res.json();
-      acceptTokens(data);
+      // Go through the shared single-flight so a concurrent authedFetch
+      // can't rotate the same token underneath us (which would trip the
+      // server's reuse detection and kill the session).
+      const access = await refreshOnce();
+      if (!access) return null;
       const me = await fetchMe();
       emit(me);
       return me;
-    } catch {
-      persistRefresh(null);
-      return null;
     } finally {
       restoreInFlight = null;
     }
@@ -563,26 +553,44 @@ async function ensureAccess(): Promise<string | null> {
   return refreshOnce();
 }
 
-async function refreshOnce(): Promise<string | null> {
+// Single-flight guard for /auth/refresh. Refresh rotation revokes the
+// presented token, and the server burns the whole family if a *revoked*
+// token is presented again (theft detection). So two concurrent refreshes
+// with the same token = one rotates, the other looks like reuse → the
+// family is torched and the user is logged out everywhere. A normal page
+// fires several protected requests at once, so this WILL happen without a
+// guard. Sharing one in-flight promise means the token rotates exactly
+// once and every concurrent caller gets the same fresh access token.
+let refreshInFlight: Promise<string | null> | null = null;
+
+function refreshOnce(): Promise<string | null> {
+  // NB: the in-flight check and assignment must be synchronous (no await
+  // between them) so concurrent callers coalesce onto one request.
+  if (refreshInFlight) return refreshInFlight;
   const refresh = loadRefresh();
-  if (!refresh) return null;
-  try {
-    const res = await fetch(`${AUTH_BASE}/auth/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken: refresh })
-    });
-    if (!res.ok) {
-      persistRefresh(null);
-      memTokens = null;
+  if (!refresh) return Promise.resolve(null);
+  refreshInFlight = (async () => {
+    try {
+      const res = await fetch(`${AUTH_BASE}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken: refresh })
+      });
+      if (!res.ok) {
+        persistRefresh(null);
+        memTokens = null;
+        return null;
+      }
+      const data = await res.json();
+      acceptTokens(data);
+      return data.accessToken as string;
+    } catch {
       return null;
+    } finally {
+      refreshInFlight = null;
     }
-    const data = await res.json();
-    acceptTokens(data);
-    return data.accessToken;
-  } catch {
-    return null;
-  }
+  })();
+  return refreshInFlight;
 }
 
 function acceptTokens(data: {
