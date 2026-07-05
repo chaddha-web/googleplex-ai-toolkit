@@ -194,7 +194,7 @@ function Toggle({
       onClick={onChange}
       className={`relative h-8 w-[62px] rounded-full shrink-0 transition-colors duration-200 shadow-inner ${
         checked ? "bg-emerald-500" : "bg-slate-600"
-      } ${onChange ? "cursor-pointer" : "cursor-default"}`}
+      } ${onChange ? "cursor-pointer" : "cursor-default opacity-40 grayscale"}`}
     >
       {/* State label sits opposite the knob, like a hardware switch. */}
       <span
@@ -244,8 +244,6 @@ function NotificationsSection() {
   const { user, refreshUser } = useAuth();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [security, setSecurity] = useState(true);
-  const [funds, setFunds] = useState(true);
   const on = !!user?.notificationsOptIn;
 
   async function toggle() {
@@ -266,14 +264,12 @@ function NotificationsSection() {
       <ToggleRow
         label="Sign-in & security codes"
         desc="One-time codes for login, wallet actions, and withdrawals. Required to keep your account secure."
-        checked={security}
-        onChange={() => setSecurity((v) => !v)}
+        checked
       />
       <ToggleRow
         label="Deposit & withdrawal alerts"
         desc="Confirmation emails whenever funds move in or out."
-        checked={funds}
-        onChange={() => setFunds((v) => !v)}
+        checked
       />
       <ToggleRow
         label="Product & account emails"
