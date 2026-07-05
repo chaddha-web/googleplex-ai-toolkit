@@ -73,14 +73,8 @@ export const TOKENS: Token[] = [
     decimals: 6,
     coingeckoId: "tether"
   },
-  {
-    symbol: "USDC",
-    chain: "tron",
-    native: false,
-    address: "TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8",
-    decimals: 6,
-    coingeckoId: "usd-coin"
-  },
+  // USDC on Tron is intentionally omitted — Circle deprecated it, so it's not a
+  // real deposit path. USDC is ERC20 + BEP20 only; USDT covers TRC20.
   {
     // ⚠ Confirm decimals on tronscan before going live.
     symbol: "PARTY",
