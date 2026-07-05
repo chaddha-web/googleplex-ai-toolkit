@@ -105,8 +105,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Copy everything we built (node_modules + sources + .next dirs).
-COPY --from=build /app /app
+# Split the copy so the big, rarely-changing node_modules layer stays cached
+# across builds — only the changed app/service output re-copies. (The old single
+# `COPY /app /app` re-copied ~1GB of node_modules on every build.) Each COPY
+# --from is cached independently by its source checksum.
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package.json /app/package-lock.json ./
+COPY --from=build /app/drizzle.config.ts ./
+COPY --from=build /app/packages ./packages
+COPY --from=build /app/apps/landing ./apps/landing
+COPY --from=build /app/apps/admin ./apps/admin
+COPY --from=build /app/apps/web ./apps/web
+COPY --from=build /app/services ./services
 
 # Default writable data dir for SQLite volumes.
 RUN mkdir -p /app/services/auth/data /app/services/wallet/data
