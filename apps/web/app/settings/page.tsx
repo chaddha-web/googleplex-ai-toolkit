@@ -192,13 +192,23 @@ function Toggle({
       aria-checked={checked}
       disabled={disabled}
       onClick={onChange}
-      className={`relative h-6 w-11 rounded-full shrink-0 transition-colors ${
-        checked ? "bg-emerald-400" : "bg-white/20"
-      } ${onChange ? "cursor-pointer" : "cursor-default"}`}
+      className={`relative h-7 w-[58px] rounded-full shrink-0 transition-colors duration-200 shadow-inner ${
+        checked ? "bg-emerald-500" : "bg-rose-500"
+      } ${onChange ? "cursor-pointer" : "cursor-default"} ${
+        disabled ? "opacity-100" : ""
+      }`}
     >
+      {/* State label sits opposite the knob, like a hardware switch. */}
       <span
-        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
-          checked ? "translate-x-[22px]" : "translate-x-0.5"
+        className={`absolute top-0 h-7 flex items-center text-[10px] font-bold tracking-wider text-white/90 select-none transition-all duration-200 ${
+          checked ? "left-2.5" : "right-2.5"
+        }`}
+      >
+        {checked ? "ON" : "OFF"}
+      </span>
+      <span
+        className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow-[0_2px_5px_rgba(0,0,0,0.35)] transition-transform duration-200 ${
+          checked ? "translate-x-[32px]" : "translate-x-0.5"
         }`}
       />
     </button>
