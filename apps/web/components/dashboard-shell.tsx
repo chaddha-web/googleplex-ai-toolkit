@@ -211,6 +211,7 @@ function Sidebar({
   onClose?: () => void;
 }) {
   const initial = (firstName || "G").charAt(0).toUpperCase();
+  const [acctOpen, setAcctOpen] = useState(false);
   return (
     <aside className={className}>
       <div className="liquid-glass rounded-[28px] p-3 flex flex-col w-full h-full">
@@ -275,26 +276,79 @@ function Sidebar({
           </div>
         </div>
 
-        {/* Account row — replaces the old top bar. */}
-        <div className="mt-3 pt-3 border-t border-white/10 flex items-center gap-3 px-1.5">
-          <div
-            className="h-9 w-9 rounded-full grid place-items-center text-sm font-semibold shrink-0"
-            style={{ background: "linear-gradient(160deg,#8A68FF,#5A3CC8)", color: "#fff" }}
-          >
-            {initial}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium truncate">{firstName || "friend"}</p>
-            <p className="text-white/45 text-xs truncate">{email}</p>
-          </div>
+        {/* Account row — replaces the old top bar. Click to open a dropdown. */}
+        <div className="mt-3 pt-3 border-t border-white/10 relative">
+          {acctOpen && (
+            <>
+              {/* click-outside catcher */}
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setAcctOpen(false)}
+                aria-hidden="true"
+              />
+              <div className="absolute bottom-full left-0 right-0 mb-2 z-50 liquid-glass rounded-2xl p-1.5">
+                <Link
+                  href="/settings"
+                  onClick={() => {
+                    setAcctOpen(false);
+                    onNavigate?.();
+                  }}
+                  className="acct-item"
+                >
+                  <GearIcon /> Settings
+                </Link>
+                <Link
+                  href="/account/security"
+                  onClick={() => {
+                    setAcctOpen(false);
+                    onNavigate?.();
+                  }}
+                  className="acct-item"
+                >
+                  <ShieldIcon /> Security
+                </Link>
+                <div className="my-1 mx-2 h-px bg-white/10" />
+                <button
+                  type="button"
+                  onClick={onSignOut}
+                  className="acct-item w-full text-left"
+                >
+                  <LogoutIcon /> Sign out
+                </button>
+              </div>
+            </>
+          )}
+
           <button
             type="button"
-            onClick={onSignOut}
-            aria-label="Sign out"
-            title="Sign out"
-            className="shrink-0 p-2 rounded-xl text-white/55 hover:text-white hover:bg-white/10 transition-colors"
+            onClick={() => setAcctOpen((v) => !v)}
+            aria-haspopup="menu"
+            aria-expanded={acctOpen}
+            className="w-full flex items-center gap-3 px-1.5 py-1.5 rounded-2xl hover:bg-white/5 transition-colors"
           >
-            <LogoutIcon />
+            <div
+              className="h-9 w-9 rounded-full grid place-items-center text-sm font-semibold shrink-0"
+              style={{ background: "linear-gradient(160deg,#8A68FF,#5A3CC8)", color: "#fff" }}
+            >
+              {initial}
+            </div>
+            <div className="min-w-0 flex-1 text-left">
+              <p className="text-sm font-medium truncate">{firstName || "friend"}</p>
+              <p className="text-white/45 text-xs truncate">{email}</p>
+            </div>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`shrink-0 text-white/50 transition-transform ${acctOpen ? "rotate-180" : ""}`}
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
           </button>
         </div>
       </div>

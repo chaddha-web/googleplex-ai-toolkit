@@ -276,6 +276,21 @@ body > * { position: relative; z-index: 1; }
   box-shadow: 0 12px 28px -12px rgba(0, 0, 0, 0.65);
 }
 
+/* Account dropdown items */
+.acct-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.82);
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+.acct-item:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.acct-item svg { width: 16px; height: 16px; flex: none; opacity: 0.85; }
+
 /* Shell surfaces */
 /* Polished sidebar — clean white→lavender panel with a soft right edge. */
 .dashboard-sidebar {
