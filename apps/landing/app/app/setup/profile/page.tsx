@@ -186,11 +186,11 @@ export default function ProfileSetupPage() {
               required
               className="bg-white/5 border border-white/10 rounded-xl w-full h-12 px-4 text-white focus:border-white/30 focus:ring-2 focus:ring-white/10 outline-none transition appearance-none [color-scheme:dark]"
             >
-              <option value="" disabled>
+              <option value="" disabled className="bg-[#14122e] text-white/60">
                 Select your country
               </option>
               {COUNTRIES.map((c) => (
-                <option key={c} value={c}>
+                <option key={c} value={c} className="bg-[#14122e] text-white">
                   {c}
                 </option>
               ))}
@@ -209,7 +209,7 @@ export default function ProfileSetupPage() {
               className="bg-white/5 border border-white/10 rounded-xl w-full h-12 px-4 text-white focus:border-white/30 focus:ring-2 focus:ring-white/10 outline-none transition appearance-none [color-scheme:dark]"
             >
               {GENDERS.map((g) => (
-                <option key={g.value} value={g.value}>
+                <option key={g.value} value={g.value} className="bg-[#14122e] text-white">
                   {g.label}
                 </option>
               ))}
