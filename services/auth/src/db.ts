@@ -278,6 +278,7 @@ export type UserRow = {
   tokens_minted: number;
   tokens_minted_at: number | null;
   studio_unlocked_at: number | null;
+  avatar_url: string | null;
   created_at: number;
   updated_at: number;
 };
@@ -290,6 +291,7 @@ try {
 }
 try { db.exec(`ALTER TABLE users ADD COLUMN wallet_password_hash TEXT`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN pending_wallet_password_hash TEXT`); } catch {}
+try { db.exec(`ALTER TABLE users ADD COLUMN avatar_url TEXT`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN wallet_password_set_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN wallet_status TEXT NOT NULL DEFAULT 'pending_password'`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN wallet_status_changed_at INTEGER`); } catch {}

@@ -1,6 +1,8 @@
 "use client";
 
+import { useRef, useState } from "react";
 import { useAuth } from "@/components/auth-context";
+import { uploadAvatar } from "@/lib/auth-client";
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -12,6 +14,8 @@ export default function SettingsPage() {
       <h1 className="font-serif text-5xl md:text-6xl tracking-tight mt-2">
         Your <em className="font-serif-i text-white/60">account</em>.
       </h1>
+
+      <AvatarSection />
 
       <Section title="Profile">
         <Row label="Name" value={`${user.firstName} ${user.lastName}`} />
@@ -72,6 +76,105 @@ export default function SettingsPage() {
         </p>
       </Section>
     </div>
+  );
+}
+
+// Resize + square-crop an image file to a small JPEG data URL, so uploads stay
+// tiny and avatars are uniform.
+function fileToSquareDataUrl(file: File, size = 256): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        URL.revokeObjectURL(url);
+        return reject(new Error("Canvas unavailable."));
+      }
+      const scale = Math.max(size / img.width, size / img.height);
+      const w = img.width * scale;
+      const h = img.height * scale;
+      ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Couldn't read that image."));
+    };
+    img.src = url;
+  });
+}
+
+function AvatarSection() {
+  const { user, refreshUser } = useAuth();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const initial = (user?.firstName || "G").charAt(0).toUpperCase();
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setErr(null);
+    setBusy(true);
+    try {
+      const dataUrl = await fileToSquareDataUrl(f, 256);
+      await uploadAvatar(dataUrl);
+      await refreshUser();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  return (
+    <Section title="Profile image">
+      <div className="flex items-center gap-5">
+        {user?.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={user.avatarUrl}
+            alt="Your avatar"
+            className="h-20 w-20 rounded-full object-cover ring-1 ring-white/15 shrink-0"
+          />
+        ) : (
+          <div
+            className="h-20 w-20 rounded-full grid place-items-center text-2xl font-semibold shrink-0"
+            style={{ background: "linear-gradient(160deg,#8A68FF,#5A3CC8)", color: "#fff" }}
+          >
+            {initial}
+          </div>
+        )}
+        <div>
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={busy}
+            className="rounded-full bg-white text-black text-sm font-medium px-5 py-2.5 hover:bg-white/90 disabled:opacity-40 transition-colors"
+          >
+            {busy ? "Uploading…" : user?.avatarUrl ? "Change image" : "Upload image"}
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={onFile}
+            className="hidden"
+          />
+          <p className="text-white/40 text-xs mt-2">
+            PNG, JPEG or WebP — auto-cropped to a square.
+          </p>
+          {err && <p className="text-rose-300 text-sm mt-2">{err}</p>}
+        </div>
+      </div>
+    </Section>
   );
 }
 

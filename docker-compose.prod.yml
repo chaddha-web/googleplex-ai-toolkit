@@ -143,11 +143,17 @@ services:
       - PORT=4200
       - AUTH_DB_PATH=/data/auth.db
       - CORS_ORIGINS=https://${DOMAIN},https://app.${DOMAIN},https://admin.${DOMAIN}
+      # Profile images are written here (shared with the media nginx below) and
+      # served at https://${DOMAIN}/media/avatars/*.
+      - AVATAR_DIR=/srv/media/avatars
+      - AVATAR_BASE_URL=https://${DOMAIN}/media/avatars
     command: ["npx", "tsx", "services/auth/src/server.ts"]
     expose:
       - "4200"
     volumes:
       - auth-data:/data
+      # Same host dir the media nginx serves — auth writes avatars, nginx serves.
+      - ./media:/srv/media
     labels:
       - traefik.enable=true
       - traefik.http.routers.auth.rule=Host(`auth.${DOMAIN}`)

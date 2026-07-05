@@ -56,6 +56,8 @@ export type User = {
   studioUnlocked?: boolean;
   /** Personalized tokens minted (0 until the member builds in the Studio). */
   tokensMinted?: number;
+  /** Profile image URL (served from the media bucket). Null until uploaded. */
+  avatarUrl?: string | null;
   createdAt?: number;
 };
 
@@ -295,6 +297,18 @@ export async function confirmWalletPasswordChange(code: string): Promise<void> {
   );
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Could not verify the code.");
+}
+
+/** Upload a profile image (data URL) → media bucket. Returns the new URL. */
+export async function uploadAvatar(dataUrl: string): Promise<string> {
+  const res = await authedFetch(`${AUTH_BASE}/auth/profile/avatar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ image: dataUrl })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not upload image.");
+  return data.avatarUrl as string;
 }
 
 /** Freeze the wallet — blocks all spending until unlocked. Instant, no password. */

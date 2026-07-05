@@ -1,5 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import { stmts } from "../db.js";
+import { writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { db, stmts } from "../db.js";
 import { performLiquidityExit } from "../liquidity.js";
 import { sendSevaCreditEmail } from "../emails.js";
 import {
@@ -129,10 +131,66 @@ export async function authRoutes(app: FastifyInstance) {
         tokensMinted: user.tokens_minted,
         studioUnlocked: !!user.studio_unlocked_at,
         studioUnlockedAt: user.studio_unlocked_at,
+        avatarUrl: user.avatar_url,
         createdAt: user.created_at
       }
     });
   });
+
+  // POST /auth/profile/avatar — upload a profile image as a base64 data URL
+  // (the client resizes it small first). Written to the media volume and served
+  // at AVATAR_BASE_URL. Per-route bodyLimit lifted above the global 64KB.
+  app.post(
+    "/auth/profile/avatar",
+    { bodyLimit: 1024 * 1024 },
+    async (req, reply) => {
+      const header = req.headers.authorization;
+      if (!header || !header.startsWith("Bearer ")) {
+        return reply.code(401).send({ error: "Missing bearer token." });
+      }
+      const claims = await verifyAccessToken(header.slice("Bearer ".length).trim());
+      if (!claims) return reply.code(401).send({ error: "Invalid or expired access token." });
+      const user = stmts.user.byId.get(claims.sub);
+      if (!user) return reply.code(401).send({ error: "User no longer exists." });
+
+      const dataUrl = (req.body as { image?: string } | undefined)?.image;
+      const m =
+        typeof dataUrl === "string"
+          ? dataUrl.match(/^data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=]+)$/)
+          : null;
+      if (!m) {
+        return reply.code(400).send({ error: "Send a PNG/JPEG/WebP image as a data URL." });
+      }
+      const ext = m[1] === "jpeg" ? "jpg" : m[1];
+      const buf = Buffer.from(m[2]!, "base64");
+      if (buf.length > 800 * 1024) {
+        return reply.code(413).send({ error: "Image too large (max 800KB). Try a smaller one." });
+      }
+
+      const dir = process.env.AVATAR_DIR || "/srv/media/avatars";
+      const base = (
+        process.env.AVATAR_BASE_URL || "https://ggakingclub.com/media/avatars"
+      ).replace(/\/$/, "");
+      try {
+        mkdirSync(dir, { recursive: true });
+        // New filename each upload (timestamp) so the immutable /media cache
+        // never serves a stale avatar.
+        const fname = `${user.id}-${Date.now()}.${ext}`;
+        writeFileSync(join(dir, fname), buf);
+        const url = `${base}/${fname}`;
+        const now = Date.now();
+        db.prepare("UPDATE users SET avatar_url = ?, updated_at = ? WHERE id = ?").run(
+          url,
+          now,
+          user.id
+        );
+        return reply.send({ ok: true, avatarUrl: url });
+      } catch (e) {
+        req.log.error({ err: e }, "[avatar] write failed");
+        return reply.code(500).send({ error: "Could not save the image." });
+      }
+    }
+  );
 
   // ────────────────────────────────────────────────────────────────────────
   // POST /auth/profile — onboarding form after first OTP signup.

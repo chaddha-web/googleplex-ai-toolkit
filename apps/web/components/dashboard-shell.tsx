@@ -149,6 +149,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         pathname={pathname}
         firstName={user?.firstName ?? ""}
         email={user?.email ?? ""}
+        avatarUrl={user?.avatarUrl ?? null}
         onSignOut={onSignOut}
         collapsed={collapsed}
         onToggle={toggleCollapsed}
@@ -183,6 +184,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             pathname={pathname}
             firstName={user?.firstName ?? ""}
             email={user?.email ?? ""}
+            avatarUrl={user?.avatarUrl ?? null}
             onSignOut={onSignOut}
             collapsed={false}
             onNavigate={() => setMenuOpen(false)}
@@ -223,6 +225,7 @@ function Sidebar({
   pathname,
   firstName,
   email,
+  avatarUrl,
   onSignOut,
   collapsed = false,
   onToggle,
@@ -234,6 +237,7 @@ function Sidebar({
   pathname: string;
   firstName: string;
   email: string;
+  avatarUrl?: string | null;
   onSignOut: () => void;
   collapsed?: boolean;
   onToggle?: () => void;
@@ -352,13 +356,23 @@ function Sidebar({
             collapsed ? "justify-center px-0" : "px-1.5"
           }`}
         >
-          <div
-            className="h-9 w-9 rounded-full grid place-items-center text-sm font-semibold shrink-0"
-            style={{ background: "linear-gradient(160deg,#8A68FF,#5A3CC8)", color: "#fff" }}
-            title={collapsed ? `${firstName || "friend"} · ${email}` : undefined}
-          >
-            {initial}
-          </div>
+          {avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={avatarUrl}
+              alt=""
+              className="h-9 w-9 rounded-full object-cover ring-1 ring-white/15 shrink-0"
+              title={collapsed ? `${firstName || "friend"} · ${email}` : undefined}
+            />
+          ) : (
+            <div
+              className="h-9 w-9 rounded-full grid place-items-center text-sm font-semibold shrink-0"
+              style={{ background: "linear-gradient(160deg,#8A68FF,#5A3CC8)", color: "#fff" }}
+              title={collapsed ? `${firstName || "friend"} · ${email}` : undefined}
+            >
+              {initial}
+            </div>
+          )}
           {!collapsed && (
             <>
               <div className="min-w-0 flex-1">
