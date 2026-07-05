@@ -278,14 +278,14 @@ function Sidebar({
                 </span>
               </span>
               {!collapsed && (
-                <span className="font-medium tracking-tight text-[16px] whitespace-nowrap">GoogolPlex</span>
+                <span className="font-semibold tracking-tight text-[20px] whitespace-nowrap">GoogolPlex</span>
               )}
             </button>
           ) : (
             <Link href="/" onClick={onNavigate} className="flex items-center gap-2.5 min-w-0">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/logo.png" alt="GoogolPlex" className="h-11 w-11 object-contain rounded-full shrink-0" />
-              <span className="font-medium tracking-tight text-[16px] whitespace-nowrap">GoogolPlex</span>
+              <span className="font-semibold tracking-tight text-[20px] whitespace-nowrap">GoogolPlex</span>
             </Link>
           )}
           {showClose && (
