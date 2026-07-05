@@ -8,36 +8,69 @@ import { useAuth } from "@/components/auth-context";
 const LANDING_URL =
   process.env.NEXT_PUBLIC_LANDING_URL || "http://localhost:3010";
 
-// Ambient sidebar video — served from the nginx media server (not bundled).
+// Ambient loop — served from the nginx media server (not bundled).
 const SIDEBAR_VIDEO_URL =
   process.env.NEXT_PUBLIC_SIDEBAR_VIDEO_URL ||
   "https://ggakingclub.com/media/final.mp4";
 
-// Celestial-lion cosmos behind the dashboard content. Served from the media
-// server (drop the file at /media/celestial-lion.jpg). A light veil keeps the
-// light-theme cards + dark text readable; tune the veil alpha to taste.
+// Celestial-lion cosmos behind the whole dashboard.
 const DASH_BG_URL =
   process.env.NEXT_PUBLIC_DASH_BG_URL ||
   "https://ggakingclub.com/media/celestial-lion.jpg";
 
-const NAV_ITEMS: { href: string; label: string }[] = [
-  { href: "/", label: "Home" },
-  { href: "/wallet", label: "Wallet" },
-  { href: "/community", label: "Community" },
-  { href: "/studio", label: "Studio" },
-  { href: "/account/security", label: "Security" },
-  { href: "/settings", label: "Settings" }
+// ── Nav icons (compact, currentColor) ───────────────────────────────────────
+type IconProps = { className?: string };
+const S = (p: IconProps & { children: React.ReactNode }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.9"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={p.className}
+    width="18"
+    height="18"
+  >
+    {p.children}
+  </svg>
+);
+const HomeIcon = (p: IconProps) => (
+  <S {...p}><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V21h14V9.5" /></S>
+);
+const WalletIcon = (p: IconProps) => (
+  <S {...p}><rect x="3" y="6" width="18" height="13" rx="2.5" /><path d="M3 10h18" /><circle cx="17" cy="14" r="1.2" /></S>
+);
+const UsersIcon = (p: IconProps) => (
+  <S {...p}><circle cx="9" cy="8" r="3" /><path d="M3.5 20a5.5 5.5 0 0 1 11 0" /><path d="M16 5.5a3 3 0 0 1 0 5.5" /><path d="M17.5 20a5.5 5.5 0 0 0-3-4.9" /></S>
+);
+const StudioIcon = (p: IconProps) => (
+  <S {...p}><path d="M12 3v3M12 18v3M3 12h3M18 12h3" /><path d="M12 8.5 13.4 11 16 12l-2.6 1L12 15.5 10.6 13 8 12l2.6-1z" /></S>
+);
+const ShieldIcon = (p: IconProps) => (
+  <S {...p}><path d="M12 3l7 3v5c0 4.2-2.8 7.4-7 9-4.2-1.6-7-4.8-7-9V6z" /><path d="m9 12 2 2 4-4" /></S>
+);
+const GearIcon = (p: IconProps) => (
+  <S {...p}><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" /></S>
+);
+
+const NAV_ITEMS: { href: string; label: string; Icon: (p: IconProps) => JSX.Element }[] = [
+  { href: "/", label: "Home", Icon: HomeIcon },
+  { href: "/wallet", label: "Wallet", Icon: WalletIcon },
+  { href: "/community", label: "Community", Icon: UsersIcon },
+  { href: "/studio", label: "Studio", Icon: StudioIcon },
+  { href: "/account/security", label: "Security", Icon: ShieldIcon },
+  { href: "/settings", label: "Settings", Icon: GearIcon }
 ];
 
 /**
  * Outer shell used by every page in apps/web.
  *
- * Layout: fixed-width sidebar on md+. On mobile the same sidebar becomes a
- * slide-in drawer toggled by a hamburger in the top bar, dismissed by tapping
- * the backdrop or any nav item.
- *
- * Auth: if the user isn't signed in after the auth context resolves, we
- * redirect to landing's /login (single source of truth for sign-in).
+ * The whole dashboard is liquid glass over the Celestial-Lion starfield (the
+ * `.cosmic` scope flips the app to its dark-native design). Navigation is a
+ * floating glass capsule pinned to the vertical middle of the left; content
+ * flows full-bleed behind it. On mobile the capsule becomes a drawer toggled
+ * by a glass hamburger.
  */
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const { status, user, signOut } = useAuth();
@@ -45,12 +78,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Close the mobile drawer whenever the route changes (a nav item was tapped).
   useEffect(() => {
     setMenuOpen(false);
   }, [pathname]);
 
-  // Lock body scroll while the drawer is open so the page behind doesn't move.
   useEffect(() => {
     if (typeof document === "undefined") return;
     document.body.style.overflow = menuOpen ? "hidden" : "";
@@ -61,14 +92,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (status === "anonymous") {
-      // Send the user to landing's login. Landing knows how to hand the
-      // session back via #h=<refresh> after a successful verify.
       window.location.href = `${LANDING_URL}/login`;
       return;
     }
-    // Hard rule: admins have NO presence on the user dashboard. Any admin
-    // who lands here is bounced to the admin surface on landing. This runs
-    // on every page transition so they can't deep-link past it either.
     if (status === "authenticated" && user?.role === "admin") {
       window.location.href = `${LANDING_URL}/app/admin`;
     }
@@ -82,19 +108,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     );
   }
   if (status === "anonymous") return null;
-  // While the bouncer is flushing the admin offsite, render nothing so
-  // they never see a flash of the user dashboard frame.
   if (user?.role === "admin") return null;
 
   return (
     <div
-      className="cosmic flex min-h-screen w-full"
+      className="cosmic min-h-screen w-full"
       style={{
-        // Celestial-Lion starfield behind the ENTIRE app (fixed, so it stays put
-        // while scrolling). The `.cosmic` scope flips the whole shell to its
-        // dark-native design; sidebar + top bar render as dark glass over this,
-        // so it reads as one immersive cosmic surface. A gentle dark scrim keeps
-        // everything legible.
+        // Starfield behind the ENTIRE app (fixed). Gentle dark scrim for depth
+        // + legibility; the glass UI floats over it.
         backgroundImage: `linear-gradient(180deg, rgba(7,8,20,0.74) 0%, rgba(7,8,20,0.5) 28%, rgba(7,8,20,0.48) 62%, rgba(7,8,20,0.72) 100%), url(${DASH_BG_URL})`,
         backgroundSize: "cover",
         backgroundPosition: "center top",
@@ -102,28 +123,30 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         backgroundColor: "#0a0b1a"
       }}
     >
-      {/* Full-height sidebar on the left — dark glass rail over the cosmos. */}
-      <Sidebar pathname={pathname} className="hidden md:flex" />
+      {/* Floating glass nav — desktop, vertically centered on the left. */}
+      <FloatingNav
+        pathname={pathname}
+        className="hidden md:block fixed left-5 top-1/2 -translate-y-1/2 z-40"
+      />
 
       {/* Mobile drawer + backdrop */}
       {menuOpen && (
         <>
-          {/* Backdrop — tap anywhere off the menu to dismiss. */}
           <div
-            className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm md:hidden"
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
             onClick={() => setMenuOpen(false)}
             aria-hidden="true"
           />
-          <Sidebar
+          <FloatingNav
             pathname={pathname}
-            className="fixed inset-y-0 left-0 z-40 flex md:hidden animate-[slideIn_0.18s_ease-out]"
             onNavigate={() => setMenuOpen(false)}
+            className="fixed left-4 top-1/2 -translate-y-1/2 z-50 md:hidden animate-[navIn_0.18s_ease-out]"
           />
         </>
       )}
 
-      {/* Content column — the top bar sits here, to the RIGHT of the sidebar. */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* Content column — shifted right on desktop to clear the floating nav. */}
+      <div className="flex flex-col min-h-screen md:pl-[16.5rem]">
         <TopBar
           firstName={user?.firstName ?? ""}
           email={user?.email ?? ""}
@@ -134,19 +157,16 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             router.refresh();
           }}
         />
-        {/* Transparent — the app-wide cosmos (on the outer container) shows
-            through behind the content. */}
         <main className="flex-1 px-6 md:px-10 py-10">{children}</main>
       </div>
 
-      {/* Drawer slide-in keyframe (scoped, no global CSS needed). */}
       <style jsx global>{`
-        @keyframes slideIn {
+        @keyframes navIn {
           from {
-            transform: translateX(-100%);
+            transform: translate(-110%, -50%);
           }
           to {
-            transform: translateX(0);
+            transform: translate(0, -50%);
           }
         }
       `}</style>
@@ -154,7 +174,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Sidebar({
+function FloatingNav({
   pathname,
   className = "",
   onNavigate
@@ -164,59 +184,60 @@ function Sidebar({
   onNavigate?: () => void;
 }) {
   return (
-    <aside
-      // On desktop the sidebar pins to the viewport (sticky, one screen tall)
-      // instead of stretching to the full scrollable page height — it stays
-      // the same height no matter how long the page content is. self-start
-      // stops the flex row from stretching it.
-      className={`dashboard-sidebar w-60 shrink-0 flex-col bg-black/90 md:bg-black/40 md:sticky md:top-0 md:h-screen md:self-start ${className}`}
-    >
-      <nav className="px-3.5 pt-5">
-        <ul className="space-y-1">
-          {NAV_ITEMS.map((item) => {
-            const active =
-              item.href === "/"
-                ? pathname === "/"
-                : pathname.startsWith(item.href);
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  onClick={onNavigate}
-                  className={`nav-item ${active ? "nav-item-active" : ""}`}
-                >
-                  <span className="nav-dot" />
-                  {item.label}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
-
-      {/* Spacer pushes the video + footer to the bottom of the sidebar. */}
-      <div className="flex-1" />
-
-      {/* Ambient looping video — anchored to the bottom of the sidebar, shown
-          in full at the sidebar's width (4:5, no crop). */}
-      <div className="px-3.5 pb-3">
-        <div className="sidebar-video-wrap w-full aspect-[4/5] overflow-hidden rounded-2xl">
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-          <video
-            src={SIDEBAR_VIDEO_URL}
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="h-full w-full object-contain"
+    <nav className={className}>
+      <div className="liquid-glass rounded-[30px] p-3 w-56 flex flex-col gap-1">
+        {/* Brand */}
+        <Link
+          href="/"
+          onClick={onNavigate}
+          className="flex items-center gap-2.5 px-2.5 py-2 mb-1"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.png"
+            alt="GoogolPlex"
+            className="h-8 w-8 object-contain rounded-full"
           />
-        </div>
-      </div>
+          <span className="font-medium tracking-tight text-[15px]">GoogolPlex</span>
+        </Link>
 
-      <p className="px-5 pb-6 text-[10px] tracking-[0.22em] uppercase nav-foot">
-        v1.02 · dashboard
-      </p>
-    </aside>
+        {NAV_ITEMS.map(({ href, label, Icon }) => {
+          const active =
+            href === "/" ? pathname === "/" : pathname.startsWith(href);
+          return (
+            <Link
+              key={href}
+              href={href}
+              onClick={onNavigate}
+              className={`nav-pill ${active ? "nav-pill-active" : ""}`}
+            >
+              <span className="nav-pill-icon">
+                <Icon />
+              </span>
+              {label}
+            </Link>
+          );
+        })}
+
+        {/* Ambient brand loop — small rounded tile at the capsule foot. */}
+        <div className="px-1.5 pt-2">
+          <div className="w-full aspect-square overflow-hidden rounded-2xl ring-1 ring-white/10">
+            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+            <video
+              src={SIDEBAR_VIDEO_URL}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="h-full w-full object-cover"
+            />
+          </div>
+        </div>
+        <p className="px-3 pt-1.5 pb-0.5 text-[10px] tracking-[0.22em] uppercase nav-foot">
+          v1.02 · dashboard
+        </p>
+      </div>
+    </nav>
   );
 }
 
@@ -234,43 +255,32 @@ function TopBar({
   onSignOut: () => void;
 }) {
   return (
-    <header className="sticky top-0 z-20 flex items-center justify-between gap-4 px-6 md:px-10 py-4 border-b border-white/5 bg-black/60 backdrop-blur">
-      <div className="flex items-center gap-3 min-w-0">
-        {/* Hamburger — mobile only. Toggles the drawer. */}
-        <button
-          type="button"
-          onClick={onToggleMenu}
-          aria-label={menuOpen ? "Close menu" : "Open menu"}
-          aria-expanded={menuOpen}
-          className="md:hidden -ml-1 p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/5 transition-colors"
-        >
-          {menuOpen ? (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          ) : (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-          )}
-        </button>
+    <header className="sticky top-0 z-20 flex items-center gap-4 px-6 md:px-10 py-4 border-b border-white/5 bg-black/60 backdrop-blur">
+      {/* Hamburger — mobile only. Toggles the floating nav drawer. */}
+      <button
+        type="button"
+        onClick={onToggleMenu}
+        aria-label={menuOpen ? "Close menu" : "Open menu"}
+        aria-expanded={menuOpen}
+        className="md:hidden -ml-1 p-2 rounded-xl text-white/70 hover:text-white hover:bg-white/5 transition-colors"
+      >
+        {menuOpen ? (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        ) : (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        )}
+      </button>
 
-        {/* Brand stays inside the dashboard — links to the dashboard home,
-            NOT the public landing site. */}
-        <Link href="/" className="flex items-center gap-2.5 shrink-0">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="GoogolPlex" className="h-9 w-auto object-contain" />
-          <span className="text-xl font-medium tracking-tight hidden sm:inline">GoogolPlex</span>
-        </Link>
-      </div>
       <div className="ml-auto flex items-center gap-3">
         <div className="text-right hidden sm:block">
-          <p className="text-white text-sm leading-tight">
-            {firstName || "friend"}
-          </p>
+          <p className="text-white text-sm leading-tight">{firstName || "friend"}</p>
           <p className="text-white/40 text-xs leading-tight">{email}</p>
         </div>
         <button
