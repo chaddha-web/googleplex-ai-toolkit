@@ -328,10 +328,11 @@ function Sidebar({
         {/* Spacer pushes the loop + account row to the bottom. */}
         <div className="flex-1 min-h-4" />
 
-        {/* Ambient brand loop — hidden on the narrow rail. */}
+        {/* Ambient brand loop — hidden on the narrow rail. The tile matches the
+            video's native 4:5 so the full brand shows uncropped. */}
         {!collapsed && (
           <div className="px-1.5">
-            <div className="w-full aspect-[5/3] overflow-hidden rounded-2xl ring-1 ring-white/10">
+            <div className="w-full aspect-[4/5] overflow-hidden rounded-2xl ring-1 ring-white/10 shadow-[0_18px_44px_-24px_rgba(0,0,0,0.8)]">
               {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
               <video
                 src={SIDEBAR_VIDEO_URL}
