@@ -299,6 +299,12 @@ export default function AdminHome() {
             Circle
           </Link>
           <Link
+            href="/app/admin/globe"
+            className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
+          >
+            Live globe
+          </Link>
+          <Link
             href="/app/admin/logs"
             className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
           >
