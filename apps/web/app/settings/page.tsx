@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-context";
 import { setNotifications, uploadAvatar } from "@/lib/auth-client";
+import { AvatarCropper, WebcamCapture } from "@/components/avatar-editor";
 
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth();
@@ -77,33 +78,12 @@ export default function SettingsPage() {
   );
 }
 
-// Resize + square-crop an image file to a small JPEG data URL, so uploads stay
-// tiny and avatars are uniform.
-function fileToSquareDataUrl(file: File, size = 256): Promise<string> {
+function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        URL.revokeObjectURL(url);
-        return reject(new Error("Canvas unavailable."));
-      }
-      const scale = Math.max(size / img.width, size / img.height);
-      const w = img.width * scale;
-      const h = img.height * scale;
-      ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
-      URL.revokeObjectURL(url);
-      resolve(canvas.toDataURL("image/jpeg", 0.85));
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("Couldn't read that image."));
-    };
-    img.src = url;
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Couldn't read that image."));
+    reader.readAsDataURL(file);
   });
 }
 
@@ -112,23 +92,35 @@ function AvatarSection() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // The raw image chosen (upload or webcam) that's being cropped.
+  const [editing, setEditing] = useState<string | null>(null);
+  const [camOpen, setCamOpen] = useState(false);
 
   const initial = (user?.firstName || "G").charAt(0).toUpperCase();
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
+    if (fileRef.current) fileRef.current.value = "";
     if (!f) return;
+    setErr(null);
+    try {
+      setEditing(await fileToDataUrl(f)); // open the cropper on the raw image
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }
+
+  async function saveCropped(dataUrl: string) {
     setErr(null);
     setBusy(true);
     try {
-      const dataUrl = await fileToSquareDataUrl(f, 256);
       await uploadAvatar(dataUrl);
       await refreshUser();
+      setEditing(null);
     } catch (e) {
       setErr((e as Error).message);
     } finally {
       setBusy(false);
-      if (fileRef.current) fileRef.current.value = "";
     }
   }
 
@@ -151,14 +143,31 @@ function AvatarSection() {
           </div>
         )}
         <div>
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            disabled={busy}
-            className="rounded-full bg-white text-black text-sm font-medium px-5 py-2.5 hover:bg-white/90 disabled:opacity-40 transition-colors"
-          >
-            {busy ? "Uploading…" : user?.avatarUrl ? "Change image" : "Upload image"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={busy}
+              className="rounded-full bg-white text-black text-sm font-medium px-5 py-2.5 hover:bg-white/90 disabled:opacity-40 transition-colors"
+            >
+              {user?.avatarUrl ? "Change image" : "Upload image"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setErr(null);
+                setCamOpen(true);
+              }}
+              disabled={busy}
+              className="rounded-full ring-1 ring-white/15 text-white/85 text-sm font-medium px-5 py-2.5 hover:bg-white/5 disabled:opacity-40 transition-colors inline-flex items-center gap-2"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+              Take photo
+            </button>
+          </div>
           <input
             ref={fileRef}
             type="file"
@@ -167,11 +176,29 @@ function AvatarSection() {
             className="hidden"
           />
           <p className="text-white/40 text-xs mt-2">
-            PNG, JPEG or WebP — auto-cropped to a square.
+            Upload or take a photo, then drag &amp; zoom to frame it.
           </p>
           {err && <p className="text-rose-300 text-sm mt-2">{err}</p>}
         </div>
       </div>
+
+      {camOpen && (
+        <WebcamCapture
+          onCapture={(dataUrl) => {
+            setCamOpen(false);
+            setEditing(dataUrl); // straight into the cropper
+          }}
+          onCancel={() => setCamOpen(false)}
+        />
+      )}
+      {editing && (
+        <AvatarCropper
+          src={editing}
+          busy={busy}
+          onCancel={() => setEditing(null)}
+          onSave={saveCropped}
+        />
+      )}
     </Section>
   );
 }
