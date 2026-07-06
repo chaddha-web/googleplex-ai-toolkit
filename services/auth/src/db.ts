@@ -274,6 +274,7 @@ export type UserRow = {
   wallet_password_hash: string | null;
   pending_wallet_password_hash: string | null;
   wallet_password_set_at: number | null;
+  wallet_password_changed_at: number | null;
   wallet_status: "pending_password" | "pending_initial_deposit" | "active" | "locked";
   wallet_status_changed_at: number | null;
   initial_deposit_credited_usd: number;
@@ -306,6 +307,7 @@ try { db.exec(`ALTER TABLE users ADD COLUMN gender TEXT`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN consented_terms_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN consented_privacy_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN consented_consultation_at INTEGER`); } catch {}
+try { db.exec(`ALTER TABLE users ADD COLUMN wallet_password_changed_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN notifications_opt_in INTEGER NOT NULL DEFAULT 0`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN notifications_opt_in_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN profile_completed_at INTEGER`); } catch {}

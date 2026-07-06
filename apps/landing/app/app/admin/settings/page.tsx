@@ -153,6 +153,48 @@ export default function AdminSettings() {
               </Row>
             </Section>
 
+            {/* ── Withdrawal limits ─────────────────────────────── */}
+            <Section
+              title="Withdrawal limits"
+              subtitle="USD caps + anti-takeover cooldowns (blank = built-in default)"
+            >
+              <Row label="Per-transaction cap ($)">
+                <TextSetting
+                  k="wd.max_per_tx_usd"
+                  placeholder="1000"
+                  initial={(settings["wd.max_per_tx_usd"] as string) || ""}
+                />
+              </Row>
+              <Row label="24h daily cap ($)">
+                <TextSetting
+                  k="wd.daily_usd"
+                  placeholder="5000"
+                  initial={(settings["wd.daily_usd"] as string) || ""}
+                />
+              </Row>
+              <Row label="Review threshold ($)">
+                <TextSetting
+                  k="wd.review_threshold_usd"
+                  placeholder="500"
+                  initial={(settings["wd.review_threshold_usd"] as string) || ""}
+                />
+              </Row>
+              <Row label="Signup cooldown (hours)">
+                <TextSetting
+                  k="wd.signup_cooldown_hours"
+                  placeholder="24"
+                  initial={(settings["wd.signup_cooldown_hours"] as string) || ""}
+                />
+              </Row>
+              <Row label="Password-change cooldown (hours)">
+                <TextSetting
+                  k="wd.pwchange_cooldown_hours"
+                  placeholder="24"
+                  initial={(settings["wd.pwchange_cooldown_hours"] as string) || ""}
+                />
+              </Row>
+            </Section>
+
             {/* ── Promote admin (founder only) ──────────────────── */}
             {isFounder && <PromoteAdmin />}
             {!isFounder && (

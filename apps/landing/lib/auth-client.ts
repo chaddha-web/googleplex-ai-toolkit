@@ -386,6 +386,41 @@ export type SweepPlan = {
   skipped: { chain: string; symbol: string; reason: string }[];
 };
 
+export type PendingWithdrawal = {
+  id: string;
+  userId: string;
+  chain: string;
+  symbol: string;
+  amount: number;
+  usd: number;
+  destAddress: string;
+  requestedAt: number;
+  status: string;
+};
+
+/** Admin: withdrawals held for approval. */
+export async function adminWithdrawalQueue(): Promise<PendingWithdrawal[]> {
+  const res = await authedFetch(`${WALLET_BASE}/wallet/admin/withdrawals?status=awaiting_approval`);
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(d.error || "Could not load the queue.");
+  return Array.isArray(d.withdrawals) ? d.withdrawals : [];
+}
+
+/** Admin: approve a held withdrawal → broadcast. */
+export async function approveWithdrawal(id: string): Promise<{ txHash: string }> {
+  const res = await authedFetch(`${WALLET_BASE}/wallet/admin/withdrawals/${id}/approve`, { method: "POST" });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(d.error || "Approve failed.");
+  return d;
+}
+
+/** Admin: reject a held withdrawal → refund. */
+export async function rejectWithdrawal(id: string): Promise<void> {
+  const res = await authedFetch(`${WALLET_BASE}/wallet/admin/withdrawals/${id}/reject`, { method: "POST" });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(d.error || "Reject failed.");
+}
+
 /** Admin: preview a user's flush-to-treasury plan (broadcasts nothing). */
 export async function sweepPreview(userId: string): Promise<SweepPlan> {
   const res = await authedFetch(`${WALLET_BASE}/wallet/admin/sweep/preview`, {

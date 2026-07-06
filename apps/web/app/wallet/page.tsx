@@ -931,7 +931,7 @@ function ProtectedLiquidity({
 
 /* ─────────────────────────── Withdrawal modal ─────────────────────────── */
 
-type Step = "form" | "auth" | "success";
+type Step = "form" | "auth" | "success" | "review";
 
 function WithdrawModal({
   assets,
@@ -1005,8 +1005,12 @@ function WithdrawModal({
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Verification failed.");
-      setTxHash(data.txHash ?? "submitted");
-      setStep("success");
+      if (data.awaitingApproval) {
+        setStep("review");
+      } else {
+        setTxHash(data.txHash ?? "submitted");
+        setStep("success");
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -1020,7 +1024,7 @@ function WithdrawModal({
       <div className="relative w-full sm:max-w-md liquid-glass rounded-t-3xl sm:rounded-3xl p-6 md:p-8 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <h2 className="font-serif text-2xl tracking-tight">
-            {step === "success" ? "Sent" : "Withdraw"}
+            {step === "success" ? "Sent" : step === "review" ? "In review" : "Withdraw"}
           </h2>
           <button onClick={onClose} className="text-white/40 hover:text-white text-sm">
             ✕
@@ -1191,6 +1195,26 @@ function WithdrawModal({
               </p>
               <p className="font-mono text-xs text-white/80 break-all">{txHash}</p>
             </div>
+            <button
+              onClick={onDone}
+              className="w-full h-12 rounded-full bg-white text-black font-medium hover:bg-white/90 transition-colors"
+            >
+              Done
+            </button>
+          </div>
+        )}
+
+        {step === "review" && (
+          <div className="space-y-5 text-center">
+            <div className="mx-auto h-14 w-14 rounded-full bg-amber-400/20 ring-1 ring-amber-300/40 text-amber-200 flex items-center justify-center text-2xl">
+              ⏳
+            </div>
+            <p className="text-white text-lg">Submitted for review</p>
+            <p className="text-white/50 text-sm leading-relaxed">
+              {fmt(amtNum)} {assetSym} is above the auto-approve limit, so it&apos;s
+              queued for a quick security review. Your balance is already held —
+              you&apos;ll be notified the moment it&apos;s approved and sent.
+            </p>
             <button
               onClick={onDone}
               className="w-full h-12 rounded-full bg-white text-black font-medium hover:bg-white/90 transition-colors"

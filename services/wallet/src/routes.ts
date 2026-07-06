@@ -24,6 +24,7 @@ import { deriveUserAddresses } from "./hd.js";
 import { TOKENS, findToken } from "./tokens.js";
 import { priceUsd, coinAmountForUsd, quoteSwap } from "./prices.js";
 import { previewUser, executeUser } from "./sweep.js";
+import { effectiveLimits, checkCooldown } from "./withdraw-limits.js";
 import { sendWithdrawal, isValidDestination } from "./withdraw.js";
 import { notify } from "./notify.js";
 
@@ -390,6 +391,10 @@ export async function walletRoutes(app: FastifyInstance) {
     if (!(await requireAuth(req, reply))) return;
     const user = req.user!;
 
+    // Anti-takeover cooldown (signup + wallet-password-change). Fails closed.
+    const cd = await checkCooldown(user.sub);
+    if (!cd.ok) return reply.code(403).send({ error: cd.message });
+
     const { chain, symbol, amountRaw, destAddress } = req.body as any;
     if (!chain || !symbol || !amountRaw || !destAddress) return reply.code(400).send({ error: "Missing fields" });
 
@@ -418,18 +423,20 @@ export async function walletRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "Insufficient balance" });
     }
 
-    // ── Withdrawal caps (USD) ────────────────────────────────────────────
+    // ── Withdrawal caps (USD), from effective (per-user or global) limits ──
+    const limits = await effectiveLimits(user.sub);
     const usdPrice = priceUsd(symbol as any) ?? 0;
     const human = Number(BigInt(amountRaw)) / 10 ** token.decimals;
     const usdValue = human * usdPrice;
 
-    if (usdPrice > 0 && usdValue > MAX_WITHDRAW_PER_TX_USD) {
+    if (usdPrice > 0 && usdValue > limits.maxPerTxUsd) {
       return reply.code(400).send({
-        error: `Withdrawal exceeds the per-transaction limit of $${MAX_WITHDRAW_PER_TX_USD}.`
+        error: `Withdrawal exceeds the per-transaction limit of $${limits.maxPerTxUsd}.`
       });
     }
 
-    // Daily cap: sum non-failed withdrawals in the last 24h (USD).
+    // Daily cap: sum non-failed withdrawals in the last 24h (USD). Pending and
+    // awaiting-approval withdrawals count as outflow (only failed/rejected skip).
     if (usdPrice > 0) {
       const since = Date.now() - 24 * 60 * 60 * 1000;
       const recent = await db.select().from(withdrawals)
@@ -443,9 +450,9 @@ export async function walletRoutes(app: FastifyInstance) {
         const p = priceUsd(r.symbol as any) ?? 0;
         dayUsd += (Number(BigInt(r.amount_raw)) / 10 ** t.decimals) * p;
       }
-      if (dayUsd + usdValue > MAX_WITHDRAW_DAILY_USD) {
+      if (dayUsd + usdValue > limits.dailyUsd) {
         return reply.code(400).send({
-          error: `This would exceed your 24h withdrawal limit of $${MAX_WITHDRAW_DAILY_USD}.`
+          error: `This would exceed your 24h withdrawal limit of $${limits.dailyUsd}.`
         });
       }
     }
@@ -579,6 +586,24 @@ export async function walletRoutes(app: FastifyInstance) {
     }
 
     if (!success) return reply.code(400).send({ error: "Insufficient balance" });
+
+    // ── Large-withdrawal approval hold ─────────────────────────────────────
+    // Funds are already debited (reserved). If this is at/above the review
+    // threshold, park it as awaiting_approval and DO NOT broadcast — an admin
+    // approves (broadcast) or rejects (refund) from the review queue.
+    {
+      const wTok = findToken(w.chain as any, w.symbol);
+      const wUsd = wTok ? (Number(BigInt(w.amount_raw)) / 10 ** wTok.decimals) * (priceUsd(w.symbol as any) ?? 0) : 0;
+      const limits = await effectiveLimits(user.sub);
+      if (wUsd > 0 && wUsd >= limits.reviewThresholdUsd) {
+        await db.update(withdrawals).set({ status: "awaiting_approval" }).where(eq(withdrawals.id, w.id));
+        notify(
+          `🕵️ <b>Withdrawal held for review</b>\n${w.symbol} on ${w.chain} (~$${wUsd.toFixed(2)})\n` +
+            `to <code>${w.dest_address}</code>\nuser <code>${user.sub}</code>`
+        );
+        return reply.send({ ok: true, awaitingApproval: true, withdrawalId: w.id });
+      }
+    }
 
     // Balance is debited and the row is in "signing". Pay out from the company
     // treasury wallet. On any broadcast failure, REFUND the ledger so the user
@@ -1174,19 +1199,133 @@ export async function walletRoutes(app: FastifyInstance) {
     return reply.send({ actualUsd });
   });
 
+  // Review queue — withdrawals held for admin approval (default), or a status.
   app.get("/wallet/admin/withdrawals", async (req: any, reply) => {
-    if (!await requireRole(req, reply, "admin")) return;
-    return reply.code(501).send({ error: "Not implemented" });
+    if (!(await requireRole(req, reply, "admin"))) return;
+    const status = String(req.query?.status || "awaiting_approval");
+    const rows = await db
+      .select()
+      .from(withdrawals)
+      .where(eq(withdrawals.status, status))
+      .orderBy(desc(withdrawals.requested_at))
+      .limit(200);
+    return reply.send({
+      withdrawals: rows.map((w) => {
+        const t = findToken(w.chain as any, w.symbol);
+        const amount = t ? Number(BigInt(w.amount_raw)) / 10 ** t.decimals : 0;
+        const usd = amount * (priceUsd(w.symbol as any) ?? 0);
+        return {
+          id: w.id,
+          userId: w.user_id,
+          chain: w.chain,
+          symbol: w.symbol,
+          amount,
+          usd,
+          destAddress: w.dest_address,
+          requestedAt: w.requested_at,
+          status: w.status
+        };
+      })
+    });
   });
 
+  // Approve a held withdrawal → broadcast from treasury. Funds already debited.
   app.post("/wallet/admin/withdrawals/:id/approve", async (req: any, reply) => {
-    if (!await requireRole(req, reply, "admin")) return;
-    return reply.code(501).send({ error: "Not implemented" });
+    if (!(await requireRole(req, reply, "admin"))) return;
+    const admin = req.user!;
+    const rows = await db
+      .select()
+      .from(withdrawals)
+      .where(and(eq(withdrawals.id, req.params.id), eq(withdrawals.status, "awaiting_approval")))
+      .limit(1);
+    if (rows.length === 0) return reply.code(404).send({ error: "No withdrawal awaiting approval with that id." });
+    const w = rows[0]!;
+    await db.update(withdrawals).set({ status: "signing", signed_at: Date.now() }).where(eq(withdrawals.id, w.id));
+    let txHash: string;
+    try {
+      txHash = await sendWithdrawal({ chain: w.chain, symbol: w.symbol, amountRaw: w.amount_raw, destAddress: w.dest_address });
+    } catch (e) {
+      // Leave it awaiting_approval so the admin can retry; funds stay reserved.
+      await db.update(withdrawals).set({ status: "awaiting_approval" }).where(eq(withdrawals.id, w.id));
+      return reply.code(502).send({ error: "Broadcast failed — still held for retry.", detail: (e as Error).message });
+    }
+    await db.update(withdrawals).set({ status: "broadcast", broadcast_at: Date.now(), tx_hash: txHash }).where(eq(withdrawals.id, w.id));
+    notify(`✅ <b>Withdrawal approved + sent</b>\n${w.symbol} on ${w.chain}\ntx <code>${txHash}</code> · by ${admin.sub}`);
+    return reply.send({ ok: true, txHash });
   });
 
+  // Reject a held withdrawal → refund the debited balance exactly.
   app.post("/wallet/admin/withdrawals/:id/reject", async (req: any, reply) => {
-    if (!await requireRole(req, reply, "admin")) return;
-    return reply.code(501).send({ error: "Not implemented" });
+    if (!(await requireRole(req, reply, "admin"))) return;
+    const admin = req.user!;
+    const rows = await db
+      .select()
+      .from(withdrawals)
+      .where(and(eq(withdrawals.id, req.params.id), eq(withdrawals.status, "awaiting_approval")))
+      .limit(1);
+    if (rows.length === 0) return reply.code(404).send({ error: "No withdrawal awaiting approval with that id." });
+    const w = rows[0]!;
+    db.transaction((tx) => {
+      const bal = tx.select().from(ledgerBalances)
+        .where(and(eq(ledgerBalances.user_id, w.user_id), eq(ledgerBalances.chain, w.chain), eq(ledgerBalances.symbol, w.symbol)))
+        .limit(1).all();
+      const cur = bal.length ? BigInt(bal[0]!.raw) : 0n;
+      tx.update(ledgerBalances).set({ raw: (cur + BigInt(w.amount_raw)).toString(), updated_at: Date.now() })
+        .where(and(eq(ledgerBalances.user_id, w.user_id), eq(ledgerBalances.chain, w.chain), eq(ledgerBalances.symbol, w.symbol)))
+        .run();
+      tx.insert(ledgerEntries).values({
+        id: ulid(), user_id: w.user_id, chain: w.chain, symbol: w.symbol,
+        delta_raw: "+" + w.amount_raw, kind: "withdrawal_refund", ref_id: w.id
+      }).run();
+      tx.update(withdrawals).set({ status: "rejected" }).where(eq(withdrawals.id, w.id)).run();
+    });
+    notify(`🚫 <b>Withdrawal rejected + refunded</b>\n${w.symbol} on ${w.chain}\nuser <code>${w.user_id}</code> · by ${admin.sub}`);
+    return reply.send({ ok: true });
+  });
+
+  // Set / clear a user's per-user withdrawal-limit override. null clears a field.
+  app.post("/wallet/admin/users/:id/withdraw-limits", async (req: any, reply) => {
+    if (!(await requireRole(req, reply, "admin"))) return;
+    const b = (req.body ?? {}) as { maxPerTxUsd?: number | null; dailyUsd?: number | null; reviewThresholdUsd?: number | null };
+    const norm = (v: unknown): number | null => (v == null || v === "" ? null : Number(v));
+    rawDb.prepare(
+      `INSERT INTO user_withdraw_limits (user_id, max_per_tx_usd, daily_usd, review_threshold_usd, updated_at)
+       VALUES (@user_id, @max_per_tx_usd, @daily_usd, @review_threshold_usd, @updated_at)
+       ON CONFLICT(user_id) DO UPDATE SET
+         max_per_tx_usd=excluded.max_per_tx_usd, daily_usd=excluded.daily_usd,
+         review_threshold_usd=excluded.review_threshold_usd, updated_at=excluded.updated_at`
+    ).run({
+      user_id: req.params.id,
+      max_per_tx_usd: norm(b.maxPerTxUsd),
+      daily_usd: norm(b.dailyUsd),
+      review_threshold_usd: norm(b.reviewThresholdUsd),
+      updated_at: Date.now()
+    });
+    return reply.send({ ok: true });
+  });
+
+  // Caller's effective limits + 24h usage — powers the withdraw UI.
+  app.get("/wallet/withdrawals/limits", async (req: any, reply) => {
+    if (!(await requireAuth(req, reply))) return;
+    const user = req.user!;
+    const limits = await effectiveLimits(user.sub);
+    const since = Date.now() - 24 * 60 * 60 * 1000;
+    const recent = await db.select().from(withdrawals).where(eq(withdrawals.user_id, user.sub));
+    let usedUsd = 0;
+    for (const r of recent) {
+      if ((r.requested_at ?? 0) < since) continue;
+      if (r.status === "failed" || r.status === "rejected") continue;
+      const t = findToken(r.chain as any, r.symbol);
+      if (!t) continue;
+      usedUsd += (Number(BigInt(r.amount_raw)) / 10 ** t.decimals) * (priceUsd(r.symbol as any) ?? 0);
+    }
+    return reply.send({
+      maxPerTxUsd: limits.maxPerTxUsd,
+      dailyUsd: limits.dailyUsd,
+      reviewThresholdUsd: limits.reviewThresholdUsd,
+      usedUsd,
+      remainingUsd: Math.max(0, limits.dailyUsd - usedUsd)
+    });
   });
 
   // ── Flush to treasury (deposit sweep) — admin only ─────────────────────

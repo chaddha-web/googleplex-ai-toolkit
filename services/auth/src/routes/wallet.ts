@@ -304,9 +304,11 @@ export async function walletRoutes(app: FastifyInstance) {
     stmts.otp.delete.run(session.id);
 
     const now = Date.now();
+    // Stamp wallet_password_changed_at — the wallet service uses it to enforce
+    // a post-change withdrawal cooldown (anti account takeover).
     db.prepare(
-      "UPDATE users SET wallet_password_hash = ?, pending_wallet_password_hash = NULL, wallet_password_set_at = ?, updated_at = ? WHERE id = ?"
-    ).run(pending, now, now, user.id);
+      "UPDATE users SET wallet_password_hash = ?, pending_wallet_password_hash = NULL, wallet_password_set_at = ?, wallet_password_changed_at = ?, updated_at = ? WHERE id = ?"
+    ).run(pending, now, now, now, user.id);
 
     return reply.send({ ok: true });
   });

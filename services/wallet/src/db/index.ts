@@ -122,6 +122,16 @@ sqlite.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_treasury_sweeps_user ON treasury_sweeps (user_id, created_at);
 
+  -- Per-user withdrawal-limit overrides. Any NULL field falls back to the
+  -- global (admin-settings) limit.
+  CREATE TABLE IF NOT EXISTS user_withdraw_limits (
+    user_id              TEXT PRIMARY KEY,
+    max_per_tx_usd       REAL,
+    daily_usd            REAL,
+    review_threshold_usd REAL,
+    updated_at           INTEGER
+  );
+
   CREATE INDEX IF NOT EXISTS idx_ledger_entries_user ON ledger_entries (user_id, created_at);
   CREATE INDEX IF NOT EXISTS idx_withdrawals_user    ON withdrawals (user_id, requested_at);
   CREATE INDEX IF NOT EXISTS idx_deposits_user       ON deposits (user_id, confirmed_at);

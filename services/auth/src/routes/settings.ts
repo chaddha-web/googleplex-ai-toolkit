@@ -28,7 +28,13 @@ const NONSECRET_KEYS = new Set([
   "wallet.tron.address",
   "wallet.btc.address",
   // Min PARTY tokens a member must hold to cast community votes.
-  "community.vote_min_party"
+  "community.vote_min_party",
+  // Withdrawal guardrails (USD caps + cooldown hours). All numeric.
+  "wd.max_per_tx_usd",
+  "wd.daily_usd",
+  "wd.review_threshold_usd",
+  "wd.signup_cooldown_hours",
+  "wd.pwchange_cooldown_hours"
 ]);
 const SECRET_KEYS = new Set([
   "ai.key.anthropic",
@@ -206,5 +212,35 @@ export async function settingsRoutes(app: FastifyInstance) {
       };
     }
     return reply.send(out);
+  });
+
+  // ── Internal: withdrawal limits for the wallet service. Unset → null so the
+  // wallet falls back to its env defaults (never removes a cap). ────────────
+  app.get("/internal/settings/withdrawal-limits", async (req, reply) => {
+    if (!requireInternal(req, reply)) return;
+    const num = (k: string): number | null => {
+      const v = readValue(k);
+      if (v == null || v.trim() === "") return null;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+    return reply.send({
+      maxPerTxUsd: num("wd.max_per_tx_usd"),
+      dailyUsd: num("wd.daily_usd"),
+      reviewThresholdUsd: num("wd.review_threshold_usd"),
+      signupCooldownHours: num("wd.signup_cooldown_hours"),
+      pwchangeCooldownHours: num("wd.pwchange_cooldown_hours")
+    });
+  });
+
+  // ── Internal: withdrawal eligibility timestamps for the cooldown check. ───
+  app.get("/internal/user/:id/withdraw-eligibility", async (req: any, reply) => {
+    if (!requireInternal(req, reply)) return;
+    const user = stmts.user.byId.get(req.params.id);
+    if (!user) return reply.code(404).send({ error: "No such user." });
+    return reply.send({
+      createdAt: user.created_at,
+      walletPasswordChangedAt: user.wallet_password_changed_at ?? null
+    });
   });
 }

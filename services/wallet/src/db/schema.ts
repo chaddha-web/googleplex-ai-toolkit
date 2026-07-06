@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, primaryKey } from "drizzle-orm/sqlite-core";
 
 /**
  * SQLite schema for the wallet service.
@@ -93,6 +93,14 @@ export const swaps = sqliteTable("swaps", {
   to_raw: text("to_raw").notNull(),
   rate_usd: text("rate_usd").notNull(),
   created_at: integer("created_at")
+});
+
+export const userWithdrawLimits = sqliteTable("user_withdraw_limits", {
+  user_id: text("user_id").primaryKey(),
+  max_per_tx_usd: real("max_per_tx_usd"),
+  daily_usd: real("daily_usd"),
+  review_threshold_usd: real("review_threshold_usd"),
+  updated_at: integer("updated_at")
 });
 
 export const treasurySweeps = sqliteTable("treasury_sweeps", {
