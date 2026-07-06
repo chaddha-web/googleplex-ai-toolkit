@@ -919,27 +919,36 @@ export async function walletRoutes(app: FastifyInstance) {
     return reply.send({ ok: true, charged, studioUnlocked: true });
   });
 
-  // POST /wallet/swaps
-  // POST /wallet/swaps — convert a funded balance into PARTY at the platform
-  // rate (PARTY fixed at $10; source priced live). Ledger-only: debit the
-  // source instance, credit PARTY (tron), record swap + two ledger entries.
+  // POST /wallet/swaps — convert between ANY two priced ledger assets at the
+  // platform rate (PARTY fixed at $10; crypto priced live). Covers crypto→PARTY,
+  // PARTY→crypto, and crypto→crypto. Ledger-only: debit the source instance,
+  // credit the destination instance, record swap + two ledger entries.
   // In-platform spend → wallet password required (no OTP); a locked wallet is
   // rejected by the verify endpoint (423), so freezes block swaps too.
+  //
+  // Body: { from:{chain,symbol}, to:{chain,symbol}, amount, walletPassword }.
+  // Back-compat: legacy { chain, symbol } (no `to`) still means → PARTY.
   app.post("/wallet/swaps", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req: any, reply) => {
     if (!(await requireAuth(req, reply))) return;
     const user = req.user!;
     const bearer = (req.headers.authorization as string) ?? "";
 
     const body = (req.body ?? {}) as {
-      chain?: string;
-      symbol?: string;
+      from?: { chain?: string; symbol?: string };
+      to?: { chain?: string; symbol?: string };
+      chain?: string; // legacy
+      symbol?: string; // legacy
       amount?: number | string;
       walletPassword?: string;
     };
-    const fromToken = findToken(body.chain as any, String(body.symbol ?? ""));
+    const from = body.from ?? { chain: body.chain, symbol: body.symbol };
+    const to = body.to ?? { chain: "tron", symbol: "PARTY" };
+    const fromToken = findToken(from.chain as any, String(from.symbol ?? ""));
+    const toToken = findToken(to.chain as any, String(to.symbol ?? ""));
     if (!fromToken) return reply.code(400).send({ error: "Unknown source asset." });
-    if (fromToken.symbol === "PARTY") {
-      return reply.code(400).send({ error: "That balance is already PARTY." });
+    if (!toToken) return reply.code(400).send({ error: "Unknown destination asset." });
+    if (fromToken.chain === toToken.chain && fromToken.symbol === toToken.symbol) {
+      return reply.code(400).send({ error: "Source and destination are the same." });
     }
     const amount = Number(body.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -963,15 +972,15 @@ export async function walletRoutes(app: FastifyInstance) {
       return reply.code(502).send({ error: "Failed to verify password" });
     }
 
-    // Quote at current prices (PARTY fixed at $10).
-    const partyOut = quoteSwap(fromToken.symbol as LogicalAsset, amount, "PARTY");
-    const rate = priceUsd(fromToken.symbol as LogicalAsset);
-    if (partyOut === null || rate === null) {
-      return reply.code(400).send({ error: `${fromToken.symbol} is not priced right now.` });
+    // Quote at current prices.
+    const received = quoteSwap(fromToken.symbol as LogicalAsset, amount, toToken.symbol as LogicalAsset);
+    const rateFrom = priceUsd(fromToken.symbol as LogicalAsset);
+    const rateTo = priceUsd(toToken.symbol as LogicalAsset);
+    if (received === null || rateFrom === null || rateTo === null) {
+      return reply.code(400).send({ error: "One side isn't priced right now." });
     }
-    const party = findToken("tron", "PARTY")!;
     const fromRaw = toRawUnits(amount, fromToken.decimals);
-    const toRaw = toRawUnits(partyOut, party.decimals);
+    const toRaw = toRawUnits(received, toToken.decimals);
     if (fromRaw <= 0n || toRaw <= 0n) {
       return reply.code(400).send({ error: "Amount too small to convert." });
     }
@@ -979,7 +988,7 @@ export async function walletRoutes(app: FastifyInstance) {
     const swapId = ulid();
     try {
       db.transaction((tx) => {
-        const rows = tx
+        const srcRows = tx
           .select()
           .from(ledgerBalances)
           .where(
@@ -991,10 +1000,10 @@ export async function walletRoutes(app: FastifyInstance) {
           )
           .limit(1)
           .all();
-        const have = rows.length ? BigInt(rows[0]!.raw) : 0n;
+        const have = srcRows.length ? BigInt(srcRows[0]!.raw) : 0n;
         if (have < fromRaw) throw new Error("INSUFFICIENT");
 
-        // Debit source
+        // Debit source instance
         tx.update(ledgerBalances)
           .set({ raw: (have - fromRaw).toString(), updated_at: Date.now() })
           .where(
@@ -1005,28 +1014,28 @@ export async function walletRoutes(app: FastifyInstance) {
             )
           )
           .run();
-        // Credit PARTY (row seeded at provisioning)
-        const prows = tx
+        // Credit destination instance (upsert)
+        const dstRows = tx
           .select()
           .from(ledgerBalances)
           .where(
             and(
               eq(ledgerBalances.user_id, user.sub),
-              eq(ledgerBalances.chain, party.chain),
-              eq(ledgerBalances.symbol, party.symbol)
+              eq(ledgerBalances.chain, toToken.chain),
+              eq(ledgerBalances.symbol, toToken.symbol)
             )
           )
           .limit(1)
           .all();
-        const phave = prows.length ? BigInt(prows[0]!.raw) : 0n;
-        if (prows.length) {
+        if (dstRows.length) {
+          const dhave = BigInt(dstRows[0]!.raw);
           tx.update(ledgerBalances)
-            .set({ raw: (phave + toRaw).toString(), updated_at: Date.now() })
+            .set({ raw: (dhave + toRaw).toString(), updated_at: Date.now() })
             .where(
               and(
                 eq(ledgerBalances.user_id, user.sub),
-                eq(ledgerBalances.chain, party.chain),
-                eq(ledgerBalances.symbol, party.symbol)
+                eq(ledgerBalances.chain, toToken.chain),
+                eq(ledgerBalances.symbol, toToken.symbol)
               )
             )
             .run();
@@ -1034,15 +1043,15 @@ export async function walletRoutes(app: FastifyInstance) {
           tx.insert(ledgerBalances)
             .values({
               user_id: user.sub,
-              chain: party.chain,
-              symbol: party.symbol,
+              chain: toToken.chain,
+              symbol: toToken.symbol,
               raw: toRaw.toString(),
-              decimals: party.decimals,
+              decimals: toToken.decimals,
               updated_at: Date.now()
             })
             .run();
         }
-        // Audit trail: swap row + paired ledger entries.
+        // Audit trail: swap row + paired ledger entries. rate_usd = USD/unit of source.
         tx.insert(swaps)
           .values({
             id: swapId,
@@ -1050,10 +1059,10 @@ export async function walletRoutes(app: FastifyInstance) {
             from_symbol: fromToken.symbol,
             from_chain: fromToken.chain,
             from_raw: fromRaw.toString(),
-            to_symbol: party.symbol,
-            to_chain: party.chain,
+            to_symbol: toToken.symbol,
+            to_chain: toToken.chain,
             to_raw: toRaw.toString(),
-            rate_usd: String(rate),
+            rate_usd: String(rateFrom),
             created_at: Date.now()
           })
           .run();
@@ -1073,8 +1082,8 @@ export async function walletRoutes(app: FastifyInstance) {
           .values({
             id: ulid(),
             user_id: user.sub,
-            chain: party.chain,
-            symbol: party.symbol,
+            chain: toToken.chain,
+            symbol: toToken.symbol,
             delta_raw: toRaw.toString(),
             kind: "swap_in",
             ref_id: swapId,
@@ -1084,20 +1093,40 @@ export async function walletRoutes(app: FastifyInstance) {
       });
     } catch (e) {
       if ((e as Error).message === "INSUFFICIENT") {
-        return reply.code(400).send({ error: `Not enough ${fromToken.symbol} on that chain.` });
+        return reply.code(400).send({ error: `Not enough ${fromToken.symbol} on ${fromToken.chain}.` });
       }
       throw e;
     }
 
     notify(
-      `🔄 <b>Swap → PARTY</b>\nuser <code>${user.sub}</code>\n` +
-        `${amount} ${fromToken.symbol} (${fromToken.chain}) → ${partyOut.toFixed(6)} PARTY`
+      `🔄 <b>Swap</b>\nuser <code>${user.sub}</code>\n` +
+        `${amount} ${fromToken.symbol} (${fromToken.chain}) → ${received.toFixed(6)} ${toToken.symbol} (${toToken.chain})`
     );
     return reply.send({
       ok: true,
       swapId,
-      received: partyOut,
-      rate: { from: fromToken.symbol, usd: rate, partyUsd: priceUsd("PARTY") }
+      received,
+      from: { symbol: fromToken.symbol, chain: fromToken.chain, usd: rateFrom },
+      to: { symbol: toToken.symbol, chain: toToken.chain, usd: rateTo }
+    });
+  });
+
+  // GET /wallet/swaps/quote — authoritative price quote for the convert UI.
+  app.get("/wallet/swaps/quote", async (req: any, reply) => {
+    if (!(await requireAuth(req, reply))) return;
+    const q = req.query as Record<string, string>;
+    const fromToken = findToken(q.fromChain as any, q.fromSymbol ?? "");
+    const toToken = findToken(q.toChain as any, q.toSymbol ?? "");
+    const amount = Number(q.amount);
+    if (!fromToken || !toToken) return reply.code(400).send({ error: "Unknown asset." });
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return reply.send({ received: null });
+    }
+    const received = quoteSwap(fromToken.symbol as LogicalAsset, amount, toToken.symbol as LogicalAsset);
+    return reply.send({
+      received,
+      fromUsd: priceUsd(fromToken.symbol as LogicalAsset),
+      toUsd: priceUsd(toToken.symbol as LogicalAsset)
     });
   });
 

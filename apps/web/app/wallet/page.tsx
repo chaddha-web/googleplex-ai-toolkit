@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-context";
-import { authedFetch, exitLiquidity, swapToParty } from "@/lib/auth-client";
+import { authedFetch, exitLiquidity, swapAssets, swapQuote } from "@/lib/auth-client";
 import { QrCode } from "@/components/qr-code";
 import { QrScanner } from "@/components/qr-scanner";
 
@@ -178,10 +178,10 @@ export default function WalletPage() {
           <button
             type="button"
             onClick={() => setConvertOpen(true)}
-            disabled={fundedAssets.filter((a) => a.asset !== "PARTY").length === 0}
+            disabled={fundedAssets.length === 0}
             className="text-xs font-medium px-4 py-2 rounded-full ring-1 ring-white/15 text-white/85 hover:bg-white/5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
-            Convert to PARTY
+            Convert
           </button>
           <button
             type="button"
@@ -313,7 +313,7 @@ export default function WalletPage() {
 
       {convertOpen && (
         <ConvertModal
-          assets={fundedAssets.filter((a) => a.asset !== "PARTY")}
+          assets={fundedAssets}
           onClose={() => setConvertOpen(false)}
           onDone={() => {
             setConvertOpen(false);
@@ -325,9 +325,18 @@ export default function WalletPage() {
   );
 }
 
-/* ─────────────────────────── Convert to PARTY ─────────────────────────── */
+/* ───────────────────────────── Convert (any → any) ─────────────────────── */
 
-const PARTY_USD = 10; // platform-fixed PARTY price
+// Every destination instance the platform can credit.
+const SWAP_TARGETS: { symbol: string; chains: Chain[] }[] = [
+  { symbol: "PARTY", chains: ["tron"] },
+  { symbol: "USDT", chains: ["eth", "bsc", "tron"] },
+  { symbol: "USDC", chains: ["eth", "bsc"] },
+  { symbol: "ETH", chains: ["eth"] },
+  { symbol: "BNB", chains: ["bsc"] },
+  { symbol: "TRX", chains: ["tron"] },
+  { symbol: "BTC", chains: ["btc"] }
+];
 
 function ConvertModal({
   assets,
@@ -338,31 +347,64 @@ function ConvertModal({
   onClose: () => void;
   onDone: () => void;
 }) {
+  // Source
   const [assetSym, setAssetSym] = useState(assets[0]?.asset ?? "");
   const asset = assets.find((a) => a.asset === assetSym);
   const fundedChains = (asset?.perChain ?? []).filter((c) => c.amount > 0);
   const [chain, setChain] = useState<Chain | "">(fundedChains[0]?.chain ?? "");
   const chainRow = fundedChains.find((c) => c.chain === chain);
+  const max = chainRow?.amount ?? 0;
+
+  // Destination — default to PARTY (the common case), else first non-source.
+  const [toSym, setToSym] = useState("PARTY");
+  const toTarget = SWAP_TARGETS.find((t) => t.symbol === toSym) ?? SWAP_TARGETS[0]!;
+  const [toChain, setToChain] = useState<Chain>(toTarget.chains[0]!);
+
   const [amount, setAmount] = useState("");
   const [pwd, setPwd] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<number | null>(null);
+  const [done, setDone] = useState<{ received: number; sym: string } | null>(null);
+  const [quote, setQuote] = useState<number | null>(null);
 
-  const max = chainRow?.amount ?? 0;
-  // Per-unit USD for the whole asset (fixed-price valuation); PARTY = $10.
-  const unitUsd = asset && asset.usd != null && asset.total > 0 ? asset.usd / asset.total : null;
   const amt = Number(amount);
-  const estParty =
-    unitUsd != null && Number.isFinite(amt) && amt > 0 ? (amt * unitUsd) / PARTY_USD : null;
+  const sameInstance = asset?.asset === toSym && chain === toChain;
+  const valid = !!chain && !!asset && amt > 0 && amt <= max && !!pwd.trim() && !sameInstance;
+
+  // Debounced authoritative quote from the server.
+  useEffect(() => {
+    if (!asset || !chain || !amt || amt <= 0 || sameInstance) {
+      setQuote(null);
+      return;
+    }
+    let alive = true;
+    const t = setTimeout(() => {
+      swapQuote({
+        from: { chain, symbol: asset.asset },
+        to: { chain: toChain, symbol: toSym },
+        amount: amt
+      })
+        .then((r) => alive && setQuote(r.received))
+        .catch(() => alive && setQuote(null));
+    }, 300);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [asset, chain, amt, toSym, toChain, sameInstance]);
 
   async function submit() {
-    if (!chain || !asset || !amt || amt <= 0 || amt > max || !pwd.trim() || busy) return;
+    if (!valid || !asset || busy) return;
     setBusy(true);
     setError(null);
     try {
-      const r = await swapToParty({ chain, symbol: asset.asset, amount: amt, walletPassword: pwd });
-      setDone(r.received);
+      const r = await swapAssets({
+        from: { chain: chain as Chain, symbol: asset.asset },
+        to: { chain: toChain, symbol: toSym },
+        amount: amt,
+        walletPassword: pwd
+      });
+      setDone({ received: r.received, sym: toSym });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -372,60 +414,86 @@ function ConvertModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6" onClick={onClose}>
-      <div className="w-full max-w-md liquid-glass rounded-3xl p-6 md:p-7" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md liquid-glass rounded-3xl p-6 md:p-7 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-1">
-          <h3 className="text-white text-lg font-medium">
-            {done !== null ? "Converted" : "Convert to PARTY"}
-          </h3>
-          <button onClick={done !== null ? onDone : onClose} className="text-white/50 hover:text-white text-sm">
-            {done !== null ? "Done" : "Cancel"}
+          <h3 className="text-white text-lg font-medium">{done ? "Converted" : "Convert"}</h3>
+          <button onClick={done ? onDone : onClose} className="text-white/50 hover:text-white text-sm">
+            {done ? "Done" : "Cancel"}
           </button>
         </div>
 
-        {done !== null ? (
+        {done ? (
           <div className="mt-4 text-center py-6">
-            <p className="text-4xl font-medium tracking-tight">{done.toLocaleString(undefined, { maximumFractionDigits: 6 })}</p>
-            <p className="text-white/50 text-sm mt-2">PARTY added to your balance</p>
+            <p className="text-4xl font-medium tracking-tight">
+              {done.received.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+            </p>
+            <p className="text-white/50 text-sm mt-2">{done.sym} added to your balance</p>
           </div>
         ) : (
           <>
             <p className="text-white/50 text-sm mb-5">
-              Convert a funded balance into PARTY at the platform rate — PARTY is fixed at ${PARTY_USD.toFixed(2)}.
+              Convert between assets at the platform rate — PARTY is fixed at $10.00.
             </p>
 
-            <Field label="From asset">
-              <select
-                value={assetSym}
-                onChange={(e) => {
-                  setAssetSym(e.target.value);
-                  const next = assets.find((a) => a.asset === e.target.value);
-                  const fc = (next?.perChain ?? []).filter((c) => c.amount > 0);
-                  setChain(fc[0]?.chain ?? "");
-                  setAmount("");
-                }}
-                className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 text-white focus:ring-2 focus:ring-white/20 appearance-none [color-scheme:dark]"
-              >
-                {assets.map((a) => (
-                  <option key={a.asset} value={a.asset} className="bg-[#14122e] text-white">
-                    {a.asset}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="From asset">
+                <select
+                  value={assetSym}
+                  onChange={(e) => {
+                    setAssetSym(e.target.value);
+                    const next = assets.find((a) => a.asset === e.target.value);
+                    const fc = (next?.perChain ?? []).filter((c) => c.amount > 0);
+                    setChain(fc[0]?.chain ?? "");
+                    setAmount("");
+                  }}
+                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-3 text-white focus:ring-2 focus:ring-white/20 appearance-none [color-scheme:dark]"
+                >
+                  {assets.map((a) => (
+                    <option key={a.asset} value={a.asset} className="bg-[#14122e] text-white">{a.asset}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="From chain">
+                <select
+                  value={chain}
+                  onChange={(e) => setChain(e.target.value as Chain)}
+                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-3 text-white focus:ring-2 focus:ring-white/20 appearance-none [color-scheme:dark]"
+                >
+                  {fundedChains.map((c) => (
+                    <option key={c.chain} value={c.chain} className="bg-[#14122e] text-white">{CHAIN_LABEL[c.chain]}</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
 
-            <Field label="From chain">
-              <select
-                value={chain}
-                onChange={(e) => setChain(e.target.value as Chain)}
-                className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 text-white focus:ring-2 focus:ring-white/20 appearance-none [color-scheme:dark]"
-              >
-                {fundedChains.map((c) => (
-                  <option key={c.chain} value={c.chain} className="bg-[#14122e] text-white">
-                    {CHAIN_LABEL[c.chain]} — {fmt(c.amount)} {assetSym}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            <div className="grid grid-cols-2 gap-3 mt-1">
+              <Field label="To asset">
+                <select
+                  value={toSym}
+                  onChange={(e) => {
+                    setToSym(e.target.value);
+                    const t = SWAP_TARGETS.find((t) => t.symbol === e.target.value)!;
+                    setToChain(t.chains[0]!);
+                  }}
+                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-3 text-white focus:ring-2 focus:ring-white/20 appearance-none [color-scheme:dark]"
+                >
+                  {SWAP_TARGETS.map((t) => (
+                    <option key={t.symbol} value={t.symbol} className="bg-[#14122e] text-white">{t.symbol}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="To chain">
+                <select
+                  value={toChain}
+                  onChange={(e) => setToChain(e.target.value as Chain)}
+                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-3 text-white focus:ring-2 focus:ring-white/20 appearance-none [color-scheme:dark]"
+                >
+                  {toTarget.chains.map((c) => (
+                    <option key={c} value={c} className="bg-[#14122e] text-white">{CHAIN_LABEL[c]}</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
 
             <Field label="Amount">
               <div className="relative">
@@ -446,9 +514,11 @@ function ConvertModal({
               </div>
               <div className="flex items-center justify-between mt-2">
                 <p className="text-white/30 text-xs">{fmt(max)} {assetSym} available</p>
-                {estParty != null && (
-                  <p className="text-emerald-300/90 text-xs">≈ {estParty.toLocaleString(undefined, { maximumFractionDigits: 6 })} PARTY</p>
-                )}
+                {sameInstance ? (
+                  <p className="text-amber-300/80 text-xs">Pick a different destination</p>
+                ) : quote != null ? (
+                  <p className="text-emerald-300/90 text-xs">≈ {quote.toLocaleString(undefined, { maximumFractionDigits: 6 })} {toSym}</p>
+                ) : null}
               </div>
             </Field>
 
@@ -467,10 +537,10 @@ function ConvertModal({
             <button
               type="button"
               onClick={submit}
-              disabled={busy || !chain || !amt || amt <= 0 || amt > max || !pwd.trim()}
+              disabled={busy || !valid}
               className="mt-5 w-full rounded-full bg-white text-black text-sm font-medium py-3 hover:bg-white/90 disabled:opacity-40"
             >
-              {busy ? "Converting…" : "Convert to PARTY"}
+              {busy ? "Converting…" : `Convert to ${toSym}`}
             </button>
           </>
         )}

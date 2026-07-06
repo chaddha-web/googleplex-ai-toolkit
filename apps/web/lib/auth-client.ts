@@ -330,20 +330,41 @@ export async function unlockWallet(password: string): Promise<void> {
   if (!res.ok) throw new Error(data.error || "Could not unlock wallet.");
 }
 
-/** Convert a funded balance into PARTY at the platform rate (PARTY = $10). */
-export async function swapToParty(opts: {
-  chain: string;
-  symbol: string;
+export type SwapEndpoint = { chain: string; symbol: string };
+
+/** Convert between any two priced assets at the platform rate (ledger-only). */
+export async function swapAssets(opts: {
+  from: SwapEndpoint;
+  to: SwapEndpoint;
   amount: number;
   walletPassword: string;
-}): Promise<{ received: number; rate: { from: string; usd: number; partyUsd: number } }> {
+}): Promise<{ received: number; from: { symbol: string }; to: { symbol: string } }> {
   const res = await authedFetch(`${WALLET_BASE}/wallet/swaps`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(opts)
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "Could not convert to PARTY.");
+  if (!res.ok) throw new Error(data.error || "Could not convert.");
+  return data;
+}
+
+/** Authoritative quote for the convert UI. Returns received amount or null. */
+export async function swapQuote(opts: {
+  from: SwapEndpoint;
+  to: SwapEndpoint;
+  amount: number;
+}): Promise<{ received: number | null }> {
+  const p = new URLSearchParams({
+    fromChain: opts.from.chain,
+    fromSymbol: opts.from.symbol,
+    toChain: opts.to.chain,
+    toSymbol: opts.to.symbol,
+    amount: String(opts.amount)
+  });
+  const res = await authedFetch(`${WALLET_BASE}/wallet/swaps/quote?${p.toString()}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { received: null };
   return data;
 }
 
