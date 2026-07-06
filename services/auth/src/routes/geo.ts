@@ -4,6 +4,24 @@ import { stmts } from "../db.js";
 import { verifyAccessToken } from "../jwt.js";
 
 /**
+ * Offline IP→geo lookup, hardened: normalises IPv4-mapped IPv6 (Traefik/Node
+ * can hand us "::ffff:1.2.3.4") and never throws — a bad IP just yields null.
+ * Shared so every geo path (online sessions, member placement, presence) uses
+ * identical semantics.
+ */
+export function lookupGeo(
+  ip: string | null | undefined
+): ReturnType<typeof geoip.lookup> {
+  if (!ip) return null;
+  const norm = ip.startsWith("::ffff:") ? ip.slice(7) : ip;
+  try {
+    return geoip.lookup(norm);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * GET /auth/admin/geo — aggregate customer locations for the admin globe.
  *
  * Privacy by construction: the response carries ONLY country/state aggregates
@@ -57,7 +75,7 @@ export async function geoRoutes(app: FastifyInstance) {
       if (seen.has(r.user_id)) continue;
       seen.add(r.user_id);
       if (!r.ip) continue;
-      const hit = geoip.lookup(r.ip);
+      const hit = lookupGeo(r.ip);
       if (!hit || !hit.ll) continue; // private/unknown IP — skip silently
       activeTotal++;
       const lat = Math.round(hit.ll[0]);

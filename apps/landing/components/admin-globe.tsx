@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Globe, { type GlobeMethods } from "react-globe.gl";
 import { authedFetch, AUTH_BASE } from "@/lib/auth-client";
 
@@ -74,6 +74,8 @@ export default function AdminGlobe() {
   }, []);
 
   const load = useCallback(async () => {
+    // Don't poll a tab nobody's looking at.
+    if (typeof document !== "undefined" && document.hidden) return;
     try {
       const res = await authedFetch(`${AUTH_BASE}/auth/admin/geo`);
       const d = await res.json().catch(() => ({}));
@@ -89,6 +91,22 @@ export default function AdminGlobe() {
     load();
     const t = setInterval(load, 30_000);
     return () => clearInterval(t);
+  }, [load]);
+
+  // Pause the three.js render loop (and rotation) while the tab is hidden to
+  // save GPU/battery; resume and refresh immediately on return.
+  useEffect(() => {
+    const onVis = () => {
+      const g = globeRef.current;
+      if (document.hidden) {
+        g?.pauseAnimation();
+      } else {
+        g?.resumeAnimation();
+        load();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
   }, [load]);
 
   // Slow auto-rotate once the globe is ready. Speed is gentle so a single
@@ -158,7 +176,19 @@ export default function AdminGlobe() {
       });
     }
   }
-  const rings = (data?.active ?? []).map((a) => ({ lat: a.lat, lng: a.lng }));
+  // Keep the same ring objects between polls when the online locations haven't
+  // moved, so react-globe.gl doesn't restart the pulse animation every 30 s.
+  const activeKey = data ? data.active.map((a) => `${a.lat},${a.lng}`).join("|") : "";
+  const rings = useMemo(
+    () =>
+      activeKey
+        ? activeKey.split("|").map((s) => {
+            const [lat, lng] = s.split(",").map(Number);
+            return { lat, lng };
+          })
+        : [],
+    [activeKey]
+  );
 
   return (
     <div className="relative">
@@ -204,7 +234,7 @@ export default function AdminGlobe() {
             Online now (state-level)
           </p>
           <p className="text-white/70">
-            <span className="inline-block h-2 w-2 rounded-full align-middle mr-2" style={{ background: "rgba(255,200,90,0.75)" }} />
+            <span className="inline-block h-2 w-2 rounded-full align-middle mr-2" style={{ background: "rgba(255,200,90,0.9)" }} />
             All members (by country)
           </p>
         </div>
