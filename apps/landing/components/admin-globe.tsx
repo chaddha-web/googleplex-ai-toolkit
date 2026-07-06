@@ -59,6 +59,7 @@ function countryName(code: string): string {
 
 export default function AdminGlobe() {
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
+  const focused = useRef(false);
   const [data, setData] = useState<GeoResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [dims, setDims] = useState({ w: 800, h: 600 });
@@ -90,14 +91,46 @@ export default function AdminGlobe() {
     return () => clearInterval(t);
   }, [load]);
 
-  // Slow auto-rotate once the globe is ready.
+  // Slow auto-rotate once the globe is ready. Speed is gentle so a single
+  // populated region (e.g. everyone in India today) stays in view for a while
+  // rather than being whisked to the far side.
   const onReady = useCallback(() => {
     const controls = globeRef.current?.controls();
     if (controls) {
       controls.autoRotate = true;
-      controls.autoRotateSpeed = 0.55;
+      controls.autoRotateSpeed = 0.4;
     }
   }, []);
+
+  // Frame the camera on wherever the members actually are, the first time we
+  // get data — so the globe never opens on an empty ocean. Uses a spherical
+  // (vector) mean, which stays correct even when members straddle the
+  // antimeridian once presence goes worldwide. Only runs once, so it won't
+  // fight the admin's manual rotation on later 30s refreshes.
+  useEffect(() => {
+    if (focused.current || !data || !globeRef.current) return;
+    const pts: { lat: number; lng: number; w: number }[] = [];
+    for (const c of data.customers) {
+      const ll = COUNTRY_LL[c.country];
+      if (ll) pts.push({ lat: ll[0], lng: ll[1], w: Math.max(1, c.count) });
+    }
+    for (const a of data.active) pts.push({ lat: a.lat, lng: a.lng, w: Math.max(1, a.count) });
+    if (pts.length === 0) return;
+    const R = Math.PI / 180;
+    let x = 0, y = 0, z = 0, tw = 0;
+    for (const p of pts) {
+      const la = p.lat * R, lo = p.lng * R;
+      x += Math.cos(la) * Math.cos(lo) * p.w;
+      y += Math.cos(la) * Math.sin(lo) * p.w;
+      z += Math.sin(la) * p.w;
+      tw += p.w;
+    }
+    if (tw === 0) return;
+    const lng = Math.atan2(y / tw, x / tw) / R;
+    const lat = Math.atan2(z / tw, Math.hypot(x / tw, y / tw)) / R;
+    globeRef.current.pointOfView({ lat, lng, altitude: 2.1 }, 1400);
+    focused.current = true;
+  }, [data]);
 
   const points: Pt[] = [];
   if (data) {
@@ -107,8 +140,8 @@ export default function AdminGlobe() {
       points.push({
         lat: ll[0],
         lng: ll[1],
-        size: Math.min(0.5, 0.12 + Math.sqrt(c.count) * 0.06),
-        color: "rgba(255, 200, 90, 0.55)",
+        size: Math.min(0.9, 0.3 + Math.sqrt(c.count) * 0.08),
+        color: "rgba(255, 200, 90, 0.9)",
         label: `${c.country} — ${c.count} member${c.count === 1 ? "" : "s"}`
       });
     }
@@ -119,8 +152,8 @@ export default function AdminGlobe() {
       points.push({
         lat: a.lat,
         lng: a.lng,
-        size: Math.min(0.7, 0.22 + Math.sqrt(a.count) * 0.08),
-        color: "rgba(52, 211, 153, 0.95)",
+        size: Math.min(1.1, 0.45 + Math.sqrt(a.count) * 0.1),
+        color: "rgba(52, 211, 153, 0.98)",
         label: `${where} — ${a.count} online`
       });
     }
@@ -142,16 +175,16 @@ export default function AdminGlobe() {
         pointLat="lat"
         pointLng="lng"
         pointColor="color"
-        pointAltitude={0.015}
+        pointAltitude={0.07}
         pointRadius="size"
         pointLabel="label"
         ringsData={rings}
         ringLat="lat"
         ringLng="lng"
         ringColor={() => (t: number) => `rgba(52, 211, 153, ${1 - t})`}
-        ringMaxRadius={3.2}
-        ringPropagationSpeed={1.1}
-        ringRepeatPeriod={1100}
+        ringMaxRadius={5}
+        ringPropagationSpeed={1.6}
+        ringRepeatPeriod={900}
       />
 
       {/* Overlay: totals + legend */}
