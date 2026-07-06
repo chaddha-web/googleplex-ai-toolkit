@@ -2,12 +2,22 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/components/auth-context";
-import { submitProfile } from "@/lib/auth-client";
+import { submitProfile, uploadAvatar } from "@/lib/auth-client";
+import { AvatarCropper, WebcamCapture } from "@/components/avatar-editor";
 import { LoopVideo } from "@/components/video";
 import { VIDEOS } from "@/lib/assets";
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Couldn't read that image."));
+    reader.readAsDataURL(file);
+  });
+}
 
 /**
  * Step 1 of post-OTP onboarding.
@@ -58,6 +68,40 @@ export default function ProfileSetupPage() {
   const [notifications, setNotifications] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Optional profile photo.
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [camOpen, setCamOpen] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarErr, setAvatarErr] = useState<string | null>(null);
+
+  async function onAvatarFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (fileRef.current) fileRef.current.value = "";
+    if (!f) return;
+    setAvatarErr(null);
+    try {
+      setEditing(await fileToDataUrl(f));
+    } catch (err) {
+      setAvatarErr((err as Error).message);
+    }
+  }
+
+  async function saveAvatar(dataUrl: string) {
+    setAvatarErr(null);
+    setAvatarBusy(true);
+    try {
+      await uploadAvatar(dataUrl);
+      setAvatarPreview(dataUrl);
+      setEditing(null);
+    } catch (err) {
+      setAvatarErr((err as Error).message);
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
 
   const ageNum = Number(age);
   const ageValid = Number.isFinite(ageNum) && ageNum >= 18 && ageNum <= 120;
@@ -152,6 +196,63 @@ export default function ProfileSetupPage() {
           className="mt-10 liquid-glass rounded-3xl p-6 md:p-8 space-y-6"
           noValidate
         >
+          {/* Profile photo (optional) */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-white block">
+              Profile photo <span className="text-white/30 font-normal">— optional</span>
+            </label>
+            <div className="flex items-center gap-4">
+              {avatarPreview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={avatarPreview}
+                  alt="Your avatar"
+                  className="h-16 w-16 rounded-full object-cover ring-1 ring-white/15 shrink-0"
+                />
+              ) : (
+                <div
+                  className="h-16 w-16 rounded-full grid place-items-center text-xl font-semibold shrink-0"
+                  style={{ background: "linear-gradient(160deg,#8A68FF,#5A3CC8)", color: "#fff" }}
+                >
+                  {(user?.firstName || "G").charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={avatarBusy}
+                  className="rounded-full ring-1 ring-white/15 text-white/85 text-sm px-4 py-2 hover:bg-white/5 disabled:opacity-40 transition-colors"
+                >
+                  {avatarPreview ? "Change" : "Add photo"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAvatarErr(null);
+                    setCamOpen(true);
+                  }}
+                  disabled={avatarBusy}
+                  className="rounded-full ring-1 ring-white/15 text-white/85 text-sm px-4 py-2 hover:bg-white/5 disabled:opacity-40 transition-colors inline-flex items-center gap-1.5"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                    <circle cx="12" cy="13" r="4" />
+                  </svg>
+                  Take photo
+                </button>
+              </div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={onAvatarFile}
+                className="hidden"
+              />
+            </div>
+            {avatarErr && <p className="text-rose-300 text-sm">{avatarErr}</p>}
+          </div>
+
           {/* Age */}
           <div className="space-y-2">
             <label htmlFor="age" className="text-sm font-medium text-white block">
@@ -282,6 +383,24 @@ export default function ProfileSetupPage() {
           </div>
         </motion.form>
       </section>
+
+      {camOpen && (
+        <WebcamCapture
+          onCapture={(dataUrl) => {
+            setCamOpen(false);
+            setEditing(dataUrl);
+          }}
+          onCancel={() => setCamOpen(false)}
+        />
+      )}
+      {editing && (
+        <AvatarCropper
+          src={editing}
+          busy={avatarBusy}
+          onCancel={() => setEditing(null)}
+          onSave={saveAvatar}
+        />
+      )}
     </main>
   );
 }

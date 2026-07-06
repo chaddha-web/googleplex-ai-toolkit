@@ -283,6 +283,18 @@ export async function submitProfile(payload: ProfilePayload): Promise<User> {
   return (me ?? data.user) as User;
 }
 
+/** Upload a profile image (data URL) → media bucket. Returns the new URL. */
+export async function uploadAvatar(dataUrl: string): Promise<string> {
+  const res = await authedFetch(`${AUTH_BASE}/auth/profile/avatar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ image: dataUrl })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not upload image.");
+  return data.avatarUrl as string;
+}
+
 export type AdminUserRow = {
   id: string;
   email: string;
