@@ -111,3 +111,57 @@ export async function sendBtc(opts: { to: string; amountRaw: string }): Promise<
   if (!res.ok) throw new Error(`BTC broadcast failed: ${txid}`);
   return txid.trim();
 }
+
+// ── Sweep primitives (from an arbitrary derived user key) ──────────────────
+
+/** Confirmed BTC balance (sats) at an address. */
+export async function btcBalance(address: string): Promise<bigint> {
+  const utxos = await fetchUtxos(address);
+  return BigInt(utxos.reduce((s, u) => s + u.value, 0));
+}
+
+/**
+ * Sweep ALL confirmed UTXOs from the address controlled by `priv` to `to`,
+ * as a single output (value = total − fee). No gas-funding needed — the miner
+ * fee comes out of the swept amount. Returns null if there's nothing worth
+ * sweeping (dust after fee).
+ */
+export async function btcSweepAllFromPriv(opts: {
+  priv: string;
+  to: string;
+}): Promise<{ txid: string; amountRaw: string } | null> {
+  if (!isValidBtcAddress(opts.to)) throw new Error("Invalid BTC destination");
+  const priv = opts.priv.replace(/^0x/, "");
+  const privBuf = Buffer.from(priv, "hex");
+  const pubkey = btcPubkey(priv);
+  const fromAddr = addressForKey("btc", priv);
+  const p2wpkh = bitcoin.payments.p2wpkh({ pubkey, network: NETWORK });
+  const script = p2wpkh.output!;
+
+  const [utxos, rate] = await Promise.all([fetchUtxos(fromAddr), feeRate()]);
+  if (utxos.length === 0) return null;
+  const inSum = utxos.reduce((s, u) => s + u.value, 0);
+  // Single-output tx: inputs*68 + 1*31 + 11 vbytes.
+  const fee = Math.ceil(rate * (utxos.length * 68 + 31 + 11));
+  const send = inSum - fee;
+  if (send <= DUST) return null;
+
+  const psbt = new bitcoin.Psbt({ network: NETWORK });
+  for (const u of utxos) {
+    psbt.addInput({ hash: u.txid, index: u.vout, witnessUtxo: { script, value: u.value } });
+  }
+  psbt.addOutput({ address: opts.to, value: send });
+
+  const signer: bitcoin.Signer = {
+    publicKey: pubkey,
+    sign: (hash: Buffer) => Buffer.from(ecc.sign(hash, privBuf))
+  };
+  for (let i = 0; i < utxos.length; i++) psbt.signInput(i, signer);
+  psbt.finalizeAllInputs();
+
+  const rawHex = psbt.extractTransaction().toHex();
+  const res = await fetch(`${API}/tx`, { method: "POST", body: rawHex });
+  const txid = await res.text();
+  if (!res.ok) throw new Error(`BTC broadcast failed: ${txid}`);
+  return { txid: txid.trim(), amountRaw: String(send) };
+}

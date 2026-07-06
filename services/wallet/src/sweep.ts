@@ -23,6 +23,8 @@ import { deriveUserPrivKey } from "./hd.js";
 import { treasuryAddress, privKeyForChain } from "./treasury.js";
 import { TOKENS } from "./tokens.js";
 import * as evm from "./sign/evm.js";
+import * as tron from "./sign/tron.js";
+import * as btc from "./sign/btc.js";
 
 export type SweepLeg = {
   chain: string;
@@ -145,45 +147,111 @@ async function planEvm(
   }
 }
 
+/** Tron plan: TRC-20 sweeps (gas-funded with TRX) + a native TRX sweep.
+ *  PARTY is excluded — it's an internal fixed-price token, not a deposit asset. */
+async function planTron(address: string, treasury: string, plan: SweepPlan) {
+  let trx: bigint;
+  try {
+    trx = await tron.tronNativeBalance(address);
+  } catch {
+    plan.skipped.push({ chain: "tron", symbol: "*", reason: "RPC unavailable" });
+    return;
+  }
+  const tokens = TOKENS.filter((t) => t.chain === "tron" && !t.native && t.symbol !== "PARTY");
+  for (const t of tokens) {
+    let bal: bigint;
+    try {
+      bal = await tron.tronTrc20Balance(t.address!, address);
+    } catch {
+      continue;
+    }
+    if (bal <= 0n) continue;
+    if (trx < tron.TRON_SWEEP_GAS_SUN) {
+      const need = tron.TRON_SWEEP_GAS_SUN - trx;
+      plan.legs.push({
+        chain: "tron",
+        symbol: t.symbol,
+        kind: "gas_fund",
+        amountRaw: need.toString(),
+        amount: human(need, 6),
+        from: treasury,
+        to: address
+      });
+    }
+    plan.legs.push({
+      chain: "tron",
+      symbol: t.symbol,
+      kind: "token_sweep",
+      amountRaw: bal.toString(),
+      amount: human(bal, t.decimals),
+      from: address,
+      to: treasury
+    });
+  }
+  if (trx > tron.TRON_NATIVE_RESERVE_SUN) {
+    const amt = trx - tron.TRON_NATIVE_RESERVE_SUN;
+    plan.legs.push({
+      chain: "tron",
+      symbol: "TRX",
+      kind: "native_sweep",
+      amountRaw: amt.toString(),
+      amount: human(amt, 6),
+      from: address,
+      to: treasury
+    });
+  }
+}
+
+/** BTC plan: a single native sweep of all UTXOs (fee comes out of the amount). */
+async function planBtc(address: string, treasury: string, plan: SweepPlan) {
+  let bal: bigint;
+  try {
+    bal = await btc.btcBalance(address);
+  } catch {
+    plan.skipped.push({ chain: "btc", symbol: "*", reason: "RPC unavailable" });
+    return;
+  }
+  if (bal <= 0n) return;
+  plan.legs.push({
+    chain: "btc",
+    symbol: "BTC",
+    kind: "native_sweep",
+    amountRaw: bal.toString(),
+    amount: human(bal, 8),
+    from: address,
+    to: treasury
+  });
+}
+
 export async function previewUser(userId: string): Promise<SweepPlan> {
   const row = await userRow(userId);
   const plan: SweepPlan = {
     userId,
     userIndex: row.user_index,
-    supported: ["eth", "bsc"],
-    pending: ["tron", "btc"],
+    supported: ["eth", "bsc", "tron", "btc"],
+    pending: [],
     legs: [],
     skipped: []
   };
-  const treasury = await treasuryAddress("evm");
-  await planEvm("eth", row.eth, treasury, plan);
-  await planEvm("bsc", row.bsc, treasury, plan);
-  // Tron/BTC: surfaced as pending so the admin knows they aren't swept yet.
-  if (row.tron) plan.skipped.push({ chain: "tron", symbol: "*", reason: "execution pending on-chain validation" });
-  if (row.btc) plan.skipped.push({ chain: "btc", symbol: "*", reason: "execution pending on-chain validation" });
+  const evmTreasury = await treasuryAddress("evm");
+  await planEvm("eth", row.eth, evmTreasury, plan);
+  await planEvm("bsc", row.bsc, evmTreasury, plan);
+  if (row.tron) await planTron(row.tron, await treasuryAddress("tron"), plan);
+  if (row.btc) await planBtc(row.btc, await treasuryAddress("btc"), plan);
   return plan;
 }
 
 /**
- * Execute the EVM legs of the plan. Gas-fund legs run first (treasury → user)
- * and are awaited before the dependent token transfer. Every broadcast leg is
- * recorded in treasury_sweeps. The user ledger is never touched.
+ * Execute the flush for one user across all chains. Gas-fund legs run first
+ * (treasury → user) and are awaited before the dependent token transfer.
+ * Amounts are RE-READ live at execution so we never over-send. Every broadcast
+ * leg is recorded in treasury_sweeps. The user ledger is never touched.
  */
 export async function executeUser(userId: string, adminId: string): Promise<SweepResult> {
   const row = await userRow(userId);
-  const treasury = await treasuryAddress("evm");
-  const mnemonic = await masterMnemonic("evm");
-  const userPriv = deriveUserPrivKey(mnemonic, "eth", row.user_index); // EVM key
-
-  const plan = await previewUser(userId);
   const out: SweepResult = { ok: true, legs: [] };
 
-  const record = (
-    leg: SweepLeg,
-    status: string,
-    txHash?: string,
-    error?: string
-  ) => {
+  const record = (leg: SweepLeg, status: string, txHash?: string, error?: string) => {
     db.insert(treasurySweeps)
       .values({
         id: ulid(),
@@ -203,41 +271,139 @@ export async function executeUser(userId: string, adminId: string): Promise<Swee
       .run();
     out.legs.push({ ...leg, txHash, status, error });
   };
+  const leg = (
+    chain: string,
+    symbol: string,
+    kind: SweepLeg["kind"],
+    raw: bigint,
+    dec: number,
+    from: string,
+    to: string
+  ): SweepLeg => ({ chain, symbol, kind, amountRaw: raw.toString(), amount: human(raw, dec), from, to });
 
-  for (const leg of plan.legs.filter((l) => l.chain === "eth" || l.chain === "bsc")) {
-    const chain = leg.chain as EvmChain;
+  // ── EVM (ETH + BSC share the address/key) ──────────────────────────────
+  try {
+    const priv = deriveUserPrivKey(await masterMnemonic("evm"), "eth", row.user_index);
+    const treasury = await treasuryAddress("evm");
+    for (const chain of EVM_CHAINS) {
+      const addr = chain === "eth" ? row.eth : row.bsc;
+      const gasPrice = await evm.evmGasPrice(chain);
+      const tokenGas = evm.EVM_ERC20_GAS * gasPrice;
+      for (const t of TOKENS.filter((t) => t.chain === chain && !t.native && t.symbol !== "PARTY")) {
+        let bal: bigint;
+        try {
+          bal = await evm.evmTokenBalance(chain, t.address!, addr);
+        } catch {
+          continue;
+        }
+        if (bal <= 0n) continue;
+        try {
+          const have = await evm.evmNativeBalance(chain, addr);
+          if (have < tokenGas) {
+            const need = tokenGas - have;
+            const gl = leg(chain, t.symbol, "gas_fund", need, 18, treasury, addr);
+            const gh = await evm.sendEvmNative({ chain, to: addr, amountRaw: need.toString() });
+            record(gl, "sent", gh);
+            if (!(await evm.evmWaitReceipt(chain, gh))) throw new Error("gas-fund reverted");
+          }
+          const tl = leg(chain, t.symbol, "token_sweep", bal, t.decimals, addr, treasury);
+          const th = await evm.evmSendErc20FromPriv({ chain, priv, token: t.address!, to: treasury, amountRaw: bal.toString() });
+          record(tl, "sent", th);
+        } catch (e) {
+          out.ok = false;
+          record(leg(chain, t.symbol, "token_sweep", bal, t.decimals, addr, treasury), "failed", undefined, (e as Error).message);
+        }
+      }
+      // native sweep — re-read, subtract fee
+      try {
+        const bal = await evm.evmNativeBalance(chain, addr);
+        const fee = evm.EVM_NATIVE_GAS * gasPrice;
+        if (bal > fee) {
+          const nl = leg(chain, chain === "eth" ? "ETH" : "BNB", "native_sweep", bal - fee, 18, addr, treasury);
+          const nh = await evm.evmSendNativeFromPriv({ chain, priv, to: treasury, amountRaw: (bal - fee).toString() });
+          record(nl, "sent", nh);
+        }
+      } catch (e) {
+        out.ok = false;
+        record(leg(chain, "native", "native_sweep", 0n, 18, addr, treasury), "failed", undefined, (e as Error).message);
+      }
+    }
+  } catch (e) {
+    out.ok = false;
+    record(leg("eth", "*", "token_sweep", 0n, 18, row.eth, ""), "failed", undefined, "EVM: " + (e as Error).message);
+  }
+
+  // ── Tron ───────────────────────────────────────────────────────────────
+  if (row.tron) {
     try {
-      let hash: string;
-      if (leg.kind === "gas_fund") {
-        // Treasury pays the gas to the user address, then we wait for it.
-        hash = await evm.sendEvmNative({ chain, to: leg.to, amountRaw: leg.amountRaw });
-        record(leg, "sent", hash);
-        const ok = await evm.evmWaitReceipt(chain, hash);
-        if (!ok) throw new Error("gas-fund tx reverted");
-      } else if (leg.kind === "token_sweep") {
-        const token = TOKENS.find((t) => t.chain === chain && t.symbol === leg.symbol && !t.native)!;
-        hash = await evm.evmSendErc20FromPriv({
-          chain,
-          priv: userPriv,
-          token: token.address!,
-          to: treasury,
-          amountRaw: leg.amountRaw
-        });
-        record(leg, "sent", hash);
-      } else {
-        hash = await evm.evmSendNativeFromPriv({
-          chain,
-          priv: userPriv,
-          to: treasury,
-          amountRaw: leg.amountRaw
-        });
-        record(leg, "sent", hash);
+      const priv = deriveUserPrivKey(await masterMnemonic("tron"), "tron", row.user_index);
+      const treasury = await treasuryAddress("tron");
+      for (const t of TOKENS.filter((t) => t.chain === "tron" && !t.native && t.symbol !== "PARTY")) {
+        let bal: bigint;
+        try {
+          bal = await tron.tronTrc20Balance(t.address!, row.tron);
+        } catch {
+          continue;
+        }
+        if (bal <= 0n) continue;
+        try {
+          const have = await tron.tronNativeBalance(row.tron);
+          if (have < tron.TRON_SWEEP_GAS_SUN) {
+            const need = tron.TRON_SWEEP_GAS_SUN - have;
+            const gl = leg("tron", t.symbol, "gas_fund", need, 6, treasury, row.tron);
+            const gh = await tron.tronSendNativeFromPriv({ priv: await treasuryTronPriv(), to: row.tron, amountRaw: need.toString() });
+            record(gl, "sent", gh);
+            await tron.tronWaitBalance(row.tron, tron.TRON_SWEEP_GAS_SUN);
+          }
+          const tl = leg("tron", t.symbol, "token_sweep", bal, t.decimals, row.tron, treasury);
+          const th = await tron.tronSendTrc20FromPriv({ priv, contract: t.address!, to: treasury, amountRaw: bal.toString() });
+          record(tl, "sent", th);
+        } catch (e) {
+          out.ok = false;
+          record(leg("tron", t.symbol, "token_sweep", bal, t.decimals, row.tron, treasury), "failed", undefined, (e as Error).message);
+        }
+      }
+      try {
+        const trx = await tron.tronNativeBalance(row.tron);
+        if (trx > tron.TRON_NATIVE_RESERVE_SUN) {
+          const amt = trx - tron.TRON_NATIVE_RESERVE_SUN;
+          const nl = leg("tron", "TRX", "native_sweep", amt, 6, row.tron, treasury);
+          const nh = await tron.tronSendNativeFromPriv({ priv, to: treasury, amountRaw: amt.toString() });
+          record(nl, "sent", nh);
+        }
+      } catch (e) {
+        out.ok = false;
+        record(leg("tron", "TRX", "native_sweep", 0n, 6, row.tron, treasury), "failed", undefined, (e as Error).message);
       }
     } catch (e) {
       out.ok = false;
-      record(leg, "failed", undefined, (e as Error).message);
+      record(leg("tron", "*", "token_sweep", 0n, 6, row.tron, ""), "failed", undefined, "Tron: " + (e as Error).message);
+    }
+  }
+
+  // ── BTC (native only, single sweep-all) ────────────────────────────────
+  if (row.btc) {
+    try {
+      const priv = deriveUserPrivKey(await masterMnemonic("btc"), "btc", row.user_index);
+      const treasury = await treasuryAddress("btc");
+      const res = await btc.btcSweepAllFromPriv({ priv, to: treasury });
+      if (res) {
+        record(
+          { chain: "btc", symbol: "BTC", kind: "native_sweep", amountRaw: res.amountRaw, amount: human(BigInt(res.amountRaw), 8), from: row.btc, to: treasury },
+          "sent",
+          res.txid
+        );
+      }
+    } catch (e) {
+      out.ok = false;
+      record(leg("btc", "BTC", "native_sweep", 0n, 8, row.btc, ""), "failed", undefined, "BTC: " + (e as Error).message);
     }
   }
 
   return out;
+}
+
+/** Treasury Tron private key (for gas-funding legs). */
+async function treasuryTronPriv(): Promise<string> {
+  return privKeyForChain("tron");
 }
