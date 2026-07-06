@@ -22,7 +22,7 @@ import {
 } from "./assets.js";
 import { deriveUserAddresses } from "./hd.js";
 import { TOKENS, findToken } from "./tokens.js";
-import { priceUsd, coinAmountForUsd } from "./prices.js";
+import { priceUsd, coinAmountForUsd, quoteSwap } from "./prices.js";
 import { sendWithdrawal, isValidDestination } from "./withdraw.js";
 import { notify } from "./notify.js";
 
@@ -919,11 +919,185 @@ export async function walletRoutes(app: FastifyInstance) {
   });
 
   // POST /wallet/swaps
-  app.post("/wallet/swaps", async (req: any, reply) => {
+  // POST /wallet/swaps — convert a funded balance into PARTY at the platform
+  // rate (PARTY fixed at $10; source priced live). Ledger-only: debit the
+  // source instance, credit PARTY (tron), record swap + two ledger entries.
+  // In-platform spend → wallet password required (no OTP); a locked wallet is
+  // rejected by the verify endpoint (423), so freezes block swaps too.
+  app.post("/wallet/swaps", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req: any, reply) => {
     if (!(await requireAuth(req, reply))) return;
+    const user = req.user!;
+    const bearer = (req.headers.authorization as string) ?? "";
 
-    // Fixed price book implementation omitted for brevity, returns 501
-    return reply.code(501).send({ error: "Swaps not fully implemented in v1" });
+    const body = (req.body ?? {}) as {
+      chain?: string;
+      symbol?: string;
+      amount?: number | string;
+      walletPassword?: string;
+    };
+    const fromToken = findToken(body.chain as any, String(body.symbol ?? ""));
+    if (!fromToken) return reply.code(400).send({ error: "Unknown source asset." });
+    if (fromToken.symbol === "PARTY") {
+      return reply.code(400).send({ error: "That balance is already PARTY." });
+    }
+    const amount = Number(body.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return reply.code(400).send({ error: "Enter a valid amount." });
+    }
+    if (!body.walletPassword) {
+      return reply.code(400).send({ error: "Wallet password is required." });
+    }
+    try {
+      const pw = await fetch(AUTH_BASE + "/auth/wallet-password/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: bearer },
+        body: JSON.stringify({ password: body.walletPassword })
+      });
+      if (pw.status === 423) {
+        return reply.code(423).send({ error: "Wallet is frozen — unlock it first." });
+      }
+      if (!pw.ok) return reply.code(400).send({ error: "Invalid wallet password" });
+    } catch (e) {
+      app.log.error(e);
+      return reply.code(502).send({ error: "Failed to verify password" });
+    }
+
+    // Quote at current prices (PARTY fixed at $10).
+    const partyOut = quoteSwap(fromToken.symbol as LogicalAsset, amount, "PARTY");
+    const rate = priceUsd(fromToken.symbol as LogicalAsset);
+    if (partyOut === null || rate === null) {
+      return reply.code(400).send({ error: `${fromToken.symbol} is not priced right now.` });
+    }
+    const party = findToken("tron", "PARTY")!;
+    const fromRaw = toRawUnits(amount, fromToken.decimals);
+    const toRaw = toRawUnits(partyOut, party.decimals);
+    if (fromRaw <= 0n || toRaw <= 0n) {
+      return reply.code(400).send({ error: "Amount too small to convert." });
+    }
+
+    const swapId = ulid();
+    try {
+      db.transaction((tx) => {
+        const rows = tx
+          .select()
+          .from(ledgerBalances)
+          .where(
+            and(
+              eq(ledgerBalances.user_id, user.sub),
+              eq(ledgerBalances.chain, fromToken.chain),
+              eq(ledgerBalances.symbol, fromToken.symbol)
+            )
+          )
+          .limit(1)
+          .all();
+        const have = rows.length ? BigInt(rows[0]!.raw) : 0n;
+        if (have < fromRaw) throw new Error("INSUFFICIENT");
+
+        // Debit source
+        tx.update(ledgerBalances)
+          .set({ raw: (have - fromRaw).toString(), updated_at: Date.now() })
+          .where(
+            and(
+              eq(ledgerBalances.user_id, user.sub),
+              eq(ledgerBalances.chain, fromToken.chain),
+              eq(ledgerBalances.symbol, fromToken.symbol)
+            )
+          )
+          .run();
+        // Credit PARTY (row seeded at provisioning)
+        const prows = tx
+          .select()
+          .from(ledgerBalances)
+          .where(
+            and(
+              eq(ledgerBalances.user_id, user.sub),
+              eq(ledgerBalances.chain, party.chain),
+              eq(ledgerBalances.symbol, party.symbol)
+            )
+          )
+          .limit(1)
+          .all();
+        const phave = prows.length ? BigInt(prows[0]!.raw) : 0n;
+        if (prows.length) {
+          tx.update(ledgerBalances)
+            .set({ raw: (phave + toRaw).toString(), updated_at: Date.now() })
+            .where(
+              and(
+                eq(ledgerBalances.user_id, user.sub),
+                eq(ledgerBalances.chain, party.chain),
+                eq(ledgerBalances.symbol, party.symbol)
+              )
+            )
+            .run();
+        } else {
+          tx.insert(ledgerBalances)
+            .values({
+              user_id: user.sub,
+              chain: party.chain,
+              symbol: party.symbol,
+              raw: toRaw.toString(),
+              decimals: party.decimals,
+              updated_at: Date.now()
+            })
+            .run();
+        }
+        // Audit trail: swap row + paired ledger entries.
+        tx.insert(swaps)
+          .values({
+            id: swapId,
+            user_id: user.sub,
+            from_symbol: fromToken.symbol,
+            from_chain: fromToken.chain,
+            from_raw: fromRaw.toString(),
+            to_symbol: party.symbol,
+            to_chain: party.chain,
+            to_raw: toRaw.toString(),
+            rate_usd: String(rate),
+            created_at: Date.now()
+          })
+          .run();
+        tx.insert(ledgerEntries)
+          .values({
+            id: ulid(),
+            user_id: user.sub,
+            chain: fromToken.chain,
+            symbol: fromToken.symbol,
+            delta_raw: "-" + fromRaw.toString(),
+            kind: "swap_out",
+            ref_id: swapId,
+            created_at: Date.now()
+          })
+          .run();
+        tx.insert(ledgerEntries)
+          .values({
+            id: ulid(),
+            user_id: user.sub,
+            chain: party.chain,
+            symbol: party.symbol,
+            delta_raw: toRaw.toString(),
+            kind: "swap_in",
+            ref_id: swapId,
+            created_at: Date.now()
+          })
+          .run();
+      });
+    } catch (e) {
+      if ((e as Error).message === "INSUFFICIENT") {
+        return reply.code(400).send({ error: `Not enough ${fromToken.symbol} on that chain.` });
+      }
+      throw e;
+    }
+
+    notify(
+      `🔄 <b>Swap → PARTY</b>\nuser <code>${user.sub}</code>\n` +
+        `${amount} ${fromToken.symbol} (${fromToken.chain}) → ${partyOut.toFixed(6)} PARTY`
+    );
+    return reply.send({
+      ok: true,
+      swapId,
+      received: partyOut,
+      rate: { from: fromToken.symbol, usd: rate, partyUsd: priceUsd("PARTY") }
+    });
   });
 
   // Admin routes

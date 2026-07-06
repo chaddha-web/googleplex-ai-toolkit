@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-context";
-import { authedFetch, exitLiquidity } from "@/lib/auth-client";
+import { authedFetch, exitLiquidity, swapToParty } from "@/lib/auth-client";
 import { QrCode } from "@/components/qr-code";
 import { QrScanner } from "@/components/qr-scanner";
 
@@ -88,6 +88,7 @@ export default function WalletPage() {
   const [offline, setOffline] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [convertOpen, setConvertOpen] = useState(false);
   // "minting" plays the Seva Credit issuance animation when the wallet just
   // activated (tokens went 0 → 10B during a refresh on this page).
   const [minting, setMinting] = useState(false);
@@ -173,6 +174,14 @@ export default function WalletPage() {
           >
             <span className={refreshing ? "inline-block animate-spin" : ""}>↻</span>
             {refreshing ? "Refreshing…" : "Refresh"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setConvertOpen(true)}
+            disabled={fundedAssets.filter((a) => a.asset !== "PARTY").length === 0}
+            className="text-xs font-medium px-4 py-2 rounded-full ring-1 ring-white/15 text-white/85 hover:bg-white/5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            Convert to PARTY
           </button>
           <button
             type="button"
@@ -301,6 +310,171 @@ export default function WalletPage() {
           }}
         />
       )}
+
+      {convertOpen && (
+        <ConvertModal
+          assets={fundedAssets.filter((a) => a.asset !== "PARTY")}
+          onClose={() => setConvertOpen(false)}
+          onDone={() => {
+            setConvertOpen(false);
+            refresh();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────── Convert to PARTY ─────────────────────────── */
+
+const PARTY_USD = 10; // platform-fixed PARTY price
+
+function ConvertModal({
+  assets,
+  onClose,
+  onDone
+}: {
+  assets: AssetBreakdown[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [assetSym, setAssetSym] = useState(assets[0]?.asset ?? "");
+  const asset = assets.find((a) => a.asset === assetSym);
+  const fundedChains = (asset?.perChain ?? []).filter((c) => c.amount > 0);
+  const [chain, setChain] = useState<Chain | "">(fundedChains[0]?.chain ?? "");
+  const chainRow = fundedChains.find((c) => c.chain === chain);
+  const [amount, setAmount] = useState("");
+  const [pwd, setPwd] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<number | null>(null);
+
+  const max = chainRow?.amount ?? 0;
+  // Per-unit USD for the whole asset (fixed-price valuation); PARTY = $10.
+  const unitUsd = asset && asset.usd != null && asset.total > 0 ? asset.usd / asset.total : null;
+  const amt = Number(amount);
+  const estParty =
+    unitUsd != null && Number.isFinite(amt) && amt > 0 ? (amt * unitUsd) / PARTY_USD : null;
+
+  async function submit() {
+    if (!chain || !asset || !amt || amt <= 0 || amt > max || !pwd.trim() || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await swapToParty({ chain, symbol: asset.asset, amount: amt, walletPassword: pwd });
+      setDone(r.received);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6" onClick={onClose}>
+      <div className="w-full max-w-md liquid-glass rounded-3xl p-6 md:p-7" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="text-white text-lg font-medium">
+            {done !== null ? "Converted" : "Convert to PARTY"}
+          </h3>
+          <button onClick={done !== null ? onDone : onClose} className="text-white/50 hover:text-white text-sm">
+            {done !== null ? "Done" : "Cancel"}
+          </button>
+        </div>
+
+        {done !== null ? (
+          <div className="mt-4 text-center py-6">
+            <p className="text-4xl font-medium tracking-tight">{done.toLocaleString(undefined, { maximumFractionDigits: 6 })}</p>
+            <p className="text-white/50 text-sm mt-2">PARTY added to your balance</p>
+          </div>
+        ) : (
+          <>
+            <p className="text-white/50 text-sm mb-5">
+              Convert a funded balance into PARTY at the platform rate — PARTY is fixed at ${PARTY_USD.toFixed(2)}.
+            </p>
+
+            <Field label="From asset">
+              <select
+                value={assetSym}
+                onChange={(e) => {
+                  setAssetSym(e.target.value);
+                  const next = assets.find((a) => a.asset === e.target.value);
+                  const fc = (next?.perChain ?? []).filter((c) => c.amount > 0);
+                  setChain(fc[0]?.chain ?? "");
+                  setAmount("");
+                }}
+                className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 text-white focus:ring-2 focus:ring-white/20 appearance-none [color-scheme:dark]"
+              >
+                {assets.map((a) => (
+                  <option key={a.asset} value={a.asset} className="bg-[#14122e] text-white">
+                    {a.asset}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="From chain">
+              <select
+                value={chain}
+                onChange={(e) => setChain(e.target.value as Chain)}
+                className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 text-white focus:ring-2 focus:ring-white/20 appearance-none [color-scheme:dark]"
+              >
+                {fundedChains.map((c) => (
+                  <option key={c.chain} value={c.chain} className="bg-[#14122e] text-white">
+                    {CHAIN_LABEL[c.chain]} — {fmt(c.amount)} {assetSym}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="Amount">
+              <div className="relative">
+                <input
+                  type="number"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 pr-16 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20"
+                />
+                <button
+                  type="button"
+                  onClick={() => setAmount(String(max))}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-white/60 hover:text-white px-2 py-1 rounded-md ring-1 ring-white/10"
+                >
+                  Max
+                </button>
+              </div>
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-white/30 text-xs">{fmt(max)} {assetSym} available</p>
+                {estParty != null && (
+                  <p className="text-emerald-300/90 text-xs">≈ {estParty.toLocaleString(undefined, { maximumFractionDigits: 6 })} PARTY</p>
+                )}
+              </div>
+            </Field>
+
+            <Field label="Wallet password">
+              <input
+                type="password"
+                value={pwd}
+                onChange={(e) => setPwd(e.target.value)}
+                placeholder="Your wallet password"
+                className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20"
+              />
+            </Field>
+
+            {error && <p className="text-rose-300 text-sm mt-1">{error}</p>}
+
+            <button
+              type="button"
+              onClick={submit}
+              disabled={busy || !chain || !amt || amt <= 0 || amt > max || !pwd.trim()}
+              className="mt-5 w-full rounded-full bg-white text-black text-sm font-medium py-3 hover:bg-white/90 disabled:opacity-40"
+            >
+              {busy ? "Converting…" : "Convert to PARTY"}
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

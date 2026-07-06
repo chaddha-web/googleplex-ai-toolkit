@@ -330,6 +330,23 @@ export async function unlockWallet(password: string): Promise<void> {
   if (!res.ok) throw new Error(data.error || "Could not unlock wallet.");
 }
 
+/** Convert a funded balance into PARTY at the platform rate (PARTY = $10). */
+export async function swapToParty(opts: {
+  chain: string;
+  symbol: string;
+  amount: number;
+  walletPassword: string;
+}): Promise<{ received: number; rate: { from: string; usd: number; partyUsd: number } }> {
+  const res = await authedFetch(`${WALLET_BASE}/wallet/swaps`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(opts)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not convert to PARTY.");
+  return data;
+}
+
 export type ProfilePayload = {
   age: number;
   country: string;
