@@ -30,7 +30,7 @@ export function Select({ value, defaultValue, onValueChange, children }: SelectP
 
   return (
     <Ctx.Provider value={{ value: current, onValueChange: (v) => { if (value === undefined) setInternal(v); onValueChange?.(v); }, registerItem }}>
-      <div className="relative">
+      <div className="relative rounded-md transition-shadow focus-within:ring-2 focus-within:ring-[#8A68FF]/70">
         {children}
         <select
           aria-hidden
@@ -63,6 +63,18 @@ export function SelectTrigger({ className, children }: { className?: string; chi
       )}
     >
       {children}
+      <svg
+        className="ml-2 h-4 w-4 shrink-0 opacity-50"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="m6 9 6 6 6-6" />
+      </svg>
     </div>
   );
 }
@@ -70,7 +82,7 @@ export function SelectTrigger({ className, children }: { className?: string; chi
 export function SelectValue({ placeholder }: { placeholder?: string }) {
   const ctx = React.useContext(Ctx);
   if (!ctx) return null;
-  return <span className={ctx.value ? "" : "opacity-40"}>{ctx.value ?? placeholder}</span>;
+  return <span className={ctx.value ? "" : "opacity-50"}>{ctx.value ?? placeholder}</span>;
 }
 
 export function SelectContent({ children }: { children: React.ReactNode }) {
