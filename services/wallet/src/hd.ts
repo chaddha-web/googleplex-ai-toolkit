@@ -61,6 +61,24 @@ export function xpubFromMnemonic(mnemonic: string, chain: Chain): string {
 }
 
 /**
+ * Derive a user-index PRIVATE key (hex, no 0x) from the master mnemonic.
+ * This is the ONLY way to move funds out of a user deposit address, so it is
+ * used exclusively by the flush/sweep orchestrator — the mnemonic is loaded +
+ * KMS-decrypted by the caller and never persisted or logged. The resulting key
+ * derives the exact same address as `deriveUserAddresses` for the same index.
+ */
+export function deriveUserPrivKey(
+  mnemonic: string,
+  chain: Chain,
+  userIndex: number
+): string {
+  const root = masterFromMnemonic(mnemonic);
+  const child = root.derive(`${accountPath(chain)}/${userIndex}`);
+  if (!child.privateKey) throw new Error(`No private key for ${chain}/${userIndex}`);
+  return Buffer.from(child.privateKey).toString("hex");
+}
+
+/**
  * Derive a user-index public key from an xpub. Returns the 33-byte
  * compressed pubkey ready for chain-specific address encoding.
  */

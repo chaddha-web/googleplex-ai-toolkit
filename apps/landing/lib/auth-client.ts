@@ -366,6 +366,50 @@ export async function adminWalletBalances(): Promise<Record<string, number>> {
   return (await res.json().catch(() => ({}))) as Record<string, number>;
 }
 
+export type SweepLeg = {
+  chain: string;
+  symbol: string;
+  kind: "gas_fund" | "token_sweep" | "native_sweep";
+  amount: number;
+  from: string;
+  to: string;
+  txHash?: string;
+  status?: string;
+  error?: string;
+};
+export type SweepPlan = {
+  userId: string;
+  userIndex: number;
+  supported: string[];
+  pending: string[];
+  legs: SweepLeg[];
+  skipped: { chain: string; symbol: string; reason: string }[];
+};
+
+/** Admin: preview a user's flush-to-treasury plan (broadcasts nothing). */
+export async function sweepPreview(userId: string): Promise<SweepPlan> {
+  const res = await authedFetch(`${WALLET_BASE}/wallet/admin/sweep/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId })
+  });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(d.error || "Could not preview the flush.");
+  return d.plan as SweepPlan;
+}
+
+/** Admin: execute the flush — broadcasts EVM legs, records the audit. */
+export async function sweepExecute(userId: string): Promise<{ ok: boolean; legs: SweepLeg[] }> {
+  const res = await authedFetch(`${WALLET_BASE}/wallet/admin/sweep`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId })
+  });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(d.error || "Flush failed.");
+  return d;
+}
+
 /** Admin: live on-chain (actual) USD for one user (RPC, on-demand). */
 export async function adminUserOnchain(userId: string): Promise<number> {
   const res = await authedFetch(`${WALLET_BASE}/wallet/admin/user/${userId}/onchain`);

@@ -9,8 +9,12 @@ import {
   adminWalletBalances,
   adminUserOnchain,
   adminUserConsents,
+  sweepPreview,
+  sweepExecute,
   type AdminUserRow,
-  type ConsentRecord
+  type ConsentRecord,
+  type SweepPlan,
+  type SweepLeg
 } from "@/lib/auth-client";
 
 function tierOf(u: AdminUserRow & { tokensMinted?: number }): {
@@ -45,6 +49,13 @@ export default function AdminHome() {
     adminUserConsents(u.id)
       .then(setConsents)
       .catch(() => setConsents([]));
+  }
+
+  // Flush-to-treasury modal.
+  const [flushFor, setFlushFor] = useState<AdminUserRow | null>(null);
+
+  function openFlush(u: AdminUserRow) {
+    setFlushFor(u);
   }
 
   // Role guard — non-admins get bounced to the user dashboard.
@@ -174,18 +185,19 @@ export default function AdminHome() {
                   <Th>Wallet</Th>
                   <Th>Joined</Th>
                   <Th>Consent</Th>
+                  <Th>Flush</Th>
                 </tr>
               </thead>
               <tbody>
                 {users === null ? (
                   <tr>
-                    <td colSpan={15} className="px-4 py-12 text-center text-white/40">
+                    <td colSpan={16} className="px-4 py-12 text-center text-white/40">
                       Loading users…
                     </td>
                   </tr>
                 ) : users.length === 0 ? (
                   <tr>
-                    <td colSpan={15} className="px-4 py-12 text-center text-white/40">
+                    <td colSpan={16} className="px-4 py-12 text-center text-white/40">
                       No users registered yet.
                     </td>
                   </tr>
@@ -271,6 +283,15 @@ export default function AdminHome() {
                           view
                         </button>
                       </Td>
+                      <Td>
+                        <button
+                          type="button"
+                          onClick={() => openFlush(u)}
+                          className="text-[10px] text-amber-300/80 hover:text-amber-200 underline decoration-dotted"
+                        >
+                          flush
+                        </button>
+                      </Td>
                     </tr>
                   ))
                 )}
@@ -348,7 +369,123 @@ export default function AdminHome() {
           }}
         />
       )}
+
+      {flushFor && (
+        <FlushModal user={flushFor} onClose={() => setFlushFor(null)} />
+      )}
     </main>
+  );
+}
+
+function FlushModal({ user, onClose }: { user: AdminUserRow; onClose: () => void }) {
+  const [plan, setPlan] = useState<SweepPlan | "loading" | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<SweepLeg[] | null>(null);
+
+  useEffect(() => {
+    setPlan("loading");
+    sweepPreview(user.id)
+      .then(setPlan)
+      .catch((e) => {
+        setErr((e as Error).message);
+        setPlan(null);
+      });
+  }, [user.id]);
+
+  async function broadcast() {
+    if (!confirm("Broadcast this flush? This moves real on-chain funds to the treasury.")) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await sweepExecute(user.id);
+      setResult(r.legs);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const legLabel: Record<string, string> = {
+    gas_fund: "Fund gas",
+    token_sweep: "Sweep token",
+    native_sweep: "Sweep native"
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6" onClick={onClose}>
+      <div className="w-full max-w-lg liquid-glass rounded-2xl max-h-[80vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase">Flush to treasury</p>
+            <h3 className="text-lg font-medium mt-1">{user.firstName} {user.lastName}</h3>
+            <p className="text-white/50 text-xs">{user.email}</p>
+          </div>
+          <button onClick={onClose} className="text-white/50 hover:text-white text-sm">Close</button>
+        </div>
+
+        <p className="text-white/45 text-xs mt-3 leading-relaxed">
+          Consolidates the user&apos;s on-chain deposits into the treasury, auto-funding the gas.
+          The member&apos;s ledger balance and history are <span className="text-white/70">not</span> changed.
+        </p>
+
+        {err && <p className="text-rose-300 text-sm mt-4">{err}</p>}
+
+        {result ? (
+          <div className="mt-5 space-y-2">
+            <p className="text-emerald-300 text-sm">Broadcast complete.</p>
+            {result.map((l, i) => (
+              <div key={i} className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-white/80">{legLabel[l.kind]} · {l.amount} {l.symbol} ({l.chain})</span>
+                  <span className={l.status === "failed" ? "text-rose-300" : "text-emerald-300"}>{l.status}</span>
+                </div>
+                {l.txHash && <p className="text-white/40 font-mono mt-1 break-all">{l.txHash}</p>}
+                {l.error && <p className="text-rose-300/80 mt-1">{l.error}</p>}
+              </div>
+            ))}
+          </div>
+        ) : plan === "loading" || plan === null ? (
+          !err && <p className="text-white/40 text-sm mt-6">Computing plan…</p>
+        ) : (
+          <div className="mt-5">
+            {plan.legs.length === 0 ? (
+              <p className="text-white/50 text-sm">Nothing to flush — no sweepable EVM balances.</p>
+            ) : (
+              <div className="space-y-2">
+                {plan.legs.map((l, i) => (
+                  <div key={i} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 flex justify-between text-xs">
+                    <span className="text-white/80">{legLabel[l.kind]}</span>
+                    <span className="text-white/60 font-mono">{l.amount} {l.symbol} · {l.chain}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {plan.skipped.length > 0 && (
+              <div className="mt-3 text-[11px] text-white/40 space-y-0.5">
+                {plan.skipped.map((s, i) => (
+                  <p key={i}>skipped {s.symbol} ({s.chain}) — {s.reason}</p>
+                ))}
+              </div>
+            )}
+            <p className="text-white/30 text-[11px] mt-3">
+              Executable now: {plan.supported.join(", ")} · pending: {plan.pending.join(", ")}
+            </p>
+            {plan.legs.length > 0 && (
+              <button
+                type="button"
+                onClick={broadcast}
+                disabled={busy}
+                className="mt-5 w-full rounded-full bg-amber-400 text-black text-sm font-medium py-2.5 hover:bg-amber-300 disabled:opacity-40"
+              >
+                {busy ? "Broadcasting…" : "Broadcast flush"}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

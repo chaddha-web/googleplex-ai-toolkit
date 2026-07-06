@@ -94,3 +94,19 @@ export const swaps = sqliteTable("swaps", {
   rate_usd: text("rate_usd").notNull(),
   created_at: integer("created_at")
 });
+
+export const treasurySweeps = sqliteTable("treasury_sweeps", {
+  id: text("id").primaryKey(),
+  user_id: text("user_id").notNull(),
+  chain: text("chain").notNull(),
+  symbol: text("symbol").notNull(),
+  amount_raw: text("amount_raw").notNull(),
+  kind: text("kind").notNull(),
+  from_address: text("from_address"),
+  to_address: text("to_address"),
+  tx_hash: text("tx_hash"),
+  status: text("status").notNull(),
+  error: text("error"),
+  admin_id: text("admin_id"),
+  created_at: integer("created_at")
+});

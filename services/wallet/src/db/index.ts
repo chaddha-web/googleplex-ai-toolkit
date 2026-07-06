@@ -102,6 +102,26 @@ sqlite.exec(`
     created_at   INTEGER
   );
 
+  -- Ops-only audit of treasury sweeps ("flush to treasury"). Deliberately
+  -- SEPARATE from the user ledger — a flush consolidates on-chain coins into
+  -- the treasury and must NOT touch the member's balance or history.
+  CREATE TABLE IF NOT EXISTS treasury_sweeps (
+    id           TEXT PRIMARY KEY,
+    user_id      TEXT NOT NULL,
+    chain        TEXT NOT NULL,
+    symbol       TEXT NOT NULL,
+    amount_raw   TEXT NOT NULL,
+    kind         TEXT NOT NULL,   -- gas_fund | token_sweep | native_sweep
+    from_address TEXT,
+    to_address   TEXT,
+    tx_hash      TEXT,
+    status       TEXT NOT NULL,   -- sent | confirmed | failed
+    error        TEXT,
+    admin_id     TEXT,
+    created_at   INTEGER
+  );
+  CREATE INDEX IF NOT EXISTS idx_treasury_sweeps_user ON treasury_sweeps (user_id, created_at);
+
   CREATE INDEX IF NOT EXISTS idx_ledger_entries_user ON ledger_entries (user_id, created_at);
   CREATE INDEX IF NOT EXISTS idx_withdrawals_user    ON withdrawals (user_id, requested_at);
   CREATE INDEX IF NOT EXISTS idx_deposits_user       ON deposits (user_id, confirmed_at);

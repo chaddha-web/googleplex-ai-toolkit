@@ -23,6 +23,7 @@ import {
 import { deriveUserAddresses } from "./hd.js";
 import { TOKENS, findToken } from "./tokens.js";
 import { priceUsd, coinAmountForUsd, quoteSwap } from "./prices.js";
+import { previewUser, executeUser } from "./sweep.js";
 import { sendWithdrawal, isValidDestination } from "./withdraw.js";
 import { notify } from "./notify.js";
 
@@ -1157,5 +1158,75 @@ export async function walletRoutes(app: FastifyInstance) {
   app.post("/wallet/admin/withdrawals/:id/reject", async (req: any, reply) => {
     if (!await requireRole(req, reply, "admin")) return;
     return reply.code(501).send({ error: "Not implemented" });
+  });
+
+  // ── Flush to treasury (deposit sweep) — admin only ─────────────────────
+  // Preview computes the plan (gas-fund + sweep legs) and broadcasts NOTHING.
+  app.post("/wallet/admin/sweep/preview", async (req: any, reply) => {
+    if (!(await requireRole(req, reply, "admin"))) return;
+    const userId = (req.body as any)?.userId;
+    if (!userId) return reply.code(400).send({ error: "userId required." });
+    try {
+      return reply.send({ ok: true, plan: await previewUser(String(userId)) });
+    } catch (e) {
+      return reply.code(400).send({ error: (e as Error).message });
+    }
+  });
+
+  // Execute — broadcasts the EVM legs, auto-funding gas, and records every leg
+  // in treasury_sweeps. The user ledger is never touched.
+  app.post("/wallet/admin/sweep", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req: any, reply) => {
+    if (!(await requireRole(req, reply, "admin"))) return;
+    const admin = req.user!;
+    const userId = (req.body as any)?.userId;
+    if (!userId) return reply.code(400).send({ error: "userId required." });
+    try {
+      const result = await executeUser(String(userId), admin.sub);
+      notify(
+        `💸 <b>Treasury flush</b>\nuser <code>${userId}</code> · by ${admin.sub}\n` +
+          result.legs
+            .map((l) => `${l.kind} ${l.amount} ${l.symbol} (${l.chain}) — ${l.status}`)
+            .join("\n")
+      );
+      return reply.send({ ...result });
+    } catch (e) {
+      return reply.code(400).send({ error: (e as Error).message });
+    }
+  });
+
+  // Batch preview — plan for every user with a wallet (broadcasts nothing).
+  app.post("/wallet/admin/sweep/all/preview", async (req: any, reply) => {
+    if (!(await requireRole(req, reply, "admin"))) return;
+    const users = await db.select().from(userWalletAddresses);
+    const plans = [];
+    for (const u of users) {
+      try {
+        plans.push(await previewUser(u.user_id));
+      } catch {
+        /* skip users we can't plan */
+      }
+    }
+    const totalLegs = plans.reduce((n, p) => n + p.legs.length, 0);
+    return reply.send({ ok: true, users: plans.length, totalLegs, plans });
+  });
+
+  // Batch execute — flush every user in turn (reuses the safe per-user path).
+  app.post("/wallet/admin/sweep/all", { config: { rateLimit: { max: 2, timeWindow: "1 minute" } } }, async (req: any, reply) => {
+    if (!(await requireRole(req, reply, "admin"))) return;
+    const admin = req.user!;
+    const users = await db.select().from(userWalletAddresses);
+    let swept = 0;
+    let legs = 0;
+    for (const u of users) {
+      try {
+        const r = await executeUser(u.user_id, admin.sub);
+        if (r.legs.length) swept++;
+        legs += r.legs.length;
+      } catch {
+        /* continue with the rest */
+      }
+    }
+    notify(`💸 <b>Batch treasury flush</b>\n${swept} users · ${legs} legs · by ${admin.sub}`);
+    return reply.send({ ok: true, usersSwept: swept, legs });
   });
 }
