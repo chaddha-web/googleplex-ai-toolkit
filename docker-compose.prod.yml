@@ -98,7 +98,12 @@ services:
       - NEXT_PUBLIC_AUTH_BASE=https://auth.${DOMAIN}
       - NEXT_PUBLIC_WALLET_BASE=https://wallet.${DOMAIN}
       - NEXT_PUBLIC_LANDING_URL=https://${DOMAIN}
+      # AI-Studio-published member sites live on a persisted volume so they
+      # survive redeploys (the container filesystem is otherwise ephemeral).
+      - PUBLISHED_SITES_DIR=/data/published-sites
     command: ["npm", "run", "start", "--workspace", "@googolplex/web"]
+    volumes:
+      - ./web-published-sites:/data/published-sites
     expose:
       - "3000"
     labels:

@@ -30,7 +30,9 @@ function resolveDir(rel: string): string {
 }
 
 const DEMO_DIR = resolveDir("demo-sites");
-const PUBLISHED_DIR = resolveDir(".published-sites");
+// PUBLISHED_SITES_DIR points at a persisted volume in prod so member-generated
+// sites survive a redeploy. Falls back to a repo-relative dir in dev.
+const PUBLISHED_DIR = process.env.PUBLISHED_SITES_DIR || resolveDir(".published-sites");
 
 /** Lowercase a-z, 0-9 and single hyphens; 1–63 chars. Returns null if invalid. */
 export function sanitizeSlug(input: string): string | null {
