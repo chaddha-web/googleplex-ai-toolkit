@@ -237,7 +237,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 const inputCls =
-  "flex-1 bg-[#141414] rounded-xl px-3 py-2 text-sm text-white placeholder:text-white/25 outline-none focus:ring-2 focus:ring-white/20";
+  "flex-1 bg-[#141414] rounded-xl px-3 py-2 text-sm text-white placeholder:text-white/25 outline-none focus:ring-2 focus:ring-[#8A68FF]/60";
 const btnCls =
   "shrink-0 rounded-xl px-3 py-2 text-xs font-medium bg-white text-black hover:bg-white/90 transition-colors disabled:opacity-40";
 

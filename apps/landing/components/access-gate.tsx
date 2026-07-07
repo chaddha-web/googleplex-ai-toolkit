@@ -187,7 +187,7 @@ export function AccessGate() {
               <button
                 type="submit"
                 disabled={digits.some((d) => d === "")}
-                className="mt-2 w-full h-12 rounded-full bg-white text-black text-sm font-semibold hover:bg-white/90 active:scale-[0.98] transition disabled:opacity-40 disabled:cursor-not-allowed"
+                className="mt-2 w-full h-12 rounded-full bg-white text-black text-sm font-semibold hover:bg-white/90 active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-[#8A68FF]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent transition disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Unlock
               </button>

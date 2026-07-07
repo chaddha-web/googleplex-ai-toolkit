@@ -507,7 +507,7 @@ function ConsentCheckbox({
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 h-4 w-4 rounded border-white/20 bg-black/40 text-white focus:ring-white/20"
+        className="mt-0.5 h-4 w-4 rounded border-white/20 bg-black/40 text-white focus:ring-[#8A68FF]/60"
       />
       <span className="text-sm text-white/80 group-hover:text-white transition-colors leading-relaxed">
         {label}

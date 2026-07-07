@@ -185,7 +185,7 @@ function Field({
         placeholder={placeholder}
         autoComplete={autoComplete}
         required
-        className="bg-[#1A1A1A] border-none rounded-xl w-full h-11 px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20 transition-shadow"
+        className="bg-[#1A1A1A] border-none rounded-xl w-full h-11 px-4 text-white placeholder:text-white/40 focus:ring-2 focus:ring-[#8A68FF]/60 transition-shadow"
       />
     </div>
   );

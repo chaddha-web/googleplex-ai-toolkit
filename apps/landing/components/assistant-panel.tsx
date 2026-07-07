@@ -133,7 +133,7 @@ export function AssistantPanel({
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Ask about GoogolPlex…"
-                className="flex-1 bg-white/5 rounded-full px-4 py-3 text-sm placeholder:text-white/30 outline-none focus:ring-2 focus:ring-white/20"
+                className="flex-1 bg-white/5 rounded-full px-4 py-3 text-sm placeholder:text-white/30 outline-none focus:ring-2 focus:ring-[#8A68FF]/60"
               />
               <button
                 type="submit"

@@ -187,7 +187,7 @@ function Field({
 }) {
   const id = label.replace(/\s+/g, "-").toLowerCase();
   const cls =
-    "bg-[#1A1A1A] border-none rounded-xl w-full px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20 transition-shadow";
+    "bg-[#1A1A1A] border-none rounded-xl w-full px-4 text-white placeholder:text-white/40 focus:ring-2 focus:ring-[#8A68FF]/60 transition-shadow";
   return (
     <div className="space-y-2">
       <label htmlFor={id} className="text-sm font-medium text-white block">

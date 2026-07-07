@@ -195,7 +195,7 @@ function FormRight() {
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
                     placeholder="Jane"
-                    className="bg-[#1A1A1A] border-none rounded-xl h-11 w-full px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20 transition-shadow"
+                    className="bg-[#1A1A1A] border-none rounded-xl h-11 w-full px-4 text-white placeholder:text-white/40 focus:ring-2 focus:ring-[#8A68FF]/60 transition-shadow"
                   />
                 </div>
                 <div className="space-y-2">
@@ -212,7 +212,7 @@ function FormRight() {
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
                     placeholder="Doe"
-                    className="bg-[#1A1A1A] border-none rounded-xl h-11 w-full px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20 transition-shadow"
+                    className="bg-[#1A1A1A] border-none rounded-xl h-11 w-full px-4 text-white placeholder:text-white/40 focus:ring-2 focus:ring-[#8A68FF]/60 transition-shadow"
                   />
                 </div>
               </div>
@@ -231,7 +231,7 @@ function FormRight() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="jane@googolplex.studio"
-                  className="bg-[#1A1A1A] border-none rounded-xl h-11 w-full px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20 transition-shadow"
+                  className="bg-[#1A1A1A] border-none rounded-xl h-11 w-full px-4 text-white placeholder:text-white/40 focus:ring-2 focus:ring-[#8A68FF]/60 transition-shadow"
                 />
               </div>
 
@@ -242,7 +242,7 @@ function FormRight() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full h-14 bg-white text-black font-semibold rounded-xl hover:bg-white/90 active:scale-[0.98] transition-all mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full h-14 bg-white text-black font-semibold rounded-xl hover:bg-white/90 active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-[#8A68FF]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent transition-all mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? "Sending…" : "Request OTP"}
               </button>
@@ -282,7 +282,7 @@ function FormRight() {
               <button
                 type="submit"
                 disabled={otp.some((d) => !d) || loading}
-                className="w-full h-14 bg-white text-black font-semibold rounded-xl hover:bg-white/90 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                className="w-full h-14 bg-white text-black font-semibold rounded-xl hover:bg-white/90 active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-[#8A68FF]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {loading ? "Verifying…" : "Verify & continue"}
               </button>
