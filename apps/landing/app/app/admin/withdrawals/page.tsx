@@ -98,14 +98,14 @@ export default function WithdrawalReviewPage() {
                     <button
                       disabled={busy === w.id}
                       onClick={() => act(w.id, "approve")}
-                      className="text-xs px-4 py-2 rounded-full bg-emerald-400 text-black font-medium hover:bg-emerald-300 disabled:opacity-40"
+                      className="text-xs px-4 py-2 rounded-full bg-emerald-400 text-black font-medium hover:bg-emerald-300 disabled:opacity-40 outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
                     >
                       {busy === w.id ? "…" : "Approve"}
                     </button>
                     <button
                       disabled={busy === w.id}
                       onClick={() => act(w.id, "reject")}
-                      className="text-xs px-4 py-2 rounded-full ring-1 ring-rose-400/30 text-rose-200/90 hover:bg-rose-400/10 disabled:opacity-40"
+                      className="text-xs px-4 py-2 rounded-full ring-1 ring-rose-400/30 text-rose-200/90 hover:bg-rose-400/10 disabled:opacity-40 outline-none focus-visible:ring-2 focus-visible:ring-rose-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
                     >
                       Reject
                     </button>
