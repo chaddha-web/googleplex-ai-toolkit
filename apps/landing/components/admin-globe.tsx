@@ -5,37 +5,22 @@ import Globe, { type GlobeMethods } from "react-globe.gl";
 import { authedFetch, AUTH_BASE } from "@/lib/auth-client";
 
 /**
- * Live customer globe (admin). Two layers:
- *  - dim gold dots  = all customers, by self-reported country (centroids)
- *  - emerald dots + pulsing rings = customers online right now, state-level
- * Data is aggregate-only (country/state + counts) — the endpoint never
- * returns IPs or identities. Polls every 30 s.
+ * Live customer globe (admin). Three layers, all aggregate-only (country/state
+ * + counts + a label) — the endpoint never returns IPs or identities:
+ *  - gold dots        = all members, placed from IP (else country centroid)
+ *  - emerald + rings  = members online right now
+ *  - cyan + rings     = anonymous visitors viewing a public page right now
+ * Placement + labels are computed server-side; the client just plots cells.
+ * Polls every 30 s.
  */
 
-// Centroids for the countries offered at onboarding ("Other" is skipped).
-const COUNTRY_LL: Record<string, [number, number]> = {
-  India: [21, 78],
-  "United States": [38, -97],
-  "United Kingdom": [54, -2],
-  Canada: [56, -106],
-  Australia: [-25, 134],
-  Singapore: [1.35, 103.8],
-  "United Arab Emirates": [24, 54],
-  Germany: [51, 10],
-  France: [46, 2],
-  Netherlands: [52.2, 5.3],
-  Brazil: [-10, -52],
-  Mexico: [23, -102],
-  Japan: [36, 138],
-  "South Korea": [36, 128],
-  Nigeria: [9, 8],
-  "South Africa": [-29, 24]
-};
+type Cell = { lat: number; lng: number; count: number; label: string };
 
 type GeoResponse = {
-  customers: { country: string; count: number }[];
-  active: { country: string; region: string; lat: number; lng: number; count: number }[];
-  totals: { customers: number; active: number };
+  members: Cell[];
+  online: Cell[];
+  viewers: Cell[];
+  totals: { members: number; online: number; viewers: number };
 };
 
 type Pt = {
@@ -45,17 +30,6 @@ type Pt = {
   color: string;
   label: string;
 };
-
-const regionNames =
-  typeof Intl !== "undefined" ? new Intl.DisplayNames(["en"], { type: "region" }) : null;
-
-function countryName(code: string): string {
-  try {
-    return regionNames?.of(code) ?? code;
-  } catch {
-    return code;
-  }
-}
 
 export default function AdminGlobe() {
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
@@ -109,9 +83,8 @@ export default function AdminGlobe() {
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [load]);
 
-  // Slow auto-rotate once the globe is ready. Speed is gentle so a single
-  // populated region (e.g. everyone in India today) stays in view for a while
-  // rather than being whisked to the far side.
+  // Slow auto-rotate once the globe is ready. Gentle so a single populated
+  // region stays in view rather than being whisked to the far side.
   const onReady = useCallback(() => {
     const controls = globeRef.current?.controls();
     if (controls) {
@@ -120,28 +93,23 @@ export default function AdminGlobe() {
     }
   }, []);
 
-  // Frame the camera on wherever the members actually are, the first time we
-  // get data — so the globe never opens on an empty ocean. Uses a spherical
-  // (vector) mean, which stays correct even when members straddle the
-  // antimeridian once presence goes worldwide. Only runs once, so it won't
-  // fight the admin's manual rotation on later 30s refreshes.
+  // Frame the camera on wherever the activity actually is, the first time we get
+  // data — so the globe never opens on an empty ocean. Spherical (vector) mean,
+  // correct even across the antimeridian. Runs once, so it won't fight manual
+  // rotation on later 30 s refreshes.
   useEffect(() => {
     if (focused.current || !data || !globeRef.current) return;
-    const pts: { lat: number; lng: number; w: number }[] = [];
-    for (const c of data.customers) {
-      const ll = COUNTRY_LL[c.country];
-      if (ll) pts.push({ lat: ll[0], lng: ll[1], w: Math.max(1, c.count) });
-    }
-    for (const a of data.active) pts.push({ lat: a.lat, lng: a.lng, w: Math.max(1, a.count) });
-    if (pts.length === 0) return;
+    const cells = [...data.members, ...data.online, ...data.viewers];
+    if (cells.length === 0) return;
     const R = Math.PI / 180;
     let x = 0, y = 0, z = 0, tw = 0;
-    for (const p of pts) {
-      const la = p.lat * R, lo = p.lng * R;
-      x += Math.cos(la) * Math.cos(lo) * p.w;
-      y += Math.cos(la) * Math.sin(lo) * p.w;
-      z += Math.sin(la) * p.w;
-      tw += p.w;
+    for (const c of cells) {
+      const w = Math.max(1, c.count);
+      const la = c.lat * R, lo = c.lng * R;
+      x += Math.cos(la) * Math.cos(lo) * w;
+      y += Math.cos(la) * Math.sin(lo) * w;
+      z += Math.sin(la) * w;
+      tw += w;
     }
     if (tw === 0) return;
     const lng = Math.atan2(y / tw, x / tw) / R;
@@ -152,33 +120,39 @@ export default function AdminGlobe() {
 
   const points: Pt[] = [];
   if (data) {
-    for (const c of data.customers) {
-      const ll = COUNTRY_LL[c.country];
-      if (!ll) continue;
+    for (const c of data.members) {
       points.push({
-        lat: ll[0],
-        lng: ll[1],
+        lat: c.lat,
+        lng: c.lng,
         size: Math.min(0.9, 0.3 + Math.sqrt(c.count) * 0.08),
         color: "rgba(255, 200, 90, 0.9)",
-        label: `${c.country} — ${c.count} member${c.count === 1 ? "" : "s"}`
+        label: `${c.label} — ${c.count} member${c.count === 1 ? "" : "s"}`
       });
     }
-    for (const a of data.active) {
-      const where = a.region
-        ? `${a.region}, ${countryName(a.country)}`
-        : countryName(a.country);
+    for (const c of data.online) {
       points.push({
-        lat: a.lat,
-        lng: a.lng,
-        size: Math.min(1.1, 0.45 + Math.sqrt(a.count) * 0.1),
+        lat: c.lat,
+        lng: c.lng,
+        size: Math.min(1.1, 0.45 + Math.sqrt(c.count) * 0.1),
         color: "rgba(52, 211, 153, 0.98)",
-        label: `${where} — ${a.count} online`
+        label: `${c.label} — ${c.count} online`
+      });
+    }
+    for (const c of data.viewers) {
+      points.push({
+        lat: c.lat,
+        lng: c.lng,
+        size: Math.min(1.0, 0.4 + Math.sqrt(c.count) * 0.1),
+        color: "rgba(34, 211, 238, 0.95)",
+        label: `${c.label} — ${c.count} viewing`
       });
     }
   }
-  // Keep the same ring objects between polls when the online locations haven't
-  // moved, so react-globe.gl doesn't restart the pulse animation every 30 s.
-  const activeKey = data ? data.active.map((a) => `${a.lat},${a.lng}`).join("|") : "";
+
+  // Rings pulse for anything "live" (online + viewers). Keep the ring objects
+  // stable between polls when locations are unchanged so the pulse doesn't reset.
+  const ringSrc = data ? [...data.online, ...data.viewers] : [];
+  const activeKey = ringSrc.map((a) => `${a.lat},${a.lng}`).join("|");
   const rings = useMemo(
     () =>
       activeKey
@@ -221,11 +195,15 @@ export default function AdminGlobe() {
       <div className="pointer-events-none absolute top-4 left-4 space-y-2">
         <div className="rounded-xl bg-black/50 backdrop-blur px-4 py-3 ring-1 ring-white/10">
           <p className="text-white text-2xl font-medium tracking-tight">
-            {data ? data.totals.active : "—"}{" "}
+            {data ? data.totals.online : "—"}{" "}
             <span className="text-emerald-300 text-sm align-middle">online</span>
           </p>
+          <p className="text-white/70 text-sm mt-0.5">
+            {data ? data.totals.viewers : "—"}{" "}
+            <span className="text-cyan-300">viewing now</span>
+          </p>
           <p className="text-white/50 text-xs mt-0.5">
-            {data ? data.totals.customers : "—"} members worldwide
+            {data ? data.totals.members : "—"} members worldwide
           </p>
         </div>
         <div className="rounded-xl bg-black/50 backdrop-blur px-4 py-2.5 ring-1 ring-white/10 text-xs space-y-1">
@@ -234,8 +212,12 @@ export default function AdminGlobe() {
             Online now (state-level)
           </p>
           <p className="text-white/70">
+            <span className="inline-block h-2 w-2 rounded-full align-middle mr-2" style={{ background: "rgba(34,211,238,0.95)" }} />
+            Viewing now (anonymous)
+          </p>
+          <p className="text-white/70">
             <span className="inline-block h-2 w-2 rounded-full align-middle mr-2" style={{ background: "rgba(255,200,90,0.9)" }} />
-            All members (by country)
+            All members (where from)
           </p>
         </div>
       </div>
