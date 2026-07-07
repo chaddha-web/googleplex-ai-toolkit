@@ -10,6 +10,7 @@ import { communityRoutes } from "./routes/community.js";
 import { emailRoutes } from "./routes/email.js";
 import { sessionsRoutes } from "./routes/sessions.js";
 import { geoRoutes } from "./routes/geo.js";
+import { presenceRoutes } from "./routes/presence.js";
 import { notify } from "./notify.js";
 import { startTelegramBot } from "./telegram-bot.js";
 
@@ -90,6 +91,7 @@ await app.register(communityRoutes);
 await app.register(emailRoutes);
 await app.register(sessionsRoutes);
 await app.register(geoRoutes);
+await app.register(presenceRoutes);
 
 // Interactive Telegram command bot (/usage, /count, /paid, /stats).
 startTelegramBot();

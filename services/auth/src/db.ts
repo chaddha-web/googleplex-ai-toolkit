@@ -474,6 +474,15 @@ export const stmts = {
        WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?
        ORDER BY created_at DESC LIMIT 200
     `),
+    // Latest recorded IP per user across ALL sessions (revoked/expired included)
+    // — for member placement on the globe. SQLite returns the `ip` from the
+    // MAX(created_at) row.
+    latestIpByUser: db.prepare<[], { user_id: string; ip: string | null }>(`
+      SELECT user_id, ip, MAX(created_at) AS mx
+        FROM refresh_tokens
+       WHERE ip IS NOT NULL
+       GROUP BY user_id
+    `),
     // Admin: every session in the system, active by default, with email
     // pulled via JOIN. We expose this with optional includeRevoked.
     listAllActive: db.prepare<[number], any>(`
