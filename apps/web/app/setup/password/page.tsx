@@ -130,7 +130,7 @@ function Field({ id, label, type, value, onChange, placeholder, autoComplete }: 
   return (
     <div className="space-y-2">
       <label htmlFor={id} className="text-sm font-medium text-white block">{label}</label>
-      <input id={id} type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} autoComplete={autoComplete} required className="bg-[#1A1A1A] border-none rounded-xl w-full h-11 px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20" />
+      <input id={id} type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} autoComplete={autoComplete} required className="bg-[#1A1A1A] border-none rounded-xl w-full h-11 px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-[#8A68FF]/60" />
     </div>
   );
 }

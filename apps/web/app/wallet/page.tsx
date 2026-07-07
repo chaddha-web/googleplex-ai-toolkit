@@ -446,7 +446,7 @@ function ConvertModal({
                     setChain(fc[0]?.chain ?? "");
                     setAmount("");
                   }}
-                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-3 text-white focus:ring-2 focus:ring-white/20 appearance-none [color-scheme:dark]"
+                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-3 text-white focus:ring-2 focus:ring-[#8A68FF]/60 appearance-none [color-scheme:dark]"
                 >
                   {assets.map((a) => (
                     <option key={a.asset} value={a.asset} className="bg-[#14122e] text-white">{a.asset}</option>
@@ -457,7 +457,7 @@ function ConvertModal({
                 <select
                   value={chain}
                   onChange={(e) => setChain(e.target.value as Chain)}
-                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-3 text-white focus:ring-2 focus:ring-white/20 appearance-none [color-scheme:dark]"
+                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-3 text-white focus:ring-2 focus:ring-[#8A68FF]/60 appearance-none [color-scheme:dark]"
                 >
                   {fundedChains.map((c) => (
                     <option key={c.chain} value={c.chain} className="bg-[#14122e] text-white">{CHAIN_LABEL[c.chain]}</option>
@@ -475,7 +475,7 @@ function ConvertModal({
                     const t = SWAP_TARGETS.find((t) => t.symbol === e.target.value)!;
                     setToChain(t.chains[0]!);
                   }}
-                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-3 text-white focus:ring-2 focus:ring-white/20 appearance-none [color-scheme:dark]"
+                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-3 text-white focus:ring-2 focus:ring-[#8A68FF]/60 appearance-none [color-scheme:dark]"
                 >
                   {SWAP_TARGETS.map((t) => (
                     <option key={t.symbol} value={t.symbol} className="bg-[#14122e] text-white">{t.symbol}</option>
@@ -486,7 +486,7 @@ function ConvertModal({
                 <select
                   value={toChain}
                   onChange={(e) => setToChain(e.target.value as Chain)}
-                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-3 text-white focus:ring-2 focus:ring-white/20 appearance-none [color-scheme:dark]"
+                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-3 text-white focus:ring-2 focus:ring-[#8A68FF]/60 appearance-none [color-scheme:dark]"
                 >
                   {toTarget.chains.map((c) => (
                     <option key={c} value={c} className="bg-[#14122e] text-white">{CHAIN_LABEL[c]}</option>
@@ -502,7 +502,7 @@ function ConvertModal({
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder="0.00"
-                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 pr-16 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20"
+                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 pr-16 text-white placeholder:text-white/20 focus:ring-2 focus:ring-[#8A68FF]/60"
                 />
                 <button
                   type="button"
@@ -528,7 +528,7 @@ function ConvertModal({
                 value={pwd}
                 onChange={(e) => setPwd(e.target.value)}
                 placeholder="Your wallet password"
-                className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20"
+                className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-[#8A68FF]/60"
               />
             </Field>
 
@@ -1042,7 +1042,7 @@ function WithdrawModal({
                   const fc = (next?.perChain ?? []).filter((c) => c.amount > 0);
                   setChain(fc[0]?.chain ?? "");
                 }}
-                className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 text-white focus:ring-2 focus:ring-white/20 appearance-none"
+                className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 text-white focus:ring-2 focus:ring-[#8A68FF]/60 appearance-none"
               >
                 {assets.map((a) => (
                   <option key={a.asset} value={a.asset}>
@@ -1056,7 +1056,7 @@ function WithdrawModal({
               <select
                 value={chain}
                 onChange={(e) => setChain(e.target.value as Chain)}
-                className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 text-white focus:ring-2 focus:ring-white/20 appearance-none"
+                className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 text-white focus:ring-2 focus:ring-[#8A68FF]/60 appearance-none"
               >
                 {fundedChains.map((c) => (
                   <option key={c.chain} value={c.chain}>
@@ -1072,7 +1072,7 @@ function WithdrawModal({
                   value={dest}
                   onChange={(e) => setDest(e.target.value)}
                   placeholder="Paste or scan destination address"
-                  className="flex-1 min-w-0 bg-[#1A1A1A] rounded-xl h-11 px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20 font-mono text-sm"
+                  className="flex-1 min-w-0 bg-[#1A1A1A] rounded-xl h-11 px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-[#8A68FF]/60 font-mono text-sm"
                 />
                 <button
                   type="button"
@@ -1109,7 +1109,7 @@ function WithdrawModal({
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder="0.00"
-                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 pr-16 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20"
+                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 pr-16 text-white placeholder:text-white/20 focus:ring-2 focus:ring-[#8A68FF]/60"
                 />
                 <button
                   type="button"
@@ -1149,7 +1149,7 @@ function WithdrawModal({
                 onChange={(e) => setPwd(e.target.value)}
                 placeholder="••••••••"
                 autoComplete="current-password"
-                className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20"
+                className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-[#8A68FF]/60"
               />
             </Field>
             <Field label="Email code">
@@ -1160,7 +1160,7 @@ function WithdrawModal({
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 placeholder="123456"
                 autoComplete="one-time-code"
-                className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20 tracking-[0.3em] font-mono"
+                className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-[#8A68FF]/60 tracking-[0.3em] font-mono"
               />
             </Field>
             {error && <p className="text-rose-300/90 text-sm">{error}</p>}

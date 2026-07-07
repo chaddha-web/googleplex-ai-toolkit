@@ -138,14 +138,14 @@ function BuildForm({
           value={storeName}
           onChange={(e) => setStoreName(e.target.value)}
           placeholder="Store name (e.g. Lustre)"
-          className="bg-[#1A1A1A] border-none rounded-xl w-full px-4 py-3 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20"
+          className="bg-[#1A1A1A] border-none rounded-xl w-full px-4 py-3 text-white placeholder:text-white/20 focus:ring-2 focus:ring-[#8A68FF]/60"
         />
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           rows={4}
           placeholder="A premium home & office cleaning concierge, founded by Fateh. Calm, trustworthy, a little luxurious."
-          className="bg-[#1A1A1A] border-none rounded-xl w-full px-4 py-3 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20 resize-none"
+          className="bg-[#1A1A1A] border-none rounded-xl w-full px-4 py-3 text-white placeholder:text-white/20 focus:ring-2 focus:ring-[#8A68FF]/60 resize-none"
         />
       </div>
       {error && <p className="text-rose-300/90 text-sm">{error}</p>}
@@ -462,7 +462,7 @@ function StudioPaywall() {
             onChange={(e) => setWalletPwd(e.target.value)}
             placeholder="••••••••"
             autoComplete="current-password"
-            className="bg-[#1A1A1A] rounded-xl w-full sm:max-w-xs h-11 px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-white/20"
+            className="bg-[#1A1A1A] rounded-xl w-full sm:max-w-xs h-11 px-4 text-white placeholder:text-white/20 focus:ring-2 focus:ring-[#8A68FF]/60"
           />
         </div>
 

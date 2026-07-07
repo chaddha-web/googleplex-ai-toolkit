@@ -518,7 +518,7 @@ function Comments({
                 onChange={(e) => setBody(e.target.value)}
                 placeholder="Add a comment…"
                 maxLength={1000}
-                className="flex-1 bg-[#1A1A1A] rounded-full px-4 py-2 text-sm text-white placeholder:text-white/25 outline-none focus:ring-2 focus:ring-white/20"
+                className="flex-1 bg-[#1A1A1A] rounded-full px-4 py-2 text-sm text-white placeholder:text-white/25 outline-none focus:ring-2 focus:ring-[#8A68FF]/60"
               />
               <button
                 type="submit"
@@ -648,7 +648,7 @@ function CommentItem({
             onChange={(e) => setReplyText(e.target.value)}
             placeholder={`Reply to ${c.author}…`}
             maxLength={1000}
-            className="flex-1 bg-[#1A1A1A] rounded-full px-4 py-2 text-sm text-white placeholder:text-white/25 outline-none focus:ring-2 focus:ring-white/20"
+            className="flex-1 bg-[#1A1A1A] rounded-full px-4 py-2 text-sm text-white placeholder:text-white/25 outline-none focus:ring-2 focus:ring-[#8A68FF]/60"
           />
           <button
             type="submit"
@@ -753,7 +753,7 @@ function EditableBody({
         value={text}
         onChange={(e) => setText(e.target.value)}
         maxLength={1000}
-        className="flex-1 bg-[#1A1A1A] rounded-full px-4 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-white/20"
+        className="flex-1 bg-[#1A1A1A] rounded-full px-4 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-[#8A68FF]/60"
       />
       <button
         type="submit"

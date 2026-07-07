@@ -257,7 +257,7 @@ function WalletPasswordCard({ walletStatus }: { walletStatus?: string }) {
   }
 
   const inputCls =
-    "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-white/20";
+    "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#8A68FF]/60";
 
   return (
     <section className="liquid-glass rounded-3xl p-6 md:p-8">
@@ -430,7 +430,7 @@ function LockWalletCard() {
   }
 
   const inputCls =
-    "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-white/20";
+    "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-[#8A68FF]/60";
 
   return (
     <section
