@@ -210,6 +210,37 @@ export async function sendLoginOtp(opts: { to: string; code: string }): Promise<
   await deliver({ from: FROM.login, to: opts.to, subject: "Your GoogolPlex login code", html, text });
 }
 
+/** New-sign-in alert with a "this wasn't me" secure link. from login@. */
+export async function sendLoginAlertEmail(opts: {
+  to: string;
+  firstName?: string | null;
+  ip: string;
+  location: string; // "City, Region, Country" or "Unknown"
+  device: string;   // "Chrome on Windows"
+  when: number;     // epoch ms
+  secureUrl: string;
+}): Promise<void> {
+  const hi = opts.firstName ? opts.firstName : "there";
+  const time = new Date(opts.when).toUTCString();
+  const rows =
+    detailRow("Time", time) +
+    detailRow("Location", opts.location) +
+    detailRow("IP address", opts.ip) +
+    detailRow("Device", opts.device);
+  const html = shell({
+    preheader: "New sign-in to your GoogolPlex account",
+    heading: "New sign-in to your account",
+    body:
+      P(`Hi ${hi}, your GoogolPlex account was just signed in to.`) +
+      detailTable(rows) +
+      P(`<span style="color:${TEXT_DIM};font-size:13px;">If this was you, no action is needed. If you don't recognise it, secure your account now — this signs you out of every device and suspends the account until support restores it.</span>`),
+    cta: { label: "This wasn't me — secure my account", url: opts.secureUrl },
+    footerNote: "You're receiving this because a sign-in to your account was detected."
+  });
+  const text = `Hi ${hi}, your GoogolPlex account was just signed in to.\n\nTime: ${time}\nLocation: ${opts.location}\nIP: ${opts.ip}\nDevice: ${opts.device}\n\nIf this was you, ignore this email. If not, secure your account (signs out everywhere + suspends until support restores it):\n${opts.secureUrl}\n\n— GoogolPlex`;
+  await deliver({ from: FROM.login, to: opts.to, subject: "New sign-in to your GoogolPlex account", html, text });
+}
+
 /** Wallet verification code — confirms wallet password setup. from no-reply@. */
 export async function sendWalletOtp(opts: { to: string; code: string }): Promise<void> {
   const html = shell({

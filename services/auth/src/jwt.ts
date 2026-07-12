@@ -61,6 +61,34 @@ export async function verifyAccessToken(token: string): Promise<AccessClaims | n
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// Secure-account tokens — signed, short-lived (24h). Carried in the "this
+// wasn't me" link of a login-alert email so the recipient can suspend the
+// account without being signed in. Signed with JWT_SECRET → unforgeable.
+
+const SECURE_TTL_S = 24 * 60 * 60;
+
+export async function signSecureToken(userId: string): Promise<string> {
+  return new SignJWT({ type: "secure" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(userId)
+    .setIssuer(ISS)
+    .setAudience(AUD)
+    .setIssuedAt()
+    .setExpirationTime(`${SECURE_TTL_S}s`)
+    .sign(KEY);
+}
+
+export async function verifySecureToken(token: string): Promise<{ sub: string } | null> {
+  try {
+    const { payload } = await jwtVerify(token, KEY, { issuer: ISS, audience: AUD });
+    if (payload.type !== "secure" || typeof payload.sub !== "string") return null;
+    return { sub: payload.sub };
+  } catch {
+    return null;
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Refresh tokens — opaque random bytes, stored sha256-hashed in DB so a
 // DB leak doesn't yield usable tokens. Rotating: every /refresh issues a
 // fresh pair and revokes the presented refresh. Token theft is detected

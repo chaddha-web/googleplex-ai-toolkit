@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-context";
 import {
   listAllUsers,
+  unsuspendUser,
   adminWalletBalances,
   adminUserOnchain,
   adminUserConsents,
@@ -227,14 +228,35 @@ export default function AdminHome() {
                         </span>
                       </Td>
                       <Td>
-                        {(() => {
-                          const t = tierOf(u);
-                          return (
-                            <span className={`text-[10px] tracking-[0.15em] uppercase px-2 py-1 rounded-full ${t.cls}`}>
-                              {t.label}
-                            </span>
-                          );
-                        })()}
+                        {u.suspendedAt ? (
+                          <button
+                            type="button"
+                            title="Suspended — click to lift"
+                            onClick={async () => {
+                              if (!confirm(`Unsuspend ${u.email}? They will be able to sign in again.`)) return;
+                              try {
+                                await unsuspendUser(u.id);
+                                setUsers((us) =>
+                                  us ? us.map((x) => (x.id === u.id ? { ...x, suspendedAt: null } : x)) : us
+                                );
+                              } catch (e) {
+                                alert((e as Error).message);
+                              }
+                            }}
+                            className="text-[10px] tracking-[0.15em] uppercase px-2 py-1 rounded-full bg-rose-500/20 text-rose-300 ring-1 ring-rose-400/40 hover:bg-rose-500/30 outline-none focus-visible:ring-2 focus-visible:ring-rose-400/70"
+                          >
+                            Suspended
+                          </button>
+                        ) : (
+                          (() => {
+                            const t = tierOf(u);
+                            return (
+                              <span className={`text-[10px] tracking-[0.15em] uppercase px-2 py-1 rounded-full ${t.cls}`}>
+                                {t.label}
+                              </span>
+                            );
+                          })()
+                        )}
                       </Td>
                       <Td>
                         <span className="font-mono text-xs text-white/80">

@@ -311,6 +311,7 @@ export type AdminUserRow = {
   initialDepositCreditedUsd: number;
   tokensMinted: number;
   notificationsOptIn: boolean;
+  suspendedAt: number | null;
   createdAt: number;
 };
 
@@ -319,6 +320,17 @@ export async function listAllUsers(): Promise<{ total: number; users: AdminUserR
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Could not load users.");
   return { total: data.total, users: data.users };
+}
+
+/** Admin — lift a member's suspension so they can sign in again. */
+export async function unsuspendUser(id: string): Promise<void> {
+  const res = await authedFetch(`${AUTH_BASE}/auth/admin/users/${id}/unsuspend`, {
+    method: "POST"
+  });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.error || "Could not unsuspend.");
+  }
 }
 
 export async function verifyWalletPassword(password: string): Promise<boolean> {

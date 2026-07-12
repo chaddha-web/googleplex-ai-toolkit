@@ -59,6 +59,9 @@ export async function authRoutes(app: FastifyInstance) {
     if (!user) {
       return reply.code(401).send({ error: "User no longer exists." });
     }
+    if (user.suspended_at) {
+      return reply.code(401).send({ error: "This account is suspended." });
+    }
 
     const refresh = issueRefreshToken({
       userId: user.id,
@@ -482,6 +485,7 @@ export async function authRoutes(app: FastifyInstance) {
       tokens_minted: number;
       notifications_opt_in: number;
       studio_unlocked_at: number | null;
+      suspended_at: number | null;
       created_at: number;
     }>;
 
@@ -505,6 +509,7 @@ export async function authRoutes(app: FastifyInstance) {
         tokensMinted: u.tokens_minted,
         notificationsOptIn: u.notifications_opt_in === 1,
         studioUnlocked: !!u.studio_unlocked_at,
+        suspendedAt: u.suspended_at,
         createdAt: u.created_at
       }))
     });

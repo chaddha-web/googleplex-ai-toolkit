@@ -11,9 +11,25 @@ import {
   isValidIdempotencyKey,
   timingSafeEqualHex
 } from "../otp.js";
-import { sendSignupOtp, sendLoginOtp, sendWelcomeEmail } from "../emails.js";
-import { issueRefreshToken, signAccessToken, TTL } from "../jwt.js";
+import { sendSignupOtp, sendLoginOtp, sendWelcomeEmail, sendLoginAlertEmail } from "../emails.js";
+import { issueRefreshToken, signAccessToken, signSecureToken, TTL } from "../jwt.js";
 import { notify } from "../notify.js";
+import { lookupGeo } from "../geoip.js";
+
+const SITE_URL = process.env.PUBLIC_SITE_URL || "https://ggakingclub.com";
+const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
+function countryName(code: string): string {
+  try { return regionNames.of(code) ?? code; } catch { return code; }
+}
+/** Tiny user-agent → "Chrome on Windows" label for the login alert. */
+function deviceLabel(ua: string): string {
+  const b = /Edg/.test(ua) ? "Edge" : /OPR|Opera/.test(ua) ? "Opera" : /Chrome/.test(ua) ? "Chrome"
+    : /Firefox/.test(ua) ? "Firefox" : /Safari/.test(ua) ? "Safari" : "Browser";
+  const os = /Windows/.test(ua) ? "Windows" : /Android/.test(ua) ? "Android"
+    : /iPhone|iPad|iPod|iOS/.test(ua) ? "iOS" : /Mac OS X|Macintosh/.test(ua) ? "macOS"
+    : /Linux/.test(ua) ? "Linux" : "";
+  return os ? `${b} on ${os}` : b;
+}
 
 type RequestBody = {
   email?: unknown;
@@ -231,6 +247,41 @@ export async function otpRoutes(app: FastifyInstance) {
           `IP: ${req.ip}` +
           (ua ? `\nUA: ${ua}` : "")
       );
+
+      // Login-alert email — throttled to a new device/IP OR at most weekly.
+      try {
+        const WEEK = 7 * 24 * 60 * 60 * 1000;
+        const seenIp = req.ip ? stmts.refresh.hasFromIp.get(user.id, req.ip) : { one: 1 };
+        const stale = !user.last_login_alert_at || Date.now() - user.last_login_alert_at >= WEEK;
+        if (!seenIp || stale) {
+          const when = Date.now();
+          const hit = lookupGeo(req.ip);
+          const location = hit
+            ? [hit.city, hit.region, countryName(hit.country)].filter(Boolean).join(", ") || "Unknown"
+            : "Unknown";
+          const fullUa = String((req.headers["user-agent"] as string | undefined) ?? "");
+          const secureUrl = `${SITE_URL}/secure-account?token=${encodeURIComponent(await signSecureToken(user.id))}`;
+          sendLoginAlertEmail({
+            to: user.email,
+            firstName: user.first_name,
+            ip: req.ip || "unknown",
+            location,
+            device: deviceLabel(fullUa),
+            when,
+            secureUrl
+          }).catch(() => {});
+          stmts.user.stampLoginAlert.run({ id: user.id, last_login_alert_at: when });
+        }
+      } catch {
+        /* alerts are best-effort — never block login */
+      }
+    }
+
+    // A suspended account cannot sign in — even with a valid code.
+    if (user.suspended_at) {
+      return reply
+        .code(403)
+        .send({ error: "This account is suspended. Contact support to restore access." });
     }
 
     // Issue access + refresh.

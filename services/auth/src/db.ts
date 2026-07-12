@@ -283,6 +283,8 @@ export type UserRow = {
   tokens_minted_at: number | null;
   studio_unlocked_at: number | null;
   avatar_url: string | null;
+  suspended_at: number | null;        // set when the member (or an alert) suspends the account
+  last_login_alert_at: number | null; // throttle for the login-alert email
   created_at: number;
   updated_at: number;
 };
@@ -314,6 +316,8 @@ try { db.exec(`ALTER TABLE users ADD COLUMN profile_completed_at INTEGER`); } ca
 try { db.exec(`ALTER TABLE users ADD COLUMN tokens_minted INTEGER NOT NULL DEFAULT 0`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN tokens_minted_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN studio_unlocked_at INTEGER`); } catch {}
+try { db.exec(`ALTER TABLE users ADD COLUMN suspended_at INTEGER`); } catch {}
+try { db.exec(`ALTER TABLE users ADD COLUMN last_login_alert_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE community_comments ADD COLUMN parent_id TEXT`); } catch {}
 // Circle DAO: proposal scheduling + comment moderation (additive).
 try { db.exec(`ALTER TABLE community_proposals ADD COLUMN closes_at INTEGER`); } catch {}
@@ -416,7 +420,10 @@ export const stmts = {
         profile_completed_at = @profile_completed_at,
         updated_at = @updated_at
       WHERE id = @id
-    `)
+    `),
+    setSuspended: db.prepare(`UPDATE users SET suspended_at = @suspended_at, updated_at = @updated_at WHERE id = @id`),
+    clearSuspended: db.prepare(`UPDATE users SET suspended_at = NULL, updated_at = @updated_at WHERE id = @id`),
+    stampLoginAlert: db.prepare(`UPDATE users SET last_login_alert_at = @last_login_alert_at WHERE id = @id`)
   },
   otp: {
     insert: db.prepare(`
@@ -483,6 +490,10 @@ export const stmts = {
        WHERE ip IS NOT NULL
        GROUP BY user_id
     `),
+    // Revoke every live session for a user (logout everywhere / suspension).
+    revokeAllForUser: db.prepare(`UPDATE refresh_tokens SET revoked_at = COALESCE(revoked_at, ?) WHERE user_id = ? AND revoked_at IS NULL`),
+    // Has this user had a prior session from this exact IP? (new-device signal)
+    hasFromIp: db.prepare<[string, string], { one: number }>(`SELECT 1 AS one FROM refresh_tokens WHERE user_id = ? AND ip = ? LIMIT 1`),
     // Admin: every session in the system, active by default, with email
     // pulled via JOIN. We expose this with optional includeRevoked.
     listAllActive: db.prepare<[number], any>(`
