@@ -1,7 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Cropper, { type Area } from "react-easy-crop";
+
+/** Renders children into document.body so a `fixed` overlay can't be trapped by
+ *  a transformed/filtered ancestor (the cosmic shell uses backdrop-filter, which
+ *  otherwise makes `position:fixed` resolve against that box — clipping the modal
+ *  into the page and blowing up its size). */
+function Portal({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  return mounted ? createPortal(children, document.body) : null;
+}
 
 /**
  * Avatar tooling: a circular pan/zoom cropper (so members choose exactly what
@@ -70,6 +81,7 @@ export function AvatarCropper({
   }
 
   return (
+    <Portal>
     <div
       className="fixed inset-0 z-[60] bg-black/85 backdrop-blur-sm flex items-center justify-center p-6"
       onClick={onCancel}
@@ -126,6 +138,7 @@ export function AvatarCropper({
         </div>
       </div>
     </div>
+    </Portal>
   );
 }
 
@@ -195,6 +208,7 @@ export function WebcamCapture({
   }
 
   return (
+    <Portal>
     <div
       className="fixed inset-0 z-[60] bg-black/85 backdrop-blur-sm flex items-center justify-center p-6"
       onClick={onCancel}
@@ -240,5 +254,6 @@ export function WebcamCapture({
         </div>
       </div>
     </div>
+    </Portal>
   );
 }
