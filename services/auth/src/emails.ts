@@ -18,13 +18,48 @@ import { recordOutbound } from "./db.js";
 const DOMAIN = "ggakingclub.com";
 const BRAND = "GoogolPlex";
 const APP_URL = process.env.WEB_APP_URL || "https://app.ggakingclub.com";
-const LOGO_URL = process.env.EMAIL_LOGO_URL || "https://ggakingclub.com/media/logo.png";
+// Email-optimised mark (144px, ~44KB) served from the landing public dir —
+// the full /media/logo.png is 640px / 730KB, far too heavy for email.
+const LOGO_URL = process.env.EMAIL_LOGO_URL || "https://ggakingclub.com/email-logo.png";
 
 export const FROM = {
   signup: `${BRAND} <signup@${DOMAIN}>`,
   login: `${BRAND} <login@${DOMAIN}>`,
   noreply: `${BRAND} <no-reply@${DOMAIN}>`
 } as const;
+
+// ── Design tokens ───────────────────────────────────────────────────────────
+// A quiet near-black canvas with neutral-grey structure. The brand violet is
+// spent in ONE place — the primary CTA — so it reads as an accent, not a wash.
+// Everything degrades gracefully: solid bgcolors for Outlook, a serif fallback
+// stack for the display font, square corners where border-radius isn't supported.
+const INK = "#08080b";        // deep near-black canvas
+const PANEL = "#131317";      // quiet neutral card (barely cool)
+const WELL = "#1c1c22";       // inset well (code / mono chips)
+const HAIR = "rgba(255,255,255,0.09)"; // neutral hairline — borders & dividers
+const VIOLET = "#8a68ff";     // brand accent — kept only for the occasional text link
+const TEXT = "#c9c8d0";       // body — neutral cool-grey, high contrast
+const TEXT_DIM = "#8b8a94";   // muted / captions
+const HEADING = "#f5f4f7";    // near-white, neutral
+const SERIF =
+  "'Fraunces','Iowan Old Style','Palatino Linotype',Palatino,Georgia,'Times New Roman',serif";
+const SANS =
+  "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+const MONO = "'SFMono-Regular','SF Mono',ui-monospace,Menlo,Consolas,monospace";
+
+/**
+ * Refined CTA — an ivory, crafted button: a subtle top-lit satin gradient, a
+ * bright 1px inner highlight, and a tight grounded shadow, with dark ink text.
+ * High-contrast and clean on the dark canvas. Degrades to a solid ivory rounded
+ * rect in Outlook (gradient + box-shadow ignored there).
+ */
+function ctaButton(label: string, url: string): string {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:34px auto 6px;"><tr>
+    <td align="center" bgcolor="#f4f3f7" style="border-radius:14px;background:#f4f3f7;background-image:linear-gradient(180deg,#ffffff 0%,#ecebf1 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.9),0 2px 5px rgba(0,0,0,0.35),0 14px 26px -16px rgba(0,0,0,0.5);">
+      <a href="${url}" style="display:inline-block;padding:16px 40px;font-family:${SANS};font-size:15px;font-weight:600;letter-spacing:0.01em;color:#0c0b12;text-decoration:none;border-radius:14px;">${label}</a>
+    </td>
+  </tr></table>`;
+}
 
 // ── Shared shell ────────────────────────────────────────────────────────────
 function shell(opts: {
@@ -35,32 +70,48 @@ function shell(opts: {
   footerNote?: string;
 }): string {
   const { preheader = "", heading, body, cta, footerNote } = opts;
+  // A whisper of neutral light at the top edge — no colour wash. Degrades to
+  // the flat PANEL colour in Outlook.
+  const aurora =
+    `background-color:${PANEL};background-image:radial-gradient(120% 70% at 50% -20%,rgba(255,255,255,0.045) 0%,rgba(255,255,255,0) 60%);`;
   return `<!doctype html>
-<html>
-  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-  <body style="margin:0;padding:0;background:#0a0a0a;font-family:Inter,system-ui,-apple-system,sans-serif;color:#fff;">
-    <span style="display:none!important;opacity:0;color:transparent;height:0;width:0;overflow:hidden">${preheader}</span>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:32px 16px;">
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <meta name="supported-color-schemes" content="dark">
+    <!--[if mso]><style>*{font-family:Georgia,'Times New Roman',serif !important;}</style><![endif]-->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&display=swap" rel="stylesheet">
+    <style>
+      @media (max-width:600px){ .gp-card{ padding:32px 22px !important; } .gp-h1{ font-size:26px !important; } .gp-code{ font-size:34px !important; letter-spacing:8px !important; } }
+      a{ color:${VIOLET}; }
+    </style>
+  </head>
+  <body style="margin:0;padding:0;background:${INK};font-family:${SANS};color:${TEXT};">
+    <span style="display:none!important;opacity:0;color:transparent;height:0;width:0;overflow:hidden;mso-hide:all;">${preheader}</span>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${INK}" style="background:${INK};padding:40px 16px;">
       <tr><td align="center">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#111;border-radius:24px;padding:40px 32px;">
-          <tr><td align="center" style="padding-bottom:24px;">
-            <img src="${LOGO_URL}" alt="${BRAND}" width="48" height="48" style="display:block;border-radius:12px;object-fit:contain;" />
-            <div style="font-size:12px;letter-spacing:0.3em;text-transform:uppercase;color:rgba(255,255,255,0.45);margin-top:12px;">${BRAND}</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="gp-card" bgcolor="${PANEL}" style="max-width:560px;border-radius:28px;padding:44px 40px;${aurora}border:1px solid ${HAIR};">
+          <tr><td align="center" style="padding-bottom:26px;">
+            <img src="${LOGO_URL}" alt="${BRAND}" width="56" height="56" style="display:block;border-radius:50%;object-fit:contain;border:1px solid rgba(255,255,255,0.14);box-shadow:0 0 0 4px rgba(255,255,255,0.04);" />
+            <div style="margin-top:14px;font-family:${SANS};font-size:11px;font-weight:600;letter-spacing:0.34em;text-transform:uppercase;color:${TEXT_DIM};">${BRAND}</div>
+            <div style="width:34px;height:2px;margin:16px auto 0;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,0.22),rgba(255,255,255,0));"></div>
           </td></tr>
           <tr><td>
-            <h1 style="margin:0 0 16px 0;font-family:Georgia,'Times New Roman',serif;font-weight:400;font-size:30px;line-height:1.18;color:#fff;text-align:center;">${heading}</h1>
+            <h1 class="gp-h1" style="margin:0 0 16px 0;font-family:${SERIF};font-weight:400;font-size:32px;line-height:1.16;color:${HEADING};text-align:center;letter-spacing:-0.01em;">${heading}</h1>
             ${body}
-            ${
-              cta
-                ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:28px auto 8px;"><tr><td style="border-radius:999px;background:#fff;">
-                     <a href="${cta.url}" style="display:inline-block;padding:13px 28px;font-size:14px;font-weight:600;color:#000;text-decoration:none;border-radius:999px;">${cta.label}</a>
-                   </td></tr></table>`
-                : ""
-            }
-            ${footerNote ? `<p style="margin:24px 0 0 0;font-size:12px;line-height:1.6;color:rgba(255,255,255,0.4);text-align:center;">${footerNote}</p>` : ""}
+            ${cta ? ctaButton(cta.label, cta.url) : ""}
+            ${footerNote ? `<p style="margin:26px 0 0 0;font-size:12px;line-height:1.6;color:${TEXT_DIM};text-align:center;">${footerNote}</p>` : ""}
           </td></tr>
         </table>
-        <p style="margin:24px 0 0 0;font-size:11px;line-height:1.6;color:rgba(255,255,255,0.3);text-align:center;max-width:520px;">© 2026 ${BRAND} · ggakingclub.com</p>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+          <tr><td align="center" style="padding:26px 8px 0;">
+            <div style="font-family:${SERIF};font-size:13px;font-style:italic;color:${TEXT_DIM};">One Team &middot; One Family &middot; One Future</div>
+            <p style="margin:10px 0 0;font-size:11px;line-height:1.6;color:#5b5772;">&copy; 2026 ${BRAND} &middot; <a href="https://${DOMAIN}" style="color:#6f6a8a;text-decoration:none;">ggakingclub.com</a></p>
+          </td></tr>
+        </table>
       </td></tr>
     </table>
   </body>
@@ -68,20 +119,29 @@ function shell(opts: {
 }
 
 const P = (html: string) =>
-  `<p style="margin:0 0 14px 0;font-size:15px;line-height:1.6;color:rgba(255,255,255,0.8);">${html}</p>`;
+  `<p style="margin:0 0 15px 0;font-family:${SANS};font-size:15px;line-height:1.62;color:${TEXT};">${html}</p>`;
 
+/** The hero of the OTP emails — big, tracked, on a quiet inset well. */
 function codeBlock(code: string): string {
-  return `<div style="font-size:42px;letter-spacing:12px;font-weight:600;color:#fff;background:#1a1a1a;border-radius:16px;padding:22px;margin:24px 0;text-align:center;">${code}</div>`;
+  return `<div class="gp-code" style="font-family:${MONO};font-size:40px;letter-spacing:11px;font-weight:600;color:${HEADING};background:${WELL};border:1px solid rgba(255,255,255,0.1);border-radius:18px;padding:24px 16px;margin:26px 0;text-align:center;text-indent:11px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.04),0 14px 34px -20px rgba(0,0,0,0.8);">${code}</div>`;
+}
+
+/** Emerald/amber status chip for receipts. */
+function statusPill(label: string, tone: "ok" | "pending" = "ok"): string {
+  const c = tone === "ok"
+    ? { fg: "#5eead4", bg: "rgba(52,211,153,0.14)", bd: "rgba(52,211,153,0.4)" }
+    : { fg: "#fcd34d", bg: "rgba(252,211,77,0.14)", bd: "rgba(252,211,77,0.4)" };
+  return `<span style="display:inline-block;padding:3px 12px;font-family:${SANS};font-size:12px;font-weight:600;color:${c.fg};background:${c.bg};border:1px solid ${c.bd};border-radius:999px;">${label}</span>`;
 }
 
 function detailRow(label: string, value: string): string {
   return `<tr>
-    <td style="padding:10px 0;font-size:13px;color:rgba(255,255,255,0.5);border-bottom:1px solid rgba(255,255,255,0.06);">${label}</td>
-    <td style="padding:10px 0;font-size:13px;color:#fff;text-align:right;border-bottom:1px solid rgba(255,255,255,0.06);word-break:break-all;">${value}</td>
+    <td style="padding:12px 0;font-family:${SANS};font-size:13px;color:${TEXT_DIM};border-bottom:1px solid rgba(255,255,255,0.08);">${label}</td>
+    <td style="padding:12px 0;font-family:${SANS};font-size:13px;color:${HEADING};text-align:right;border-bottom:1px solid rgba(255,255,255,0.08);word-break:break-all;">${value}</td>
   </tr>`;
 }
 function detailTable(rows: string): string {
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;">${rows}</table>`;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0;background:rgba(255,255,255,0.03);border-radius:16px;padding:4px 18px;">${rows}</table>`;
 }
 
 // ── Low-level deliver ───────────────────────────────────────────────────────
@@ -174,7 +234,7 @@ export async function sendWelcomeEmail(opts: { to: string; firstName?: string | 
     body:
       P(`Hi ${hi}, your GoogolPlex account is ready.`) +
       P("Your member ID:") +
-      `<div style="font-family:Menlo,Consolas,monospace;font-size:18px;letter-spacing:4px;color:#fff;background:#1a1a1a;border-radius:12px;padding:16px;margin:8px 0 20px;text-align:center;">${opts.memberId}</div>` +
+      `<div style="font-family:${MONO};font-size:18px;letter-spacing:5px;color:${HEADING};background:${WELL};border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:16px;margin:8px 0 22px;text-align:center;text-indent:5px;">${opts.memberId}</div>` +
       P("Next: activate your wallet with a $1 deposit to unlock Community, the AI Studio, and your GoogolPlex Seva Credit."),
     cta: { label: "Open your dashboard", url: APP_URL },
     footerNote: "Welcome aboard — we're glad you're here."
@@ -214,7 +274,7 @@ export async function sendDepositEmail(opts: {
     detailRow("Amount", `${opts.amount} ${opts.symbol}`) +
     (opts.usd != null ? detailRow("Value", `$${opts.usd.toFixed(2)}`) : "") +
     detailRow("Network", opts.chain.toUpperCase()) +
-    detailRow("Status", '<span style="color:#34d399;">Confirmed</span>') +
+    detailRow("Status", statusPill("Confirmed")) +
     (opts.txHash ? detailRow("Transaction", opts.txHash) : "");
   const html = shell({
     preheader: `Received ${opts.amount} ${opts.symbol}`,
@@ -242,7 +302,7 @@ export async function sendWithdrawalEmail(opts: {
     detailRow("Amount", `${opts.amount} ${opts.symbol}`) +
     detailRow("Network", opts.chain.toUpperCase()) +
     (opts.dest ? detailRow("To", opts.dest) : "") +
-    detailRow("Status", '<span style="color:#34d399;">Sent</span>') +
+    detailRow("Status", statusPill("Sent")) +
     (opts.txHash ? detailRow("Transaction", opts.txHash) : "");
   const html = shell({
     preheader: `Sent ${opts.amount} ${opts.symbol}`,
@@ -265,7 +325,7 @@ export async function sendSevaCreditEmail(opts: { to: string; firstName?: string
     detailRow("Credits issued", opts.amount.toLocaleString()) +
     detailRow("Member ID", opts.memberId) +
     detailRow("Backed by", "Your $1 protected liquidity") +
-    detailRow("Status", '<span style="color:#34d399;">Issued</span>');
+    detailRow("Status", statusPill("Issued"));
   const html = shell({
     preheader: "Your GoogolPlex Seva Credit has been issued",
     heading: "Seva Credit issued",
