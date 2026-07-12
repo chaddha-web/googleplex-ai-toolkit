@@ -60,6 +60,16 @@ export default function HomePage() {
 
   if (!user) return null;
 
+  const memberSince = user.createdAt
+    ? new Date(user.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+    : "—";
+  const sevaStr = (user.tokensMinted ?? 0).toLocaleString();
+  const walletLabel =
+    ({ active: "Active", pending_password: "Setup needed", pending_initial_deposit: "Awaiting $1", locked: "Locked" } as Record<string, string>)[
+      user.walletStatus ?? ""
+    ] ?? "—";
+  const txStr = history === null ? "…" : history.length.toLocaleString();
+
   return (
     <div className="max-w-5xl mx-auto">
       <WalletBanner status={user.walletStatus} />
@@ -81,7 +91,17 @@ export default function HomePage() {
         .
       </h1>
 
-      <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4">
+      <section className="mt-10">
+        <LiveClock />
+        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card label="Member since" value={memberSince} />
+          <Card label="Seva Credits" value={sevaStr} accent />
+          <Card label="Wallet" value={walletLabel} />
+          <Card label="Transactions" value={txStr} />
+        </div>
+      </section>
+
+      <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card label="Member ID" value={user.code11} mono />
         <Card label="Email" value={user.email} />
         <Card label="Role" value={user.role} />
@@ -189,22 +209,55 @@ function ActivityRow({ entry }: { entry: LedgerEntry }) {
   );
 }
 
+/** Live local time + date. Initialises on mount (null first) to avoid a
+ *  server/client hydration mismatch, then ticks every second. */
+function LiveClock() {
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    setNow(new Date());
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const time = now
+    ? now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+    : "—:—:—";
+  const date = now
+    ? now.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+    : "";
+  const tz =
+    typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone.replace(/_/g, " ") : "";
+  return (
+    <div className="liquid-glass rounded-3xl p-6 md:p-7 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+      <div>
+        <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase mb-2">Local time</p>
+        <p className="text-4xl md:text-5xl font-medium tracking-tight tabular-nums">{time}</p>
+      </div>
+      <div className="sm:text-right">
+        <p className="text-white/80 text-base md:text-lg">{date || " "}</p>
+        {tz && <p className="text-white/40 text-xs mt-1">{tz}</p>}
+      </div>
+    </div>
+  );
+}
+
 function Card({
   label,
   value,
-  mono
+  mono,
+  accent
 }: {
   label: string;
   value: string;
   mono?: boolean;
+  accent?: boolean;
 }) {
   return (
-    <div className="liquid-glass rounded-2xl p-5">
+    <div className={`liquid-glass rounded-2xl p-5 ${accent ? "ring-1 ring-amber-300/25" : ""}`}>
       <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase mb-2">
         {label}
       </p>
       <p
-        className={`text-white text-base ${
+        className={`text-base ${accent ? "text-amber-200" : "text-white"} ${
           mono ? "font-mono tracking-widest" : ""
         }`}
       >
