@@ -55,6 +55,48 @@ const LogoutIcon = (p: IconProps) => (
   <S {...p}><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" /><path d="M10 17l-5-5 5-5" /><path d="M5 12h12" /></S>
 );
 
+/** Compact live clock for the shared chrome (sidebar + mobile). Initialises on
+ *  mount (null first) to avoid a server/client hydration mismatch, then ticks
+ *  every second. `collapsed` shows the time only; `compact` is the mobile pill. */
+function MiniClock({ collapsed = false, compact = false }: { collapsed?: boolean; compact?: boolean }) {
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    setNow(new Date());
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const time = now
+    ? now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+    : "—:—:—";
+  const date = now
+    ? now.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })
+    : "";
+
+  if (compact) {
+    return (
+      <div className="liquid-glass rounded-2xl px-3 py-2 flex items-center gap-2 leading-none">
+        <span className="text-sm font-medium tabular-nums text-white/90">{time}</span>
+        <span className="text-white/40 text-xs">{date}</span>
+      </div>
+    );
+  }
+  if (collapsed) {
+    return (
+      <div className="px-0 py-1 text-center" title={date}>
+        <span className="text-[13px] font-medium tabular-nums text-white/80">
+          {now ? now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "—:—"}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="px-2.5 py-1">
+      <p className="text-lg font-medium tabular-nums tracking-tight leading-none">{time}</p>
+      <p className="text-white/40 text-xs mt-1">{date}</p>
+    </div>
+  );
+}
+
 const NAV_ITEMS: { href: string; label: string; Icon: (p: IconProps) => JSX.Element }[] = [
   { href: "/", label: "Home", Icon: HomeIcon },
   { href: "/wallet", label: "Wallet", Icon: WalletIcon },
@@ -171,6 +213,12 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           <line x1="3" y1="18" x2="21" y2="18" />
         </svg>
       </button>
+
+      {/* Mobile: floating clock, top-right — mirrors the hamburger so the time
+          is on every page on mobile too. */}
+      <div className="md:hidden fixed top-4 right-4 z-30">
+        <MiniClock compact />
+      </div>
 
       {/* Mobile drawer + backdrop */}
       {menuOpen && (
@@ -349,6 +397,11 @@ function Sidebar({
             </div>
           </div>
         )}
+
+        {/* Live clock — shared chrome, so every page shows it. */}
+        <div className={`mt-3 pt-3 border-t border-white/10 ${collapsed ? "px-0" : ""}`}>
+          <MiniClock collapsed={collapsed} />
+        </div>
 
         {/* Account row — replaces the old top bar. */}
         <div

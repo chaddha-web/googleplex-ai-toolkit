@@ -92,8 +92,7 @@ export default function HomePage() {
       </h1>
 
       <section className="mt-10">
-        <LiveClock />
-        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card label="Member since" value={memberSince} />
           <Card label="Seva Credits" value={sevaStr} accent />
           <Card label="Wallet" value={walletLabel} />
@@ -206,37 +205,6 @@ function ActivityRow({ entry }: { entry: LedgerEntry }) {
         {human} {entry.symbol}
       </span>
     </li>
-  );
-}
-
-/** Live local time + date. Initialises on mount (null first) to avoid a
- *  server/client hydration mismatch, then ticks every second. */
-function LiveClock() {
-  const [now, setNow] = useState<Date | null>(null);
-  useEffect(() => {
-    setNow(new Date());
-    const t = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
-  const time = now
-    ? now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })
-    : "—:—:—";
-  const date = now
-    ? now.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" })
-    : "";
-  const tz =
-    typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone.replace(/_/g, " ") : "";
-  return (
-    <div className="liquid-glass rounded-3xl p-6 md:p-7 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-      <div>
-        <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase mb-2">Local time</p>
-        <p className="text-4xl md:text-5xl font-medium tracking-tight tabular-nums">{time}</p>
-      </div>
-      <div className="sm:text-right">
-        <p className="text-white/80 text-base md:text-lg">{date || " "}</p>
-        {tz && <p className="text-white/40 text-xs mt-1">{tz}</p>}
-      </div>
-    </div>
   );
 }
 
