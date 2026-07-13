@@ -17,6 +17,7 @@ import {
   ASSET_INSTANCES,
   LOGICAL_ASSETS,
   aggregate,
+  totalUsd,
   type LogicalAsset,
   type PerChainRawBalances
 } from "./assets.js";
@@ -1197,6 +1198,42 @@ export async function walletRoutes(app: FastifyInstance) {
     const snap = await reconcile({ eth: a.eth, bsc: a.bsc, tron: a.tron, btc: a.btc });
     const actualUsd = snap.byLogicalAsset.reduce((s, x) => s + (x.usd ?? 0), 0);
     return reply.send({ actualUsd });
+  });
+
+  // GET /wallet/admin/user/:id/detail — the member's deposit addresses + the
+  // full ledger balance breakdown (per logical asset, with USD). Cheap: reads
+  // the ledger DB only, no RPC. Powers the admin member popup.
+  app.get("/wallet/admin/user/:id/detail", async (req: any, reply) => {
+    if (!(await requireRole(req, reply, "admin"))) return;
+    const { id } = req.params;
+
+    const addrRows = await db
+      .select()
+      .from(userWalletAddresses)
+      .where(eq(userWalletAddresses.user_id, id))
+      .limit(1);
+    const a = addrRows[0] ?? null;
+
+    const balRows = await db
+      .select()
+      .from(ledgerBalances)
+      .where(eq(ledgerBalances.user_id, id));
+    const rawLedger = { eth: {}, bsc: {}, tron: {}, btc: {} } as Record<
+      string,
+      Record<string, string>
+    >;
+    for (const b of balRows) {
+      if (b.chain in rawLedger) rawLedger[b.chain]![b.symbol] = b.raw;
+    }
+    const balances = aggregate(rawLedger as PerChainRawBalances);
+
+    return reply.send({
+      addresses: a
+        ? { userIndex: a.user_index, eth: a.eth, bsc: a.bsc, tron: a.tron, btc: a.btc }
+        : null,
+      balances,
+      usableUsd: totalUsd(balances)
+    });
   });
 
   // Review queue — withdrawals held for admin approval (default), or a status.

@@ -465,6 +465,31 @@ export async function adminUserOnchain(userId: string): Promise<number> {
   return Number(data.actualUsd ?? 0);
 }
 
+export type AssetBalance = { asset: string; total: number; usd: number | null };
+export type MemberWalletDetail = {
+  addresses: {
+    userIndex: number;
+    eth: string;
+    bsc: string;
+    tron: string | null;
+    btc: string | null;
+  } | null;
+  balances: AssetBalance[];
+  usableUsd: number;
+};
+
+/** Admin: a member's deposit addresses + full ledger balance breakdown. */
+export async function adminUserDetail(userId: string): Promise<MemberWalletDetail> {
+  const res = await authedFetch(`${WALLET_BASE}/wallet/admin/user/${userId}/detail`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not load member wallet.");
+  return {
+    addresses: data.addresses ?? null,
+    balances: Array.isArray(data.balances) ? data.balances : [],
+    usableUsd: Number(data.usableUsd ?? 0)
+  };
+}
+
 export type ConsentRecord = {
   id: string;
   kind: string;
