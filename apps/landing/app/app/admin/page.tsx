@@ -39,6 +39,7 @@ export default function AdminHome() {
   const [total, setTotal] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [query, setQuery] = useState("");
   // userId → usable (ledger) USD; userId → actual (on-chain) USD on demand.
   const [usable, setUsable] = useState<Record<string, number>>({});
   const [actual, setActual] = useState<Record<string, number | "loading">>({});
@@ -114,6 +115,14 @@ export default function AdminHome() {
 
   if (!user || user.role !== "admin") return null;
 
+  const q = query.trim().toLowerCase();
+  const shown = !q
+    ? users ?? []
+    : (users ?? []).filter((u) =>
+        [u.code11, u.email, u.firstName, u.lastName, `${u.firstName} ${u.lastName}`, u.country, u.id]
+          .some((f) => (f ?? "").toLowerCase().includes(q))
+      );
+
   return (
     <main className="min-h-screen bg-black text-white font-sans">
       <nav className="relative z-20 w-full px-6 py-6 border-b border-white/5">
@@ -157,18 +166,37 @@ export default function AdminHome() {
           />
         </div>
 
-        <div className="mt-12 flex items-center justify-between gap-4">
+        <div className="mt-12 flex flex-wrap items-center justify-between gap-4">
           <h2 className="font-serif text-3xl tracking-tight">
             Registered <em className="font-serif-i text-white/60">users</em>
           </h2>
-          <button
-            type="button"
-            onClick={load}
-            disabled={refreshing}
-            className="text-white/50 hover:text-white text-xs transition-colors disabled:opacity-30"
-          >
-            {refreshing ? "Loading…" : "↻ Refresh"}
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <svg
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30"
+                width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search name, email, ID, country…"
+                className="w-64 max-w-[70vw] rounded-full bg-white/5 border border-white/10 py-2 pl-9 pr-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-white/25 focus-visible:ring-2 focus-visible:ring-[#8A68FF]/60"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={load}
+              disabled={refreshing}
+              className="text-white/50 hover:text-white text-xs transition-colors disabled:opacity-30"
+            >
+              {refreshing ? "Loading…" : "↻ Refresh"}
+            </button>
+          </div>
         </div>
 
         {error ? (
@@ -211,8 +239,14 @@ export default function AdminHome() {
                       No users registered yet.
                     </td>
                   </tr>
+                ) : shown.length === 0 ? (
+                  <tr>
+                    <td colSpan={16} className="px-4 py-12 text-center text-white/40">
+                      No members match “{query}”.
+                    </td>
+                  </tr>
                 ) : (
-                  users.map((u) => (
+                  shown.map((u) => (
                     <tr
                       key={u.id}
                       className="border-b border-white/5 hover:bg-white/[0.02] transition-colors"
