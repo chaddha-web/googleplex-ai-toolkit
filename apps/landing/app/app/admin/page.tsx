@@ -18,6 +18,7 @@ import {
   type AdminUserRow,
   type ConsentRecord,
   type MemberWalletDetail,
+  type Capability,
   type SweepPlan,
   type SweepLeg
 } from "@/lib/auth-client";
@@ -42,8 +43,9 @@ export default function AdminHome() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
-  // Only the main admin (founder) may suspend members.
+  // Founder flag + my granular capabilities (gates suspend + the access page).
   const [isFounder, setIsFounder] = useState(false);
+  const [myPerms, setMyPerms] = useState<Capability[]>([]);
   // userId → usable (ledger) USD; userId → actual (on-chain) USD on demand.
   const [usable, setUsable] = useState<Record<string, number>>({});
   const [actual, setActual] = useState<Record<string, number | "loading">>({});
@@ -117,8 +119,14 @@ export default function AdminHome() {
     if (user?.role === "admin") {
       load();
       getAdminSettings()
-        .then((s) => setIsFounder(s.isFounder))
-        .catch(() => setIsFounder(false));
+        .then((s) => {
+          setIsFounder(s.isFounder);
+          setMyPerms(s.perms);
+        })
+        .catch(() => {
+          setIsFounder(false);
+          setMyPerms([]);
+        });
     }
   }, [user]);
 
@@ -436,6 +444,14 @@ export default function AdminHome() {
           >
             Settings
           </Link>
+          {isFounder && (
+            <Link
+              href="/app/admin/permissions"
+              className="liquid-glass rounded-full px-6 py-3 text-amber-200 text-sm font-medium hover:bg-white/5 transition-colors ring-1 ring-amber-300/25"
+            >
+              Admin access
+            </Link>
+          )}
           <Link
             href="/app"
             className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
@@ -470,7 +486,7 @@ export default function AdminHome() {
       {memberFor && (
         <MemberModal
           user={memberFor}
-          isFounder={isFounder}
+          canSuspend={myPerms.includes("suspend")}
           onChanged={markSuspended}
           onClose={() => setMemberFor(null)}
         />
@@ -593,12 +609,12 @@ function FlushModal({ user, onClose }: { user: AdminUserRow; onClose: () => void
 
 function MemberModal({
   user,
-  isFounder,
+  canSuspend,
   onChanged,
   onClose
 }: {
   user: AdminUserRow;
-  isFounder: boolean;
+  canSuspend: boolean;
   onChanged: (id: string, suspendedAt: number | null) => void;
   onClose: () => void;
 }) {
@@ -781,8 +797,8 @@ function MemberModal({
           </>
         )}
 
-        {/* Danger zone — main admin only, never for other admins. */}
-        {isFounder && user.role !== "admin" && (
+        {/* Danger zone — needs the suspend capability; never for other admins. */}
+        {canSuspend && user.role !== "admin" && (
           <div className="mt-6 pt-5 border-t border-white/10">
             {suspendErr && <p className="text-rose-300 text-sm mb-3">{suspendErr}</p>}
             <div className="flex items-center justify-between gap-4">

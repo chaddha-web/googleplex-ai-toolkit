@@ -32,6 +32,25 @@ export async function requireRole(req: FastifyRequest, reply: FastifyReply, role
   return true;
 }
 
+/**
+ * Require an admin who also holds a specific granular capability. The main
+ * admin (founder) carries every capability in their token, so this passes for
+ * them automatically. Capabilities ride in the access token's `perms` claim.
+ */
+export async function requireCapability(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  cap: string
+) {
+  if (!(await requireRole(req, reply, "admin"))) return false;
+  const perms = req.user!.perms;
+  if (!Array.isArray(perms) || !perms.includes(cap)) {
+    reply.code(403).send({ error: `You don't have permission for this action (${cap}).` });
+    return false;
+  }
+  return true;
+}
+
 export function requireInternal(req: FastifyRequest, reply: FastifyReply) {
   const header = req.headers.authorization;
   if (!header || !header.startsWith("Bearer ")) {

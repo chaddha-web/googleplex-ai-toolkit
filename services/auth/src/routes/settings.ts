@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { stmts } from "../db.js";
 import { verifyAccessToken } from "../jwt.js";
 import { encryptSecret, decryptSecret, maskSecret } from "../crypto.js";
+import { permsForUser, isFounder } from "../permissions.js";
 import { notify } from "../notify.js";
 
 const INTERNAL_TOKEN = process.env.INTERNAL_SERVICE_TOKEN;
@@ -123,7 +124,8 @@ export async function settingsRoutes(app: FastifyInstance) {
     return reply.send({
       ok: true,
       settings: out,
-      isFounder: me.email.toLowerCase() === FOUNDER_EMAIL
+      isFounder: isFounder(me.email),
+      perms: permsForUser(me)
     });
   });
 
@@ -131,6 +133,9 @@ export async function settingsRoutes(app: FastifyInstance) {
   app.post("/auth/admin/settings", async (req, reply) => {
     const me = await requireAdmin(req, reply);
     if (!me) return;
+    if (!permsForUser(me).includes("settings")) {
+      return reply.code(403).send({ error: "You don't have permission to change settings." });
+    }
 
     const body = (req.body ?? {}) as { key?: unknown; value?: unknown };
     const key = typeof body.key === "string" ? body.key : "";

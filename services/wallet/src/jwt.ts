@@ -18,6 +18,8 @@ export type AccessClaims = JWTPayload & {
   email: string;
   code11: string;
   role: "user" | "admin";
+  /** Granular admin capabilities granted by the main admin (founder → all). */
+  perms?: string[];
   type: "access";
 };
 

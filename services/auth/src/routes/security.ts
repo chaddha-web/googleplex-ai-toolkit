@@ -1,17 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { stmts } from "../db.js";
 import { verifyAccessToken, verifySecureToken } from "../jwt.js";
+import { permsForUser } from "../permissions.js";
 import { notify } from "../notify.js";
-
-// Main admin (founder) = the only account allowed to suspend a member from the
-// panel. Same identity used for admin promotion (see routes/settings.ts).
-const FOUNDER_EMAIL = (
-  process.env.FOUNDER_EMAIL ||
-  (process.env.ADMIN_EMAILS ?? "").split(",")[0] ||
-  ""
-)
-  .trim()
-  .toLowerCase();
 
 export async function securityRoutes(app: FastifyInstance) {
   /**
@@ -57,8 +48,8 @@ export async function securityRoutes(app: FastifyInstance) {
     if (!claims) return reply.code(401).send({ error: "Invalid token." });
     const me = stmts.user.byId.get(claims.sub);
     if (!me || me.role !== "admin") return reply.code(403).send({ error: "Admin only." });
-    if (!FOUNDER_EMAIL || me.email.toLowerCase() !== FOUNDER_EMAIL) {
-      return reply.code(403).send({ error: "Only the main admin can suspend members." });
+    if (!permsForUser(me).includes("suspend")) {
+      return reply.code(403).send({ error: "You don't have permission to suspend members." });
     }
 
     const { id } = req.params as { id: string };
@@ -84,6 +75,9 @@ export async function securityRoutes(app: FastifyInstance) {
     if (!claims) return reply.code(401).send({ error: "Invalid token." });
     const me = stmts.user.byId.get(claims.sub);
     if (!me || me.role !== "admin") return reply.code(403).send({ error: "Admin only." });
+    if (!permsForUser(me).includes("suspend")) {
+      return reply.code(403).send({ error: "You don't have permission to unsuspend members." });
+    }
 
     const { id } = req.params as { id: string };
     const user = stmts.user.byId.get(id);

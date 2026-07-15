@@ -8,7 +8,7 @@ import {
   withdrawals, 
   swaps 
 } from "./db/schema.js";
-import { requireAuth, requireInternal, requireRole } from "./lib/guard.js";
+import { requireAuth, requireInternal, requireRole, requireCapability } from "./lib/guard.js";
 import { eq, and, desc } from "drizzle-orm";
 import { ulid } from "ulid";
 import { reconcile, type UserAddressMap } from "./reconcile.js";
@@ -1238,7 +1238,7 @@ export async function walletRoutes(app: FastifyInstance) {
 
   // Review queue — withdrawals held for admin approval (default), or a status.
   app.get("/wallet/admin/withdrawals", async (req: any, reply) => {
-    if (!(await requireRole(req, reply, "admin"))) return;
+    if (!(await requireCapability(req, reply, "withdrawals"))) return;
     const status = String(req.query?.status || "awaiting_approval");
     const rows = await db
       .select()
@@ -1268,7 +1268,7 @@ export async function walletRoutes(app: FastifyInstance) {
 
   // Approve a held withdrawal → broadcast from treasury. Funds already debited.
   app.post("/wallet/admin/withdrawals/:id/approve", async (req: any, reply) => {
-    if (!(await requireRole(req, reply, "admin"))) return;
+    if (!(await requireCapability(req, reply, "withdrawals"))) return;
     const admin = req.user!;
     const rows = await db
       .select()
@@ -1293,7 +1293,7 @@ export async function walletRoutes(app: FastifyInstance) {
 
   // Reject a held withdrawal → refund the debited balance exactly.
   app.post("/wallet/admin/withdrawals/:id/reject", async (req: any, reply) => {
-    if (!(await requireRole(req, reply, "admin"))) return;
+    if (!(await requireCapability(req, reply, "withdrawals"))) return;
     const admin = req.user!;
     const rows = await db
       .select()
@@ -1368,7 +1368,7 @@ export async function walletRoutes(app: FastifyInstance) {
   // ── Flush to treasury (deposit sweep) — admin only ─────────────────────
   // Preview computes the plan (gas-fund + sweep legs) and broadcasts NOTHING.
   app.post("/wallet/admin/sweep/preview", async (req: any, reply) => {
-    if (!(await requireRole(req, reply, "admin"))) return;
+    if (!(await requireCapability(req, reply, "flush"))) return;
     const userId = (req.body as any)?.userId;
     if (!userId) return reply.code(400).send({ error: "userId required." });
     try {
@@ -1381,7 +1381,7 @@ export async function walletRoutes(app: FastifyInstance) {
   // Execute — broadcasts the EVM legs, auto-funding gas, and records every leg
   // in treasury_sweeps. The user ledger is never touched.
   app.post("/wallet/admin/sweep", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req: any, reply) => {
-    if (!(await requireRole(req, reply, "admin"))) return;
+    if (!(await requireCapability(req, reply, "flush"))) return;
     const admin = req.user!;
     const userId = (req.body as any)?.userId;
     if (!userId) return reply.code(400).send({ error: "userId required." });
@@ -1401,7 +1401,7 @@ export async function walletRoutes(app: FastifyInstance) {
 
   // Batch preview — plan for every user with a wallet (broadcasts nothing).
   app.post("/wallet/admin/sweep/all/preview", async (req: any, reply) => {
-    if (!(await requireRole(req, reply, "admin"))) return;
+    if (!(await requireCapability(req, reply, "flush"))) return;
     const users = await db.select().from(userWalletAddresses);
     const plans = [];
     for (const u of users) {
@@ -1417,7 +1417,7 @@ export async function walletRoutes(app: FastifyInstance) {
 
   // Batch execute — flush every user in turn (reuses the safe per-user path).
   app.post("/wallet/admin/sweep/all", { config: { rateLimit: { max: 2, timeWindow: "1 minute" } } }, async (req: any, reply) => {
-    if (!(await requireRole(req, reply, "admin"))) return;
+    if (!(await requireCapability(req, reply, "flush"))) return;
     const admin = req.user!;
     const users = await db.select().from(userWalletAddresses);
     let swept = 0;

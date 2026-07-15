@@ -359,13 +359,67 @@ export type SecretField = { set: boolean; masked: string };
 export type AdminSettings = {
   settings: Record<string, string | SecretField>;
   isFounder: boolean;
+  perms: Capability[];
 };
 
 export async function getAdminSettings(): Promise<AdminSettings> {
   const res = await authedFetch(`${AUTH_BASE}/auth/admin/settings`);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Could not load settings.");
-  return { settings: data.settings, isFounder: !!data.isFounder };
+  return {
+    settings: data.settings,
+    isFounder: !!data.isFounder,
+    perms: Array.isArray(data.perms) ? data.perms : []
+  };
+}
+
+// ── Admin permission manager (founder only) ───────────────────────────────
+
+/** The granular admin capabilities the main admin can grant to sub-admins. */
+export const ADMIN_CAPABILITIES = [
+  { key: "withdrawals", label: "Approve withdrawals", desc: "Review queue — approve, reject, broadcast." },
+  { key: "suspend", label: "Suspend members", desc: "Block member sign-in and kill sessions." },
+  { key: "flush", label: "Treasury flush", desc: "Sweep member deposits to treasury (moves funds)." },
+  { key: "settings", label: "Settings & secrets", desc: "AI/wallet keys, withdrawal limits." }
+] as const;
+export type Capability = (typeof ADMIN_CAPABILITIES)[number]["key"];
+
+export type AdminAccount = {
+  id: string;
+  email: string;
+  code11: string;
+  firstName: string;
+  lastName: string;
+  isFounder: boolean;
+  permissions: Capability[];
+  suspendedAt: number | null;
+  createdAt: number;
+};
+
+/** Founder only — list every admin and their granted capabilities. */
+export async function listAdmins(): Promise<AdminAccount[]> {
+  const res = await authedFetch(`${AUTH_BASE}/auth/admin/admins`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not load admins.");
+  return Array.isArray(data.admins) ? data.admins : [];
+}
+
+/** Founder only — set a sub-admin's capabilities. */
+export async function setAdminPermissions(id: string, permissions: Capability[]): Promise<void> {
+  const res = await authedFetch(`${AUTH_BASE}/auth/admin/users/${id}/permissions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ permissions })
+  });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(d.error || "Could not save permissions.");
+}
+
+/** Founder only — demote a sub-admin back to a regular member. */
+export async function demoteAdmin(id: string): Promise<void> {
+  const res = await authedFetch(`${AUTH_BASE}/auth/admin/users/${id}/demote`, { method: "POST" });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(d.error || "Could not demote.");
 }
 
 export async function setAdminSetting(key: string, value: string): Promise<void> {

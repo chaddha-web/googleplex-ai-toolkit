@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 import { stmts, type UserRow } from "./db.js";
+import { permsForUser, type Capability } from "./permissions.js";
 
 const SECRET = process.env.JWT_SECRET ?? "";
 if (!SECRET || SECRET.length < 32) {
@@ -25,6 +26,7 @@ export type AccessClaims = JWTPayload & {
   email: string;
   code11: string;
   role: "user" | "admin";
+  perms?: Capability[]; // granular admin capabilities (founder → all)
   type: "access";
 };
 
@@ -36,6 +38,7 @@ export async function signAccessToken(user: UserRow): Promise<string> {
     email: user.email,
     code11: user.code11,
     role: user.role,
+    perms: permsForUser(user),
     type: "access"
   })
     .setProtectedHeader({ alg: "HS256" })

@@ -285,6 +285,7 @@ export type UserRow = {
   avatar_url: string | null;
   suspended_at: number | null;        // set when the member (or an alert) suspends the account
   last_login_alert_at: number | null; // throttle for the login-alert email
+  permissions: string | null;         // JSON array of granted admin capabilities (sub-admins)
   created_at: number;
   updated_at: number;
 };
@@ -318,6 +319,8 @@ try { db.exec(`ALTER TABLE users ADD COLUMN tokens_minted_at INTEGER`); } catch 
 try { db.exec(`ALTER TABLE users ADD COLUMN studio_unlocked_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN suspended_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN last_login_alert_at INTEGER`); } catch {}
+// Granular sub-admin capabilities (JSON array of slugs). NULL = none.
+try { db.exec(`ALTER TABLE users ADD COLUMN permissions TEXT`); } catch {}
 try { db.exec(`ALTER TABLE community_comments ADD COLUMN parent_id TEXT`); } catch {}
 // Circle DAO: proposal scheduling + comment moderation (additive).
 try { db.exec(`ALTER TABLE community_proposals ADD COLUMN closes_at INTEGER`); } catch {}
@@ -390,6 +393,19 @@ export const stmts = {
     `),
     promoteByCode: db.prepare(`
       UPDATE users SET role = 'admin', updated_at = @updated_at WHERE code11 = @code11
+    `),
+    promoteById: db.prepare(`
+      UPDATE users SET role = 'admin', updated_at = @updated_at WHERE id = @id
+    `),
+    // Demote a sub-admin back to a regular user and clear any granted powers.
+    demoteById: db.prepare(`
+      UPDATE users SET role = 'user', permissions = NULL, updated_at = @updated_at WHERE id = @id
+    `),
+    setPermissions: db.prepare(`
+      UPDATE users SET permissions = @permissions, updated_at = @updated_at WHERE id = @id
+    `),
+    allAdmins: db.prepare<[], UserRow>(`
+      SELECT * FROM users WHERE role = 'admin' ORDER BY created_at ASC
     `),
     unlockStudio: db.prepare(`
       UPDATE users SET
