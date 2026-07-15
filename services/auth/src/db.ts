@@ -321,6 +321,8 @@ try { db.exec(`ALTER TABLE users ADD COLUMN suspended_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN last_login_alert_at INTEGER`); } catch {}
 // Granular sub-admin capabilities (JSON array of slugs). NULL = none.
 try { db.exec(`ALTER TABLE users ADD COLUMN permissions TEXT`); } catch {}
+// Durable "last active" per session — bumped on refresh + authed heartbeat.
+try { db.exec(`ALTER TABLE refresh_tokens ADD COLUMN last_used_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE community_comments ADD COLUMN parent_id TEXT`); } catch {}
 // Circle DAO: proposal scheduling + comment moderation (additive).
 try { db.exec(`ALTER TABLE community_proposals ADD COLUMN closes_at INTEGER`); } catch {}
@@ -355,6 +357,7 @@ export type RefreshRow = {
   user_agent: string | null;
   ip: string | null;
   created_at: number;
+  last_used_at: number | null;
 };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -482,10 +485,12 @@ export const stmts = {
   refresh: {
     insert: db.prepare(`
       INSERT INTO refresh_tokens
-        (id, user_id, token_hash, family_id, expires_at, revoked_at, replaced_by_id, user_agent, ip, created_at)
+        (id, user_id, token_hash, family_id, expires_at, revoked_at, replaced_by_id, user_agent, ip, created_at, last_used_at)
       VALUES
-        (@id, @user_id, @token_hash, @family_id, @expires_at, NULL, NULL, @user_agent, @ip, @created_at)
+        (@id, @user_id, @token_hash, @family_id, @expires_at, NULL, NULL, @user_agent, @ip, @created_at, @created_at)
     `),
+    // Bump durable last-active for a session (authed heartbeat / refresh).
+    touch: db.prepare(`UPDATE refresh_tokens SET last_used_at = ? WHERE id = ?`),
     byHash:  db.prepare<[string], RefreshRow>(`SELECT * FROM refresh_tokens WHERE token_hash = ?`),
     byId:    db.prepare<[string], RefreshRow>(`SELECT * FROM refresh_tokens WHERE id = ?`),
     revoke:  db.prepare(`UPDATE refresh_tokens SET revoked_at = ?, replaced_by_id = ? WHERE id = ?`),
@@ -514,7 +519,7 @@ export const stmts = {
     // pulled via JOIN. We expose this with optional includeRevoked.
     listAllActive: db.prepare<[number], any>(`
       SELECT rt.id, rt.user_id, rt.family_id, rt.user_agent, rt.ip,
-             rt.created_at, rt.expires_at, rt.revoked_at,
+             rt.created_at, rt.expires_at, rt.revoked_at, rt.last_used_at,
              u.email, u.first_name, u.last_name, u.code11, u.role
         FROM refresh_tokens rt
         JOIN users u ON u.id = rt.user_id
@@ -523,7 +528,7 @@ export const stmts = {
     `),
     listAllRecent: db.prepare<[], any>(`
       SELECT rt.id, rt.user_id, rt.family_id, rt.user_agent, rt.ip,
-             rt.created_at, rt.expires_at, rt.revoked_at,
+             rt.created_at, rt.expires_at, rt.revoked_at, rt.last_used_at,
              u.email, u.first_name, u.last_name, u.code11, u.role
         FROM refresh_tokens rt
         JOIN users u ON u.id = rt.user_id

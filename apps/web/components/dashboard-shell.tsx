@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-context";
+import { SessionHeartbeat } from "@/components/session-heartbeat";
 
 const LANDING_URL =
   process.env.NEXT_PUBLIC_LANDING_URL || "http://localhost:3010";
@@ -185,6 +186,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         backgroundColor: "#0a0b1a"
       }}
     >
+      <SessionHeartbeat />
       {/* Full-height sidebar — desktop. Width animates between the icon rail and
           the full labelled rail. */}
       <Sidebar

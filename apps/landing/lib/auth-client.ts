@@ -723,6 +723,7 @@ export type SessionRow = {
   created_at: number;
   expires_at: number;
   revoked_at: number | null;
+  last_used_at: number | null;
   current?: boolean;
 };
 export type AdminSessionRow = SessionRow & {
@@ -731,6 +732,21 @@ export type AdminSessionRow = SessionRow & {
   last_name: string;
   code11: string;
   role: "user" | "admin";
+  online?: boolean;
+};
+
+/** A member actively using the platform right now (live heartbeat). */
+export type OnlineMember = {
+  userId: string;
+  email: string;
+  code11: string;
+  firstName: string;
+  lastName: string;
+  role: "user" | "admin";
+  section: string;
+  country: string;
+  region: string;
+  lastSeen: number;
 };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -764,10 +780,15 @@ export const sessions = {
   revokeOthers: () =>
     authedJson<{ ok: true; killed: number }>(`${AUTH_BASE}/auth/sessions/revoke-others`, { method: "POST" }),
   // Admin
-  listAll: (scope: "active" | "recent" = "active", q = "") =>
-    authedJson<{ sessions: AdminSessionRow[]; scope: string }>(
-      `${AUTH_BASE}/auth/admin/sessions?scope=${scope}${q ? "&q=" + encodeURIComponent(q) : ""}`
+  listAll: (scope: "active" | "recent" = "active", q = "", userId = "") =>
+    authedJson<{ sessions: AdminSessionRow[]; scope: string; onlineCount: number }>(
+      `${AUTH_BASE}/auth/admin/sessions?scope=${scope}` +
+        (q ? "&q=" + encodeURIComponent(q) : "") +
+        (userId ? "&userId=" + encodeURIComponent(userId) : "")
     ).then((r) => r.sessions),
+  // Admin — members actively using the platform right now (live heartbeat).
+  online: () =>
+    authedJson<{ members: OnlineMember[]; count: number }>(`${AUTH_BASE}/auth/admin/online`),
   adminRevoke: (id: string) =>
     authedJson<{ ok: true }>(`${AUTH_BASE}/auth/admin/sessions/${id}/revoke`, { method: "POST" })
 };

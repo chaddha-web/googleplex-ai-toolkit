@@ -9,6 +9,7 @@ import {
   suspendUser,
   unsuspendUser,
   getAdminSettings,
+  sessions,
   adminWalletBalances,
   adminUserOnchain,
   adminUserConsents,
@@ -19,6 +20,7 @@ import {
   type ConsentRecord,
   type MemberWalletDetail,
   type Capability,
+  type AdminSessionRow,
   type SweepPlan,
   type SweepLeg
 } from "@/lib/auth-client";
@@ -46,6 +48,7 @@ export default function AdminHome() {
   // Founder flag + my granular capabilities (gates suspend + the access page).
   const [isFounder, setIsFounder] = useState(false);
   const [myPerms, setMyPerms] = useState<Capability[]>([]);
+  const [onlineNow, setOnlineNow] = useState<number | null>(null);
   // userId → usable (ledger) USD; userId → actual (on-chain) USD on demand.
   const [usable, setUsable] = useState<Record<string, number>>({});
   const [actual, setActual] = useState<Record<string, number | "loading">>({});
@@ -134,6 +137,20 @@ export default function AdminHome() {
     setUsers((us) => (us ? us.map((x) => (x.id === id ? { ...x, suspendedAt } : x)) : us));
   }
 
+  // Live "online now" count — polled while the panel is open.
+  useEffect(() => {
+    if (user?.role !== "admin") return;
+    let stop = false;
+    const tick = () =>
+      sessions.online().then((r) => !stop && setOnlineNow(r.count)).catch(() => {});
+    tick();
+    const id = window.setInterval(tick, 15_000);
+    return () => {
+      stop = true;
+      window.clearInterval(id);
+    };
+  }, [user]);
+
   if (!user || user.role !== "admin") return null;
 
   const q = query.trim().toLowerCase();
@@ -167,7 +184,7 @@ export default function AdminHome() {
           Control <em className="font-serif-i text-white/60">center</em>.
         </h1>
 
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-4">
           <Stat label="Total users" value={total === null ? "—" : String(total)} />
           <Stat
             label="Profile complete"
@@ -185,6 +202,9 @@ export default function AdminHome() {
                 : String(users.filter((u) => u.walletStatus === "active").length)
             }
           />
+          <Link href="/app/admin/sessions" className="block">
+            <Stat label="Online now" value={onlineNow === null ? "—" : String(onlineNow)} live />
+          </Link>
         </div>
 
         <div className="mt-12 flex flex-wrap items-center justify-between gap-4">
@@ -421,6 +441,12 @@ export default function AdminHome() {
             Live globe
           </Link>
           <Link
+            href="/app/admin/sessions"
+            className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
+          >
+            Live sessions
+          </Link>
+          <Link
             href="/app/admin/withdrawals"
             className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
           >
@@ -625,6 +651,15 @@ function MemberModal({
   const [suspendedAt, setSuspendedAt] = useState<number | null>(user.suspendedAt);
   const [suspendBusy, setSuspendBusy] = useState(false);
   const [suspendErr, setSuspendErr] = useState<string | null>(null);
+  const [sess, setSess] = useState<AdminSessionRow[] | "loading" | null>(null);
+
+  useEffect(() => {
+    setSess("loading");
+    sessions
+      .listAll("active", "", user.id)
+      .then(setSess)
+      .catch(() => setSess([]));
+  }, [user.id]);
 
   async function toggleSuspend() {
     const suspending = !suspendedAt;
@@ -795,6 +830,39 @@ function MemberModal({
               )}
             </div>
           </>
+        )}
+
+        {/* Active sessions */}
+        <div className="mt-6 flex items-center justify-between">
+          <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase">Active sessions</p>
+          <Link href="/app/admin/sessions" className="text-white/40 hover:text-white text-xs underline decoration-dotted">
+            All sessions →
+          </Link>
+        </div>
+        {sess === "loading" || sess === null ? (
+          <p className="text-white/40 text-sm mt-2">Loading sessions…</p>
+        ) : sess.length === 0 ? (
+          <p className="text-white/40 text-sm mt-2">No active sessions.</p>
+        ) : (
+          <div className="mt-2 space-y-2">
+            {sess.map((s) => (
+              <div key={s.id} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 flex items-center justify-between gap-3 text-xs">
+                <div className="min-w-0">
+                  <p className="text-white/80">{deviceLabel(s.user_agent)}</p>
+                  <p className="text-white/40 font-mono">{s.ip ?? "—"}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  {s.online ? (
+                    <span className="inline-flex items-center gap-1 text-emerald-300">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> online
+                    </span>
+                  ) : (
+                    <span className="text-white/50">{s.last_used_at ? agoShort(s.last_used_at) : "—"}</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         )}
 
         {/* Danger zone — needs the suspend capability; never for other admins. */}
@@ -987,13 +1055,19 @@ function Avatar({ url, name, id }: { url: string | null; name: string; id: strin
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, live }: { label: string; value: string; live?: boolean }) {
   return (
-    <div className="liquid-glass rounded-2xl p-6">
-      <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase mb-2">
+    <div className={`liquid-glass rounded-2xl p-6 ${live ? "ring-1 ring-emerald-400/25 hover:ring-emerald-400/50 transition-colors" : ""}`}>
+      <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase mb-2 flex items-center gap-1.5">
+        {live && (
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+          </span>
+        )}
         {label}
       </p>
-      <p className="text-white text-3xl font-medium tracking-tight">{value}</p>
+      <p className={`text-3xl font-medium tracking-tight ${live ? "text-emerald-200" : "text-white"}`}>{value}</p>
     </div>
   );
 }
@@ -1033,6 +1107,33 @@ function labelForWalletStatus(s: string): string {
     default:
       return s;
   }
+}
+
+function deviceLabel(ua: string | null): string {
+  if (!ua) return "Unknown device";
+  const os =
+    /Windows/.test(ua) ? "Windows" :
+    /iPhone|iOS/.test(ua) ? "iPhone" :
+    /iPad/.test(ua) ? "iPad" :
+    /Android/.test(ua) ? "Android" :
+    /Mac OS X|Macintosh/.test(ua) ? "Mac" :
+    /Linux/.test(ua) ? "Linux" : "Device";
+  const browser =
+    /Edg\//.test(ua) ? "Edge" :
+    /Chrome\//.test(ua) ? "Chrome" :
+    /Firefox\//.test(ua) ? "Firefox" :
+    /Safari\//.test(ua) ? "Safari" : "Browser";
+  return `${browser} · ${os}`;
+}
+
+function agoShort(ms: number): string {
+  const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
 }
 
 function formatDate(ms: number): string {

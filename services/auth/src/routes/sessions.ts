@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { db, stmts } from "../db.js";
 import { verifyAccessToken } from "../jwt.js";
+import { recordActivity, onlineMembers, onlineUserIds } from "../session-activity.js";
 import { notify } from "../notify.js";
 
 /**
@@ -26,6 +27,7 @@ type SessionPublic = {
   created_at: number;
   expires_at: number;
   revoked_at: number | null;
+  last_used_at: number | null;
   current?: boolean;
 };
 type SessionAdminPublic = SessionPublic & {
@@ -34,6 +36,7 @@ type SessionAdminPublic = SessionPublic & {
   last_name: string;
   code11: string;
   role: "user" | "admin";
+  online?: boolean;
 };
 
 export async function sessionsRoutes(app: FastifyInstance) {
@@ -76,6 +79,7 @@ export async function sessionsRoutes(app: FastifyInstance) {
         created_at: r.created_at,
         expires_at: r.expires_at,
         revoked_at: r.revoked_at,
+        last_used_at: r.last_used_at ?? r.created_at,
         current: r.id === currentId
       }))
     });
@@ -136,6 +140,7 @@ export async function sessionsRoutes(app: FastifyInstance) {
     }
     const userId = req.query?.userId ? String(req.query.userId) : null;
     const q = String(req.query?.q || "").toLowerCase().trim();
+    const online = onlineUserIds();
     const filtered = rows
       .filter((r) => (userId ? r.user_id === userId : true))
       .filter((r) =>
@@ -155,15 +160,67 @@ export async function sessionsRoutes(app: FastifyInstance) {
           created_at: r.created_at,
           expires_at: r.expires_at,
           revoked_at: r.revoked_at,
+          last_used_at: r.last_used_at ?? r.created_at,
           email: r.email,
           first_name: r.first_name,
           last_name: r.last_name,
           code11: r.code11,
-          role: r.role
+          role: r.role,
+          online: online.has(r.user_id)
         })
       );
-    return reply.send({ sessions: filtered, scope });
+    return reply.send({ sessions: filtered, scope, onlineCount: online.size });
   });
+
+  // ── GET /auth/admin/online — members actively using the platform NOW ────
+  // Backed by the in-memory authed heartbeat. Joins user info for display.
+  app.get("/auth/admin/online", async (req: any, reply) => {
+    const me = await requireUser(req, reply);
+    if (!me) return;
+    if (me.role !== "admin") return reply.code(403).send({ error: "Admin only." });
+    const members = onlineMembers()
+      .map((m) => {
+        const u = stmts.user.byId.get(m.userId);
+        if (!u) return null;
+        return {
+          userId: m.userId,
+          email: u.email,
+          code11: u.code11,
+          firstName: u.first_name,
+          lastName: u.last_name,
+          role: u.role,
+          section: m.section,
+          country: m.country,
+          region: m.region,
+          lastSeen: m.lastSeen
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null)
+      .sort((a, b) => b.lastSeen - a.lastSeen);
+    return reply.send({ members, count: members.length });
+  });
+
+  // ── POST /auth/session/heartbeat — authed "I'm using the app" ping ──────
+  // Records live presence + bumps the current session's durable last-active.
+  app.post(
+    "/auth/session/heartbeat",
+    { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    async (req: any, reply) => {
+      const me = await requireUser(req, reply);
+      if (!me) return;
+      const section =
+        typeof req.body?.section === "string" ? req.body.section : undefined;
+      recordActivity(me.id, section, req.ip);
+      const sid = currentSessionIdFromHeader(req);
+      if (sid) {
+        const row = stmts.refresh.byId.get(sid);
+        if (row && row.user_id === me.id && row.revoked_at === null) {
+          stmts.refresh.touch.run(Date.now(), sid);
+        }
+      }
+      return reply.send({ ok: true });
+    }
+  );
 
   // ── POST /auth/admin/sessions/:id/revoke — admin revokes any ───────────
   app.post("/auth/admin/sessions/:id/revoke", async (req: any, reply) => {

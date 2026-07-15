@@ -538,6 +538,21 @@ export const mySessions = {
     })
 };
 
+/** Live "I'm using the app" heartbeat. Fire-and-forget: records authed presence
+ *  server-side and bumps this session's last-active. `section` is a coarse label
+ *  (the current route). Never throws — presence is best-effort. */
+export async function sessionHeartbeat(section: string): Promise<void> {
+  try {
+    await authedFetch(`${AUTH_BASE}/auth/session/heartbeat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ section })
+    });
+  } catch {
+    /* best-effort */
+  }
+}
+
 export async function signOut(): Promise<void> {
   const refresh = loadRefresh();
   if (refresh) {
