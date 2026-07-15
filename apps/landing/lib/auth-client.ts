@@ -322,6 +322,17 @@ export async function listAllUsers(): Promise<{ total: number; users: AdminUserR
   return { total: data.total, users: data.users };
 }
 
+/** Main admin (founder) only — suspend a member (blocks sign-in, kills sessions). */
+export async function suspendUser(id: string): Promise<void> {
+  const res = await authedFetch(`${AUTH_BASE}/auth/admin/users/${id}/suspend`, {
+    method: "POST"
+  });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(d.error || "Could not suspend.");
+  }
+}
+
 /** Admin — lift a member's suspension so they can sign in again. */
 export async function unsuspendUser(id: string): Promise<void> {
   const res = await authedFetch(`${AUTH_BASE}/auth/admin/users/${id}/unsuspend`, {

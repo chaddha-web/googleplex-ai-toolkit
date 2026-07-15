@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-context";
 import {
   listAllUsers,
+  suspendUser,
   unsuspendUser,
+  getAdminSettings,
   adminWalletBalances,
   adminUserOnchain,
   adminUserConsents,
@@ -40,6 +42,8 @@ export default function AdminHome() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
+  // Only the main admin (founder) may suspend members.
+  const [isFounder, setIsFounder] = useState(false);
   // userId → usable (ledger) USD; userId → actual (on-chain) USD on demand.
   const [usable, setUsable] = useState<Record<string, number>>({});
   const [actual, setActual] = useState<Record<string, number | "loading">>({});
@@ -110,8 +114,17 @@ export default function AdminHome() {
   }
 
   useEffect(() => {
-    if (user?.role === "admin") load();
+    if (user?.role === "admin") {
+      load();
+      getAdminSettings()
+        .then((s) => setIsFounder(s.isFounder))
+        .catch(() => setIsFounder(false));
+    }
   }, [user]);
+
+  function markSuspended(id: string, suspendedAt: number | null) {
+    setUsers((us) => (us ? us.map((x) => (x.id === id ? { ...x, suspendedAt } : x)) : us));
+  }
 
   if (!user || user.role !== "admin") return null;
 
@@ -455,7 +468,12 @@ export default function AdminHome() {
       )}
 
       {memberFor && (
-        <MemberModal user={memberFor} onClose={() => setMemberFor(null)} />
+        <MemberModal
+          user={memberFor}
+          isFounder={isFounder}
+          onChanged={markSuspended}
+          onClose={() => setMemberFor(null)}
+        />
       )}
     </main>
   );
@@ -573,11 +591,49 @@ function FlushModal({ user, onClose }: { user: AdminUserRow; onClose: () => void
   );
 }
 
-function MemberModal({ user, onClose }: { user: AdminUserRow; onClose: () => void }) {
+function MemberModal({
+  user,
+  isFounder,
+  onChanged,
+  onClose
+}: {
+  user: AdminUserRow;
+  isFounder: boolean;
+  onChanged: (id: string, suspendedAt: number | null) => void;
+  onClose: () => void;
+}) {
   const [detail, setDetail] = useState<MemberWalletDetail | "loading" | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [onchain, setOnchain] = useState<number | "loading" | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [suspendedAt, setSuspendedAt] = useState<number | null>(user.suspendedAt);
+  const [suspendBusy, setSuspendBusy] = useState(false);
+  const [suspendErr, setSuspendErr] = useState<string | null>(null);
+
+  async function toggleSuspend() {
+    const suspending = !suspendedAt;
+    if (
+      !confirm(
+        suspending
+          ? `Suspend ${user.email}? They'll be signed out everywhere and blocked from signing in.`
+          : `Unsuspend ${user.email}? They'll be able to sign in again.`
+      )
+    )
+      return;
+    setSuspendBusy(true);
+    setSuspendErr(null);
+    try {
+      if (suspending) await suspendUser(user.id);
+      else await unsuspendUser(user.id);
+      const next = suspending ? Date.now() : null;
+      setSuspendedAt(next);
+      onChanged(user.id, next);
+    } catch (e) {
+      setSuspendErr((e as Error).message);
+    } finally {
+      setSuspendBusy(false);
+    }
+  }
 
   useEffect(() => {
     setDetail("loading");
@@ -639,7 +695,7 @@ function MemberModal({ user, onClose }: { user: AdminUserRow; onClose: () => voi
           <span className={`text-[10px] tracking-[0.15em] uppercase px-2 py-1 rounded-full ${t.cls}`}>
             {t.label}
           </span>
-          {user.suspendedAt && (
+          {suspendedAt && (
             <span className="text-[10px] tracking-[0.15em] uppercase px-2 py-1 rounded-full bg-rose-500/20 text-rose-300 ring-1 ring-rose-400/40">
               Suspended
             </span>
@@ -723,6 +779,37 @@ function MemberModal({ user, onClose }: { user: AdminUserRow; onClose: () => voi
               )}
             </div>
           </>
+        )}
+
+        {/* Danger zone — main admin only, never for other admins. */}
+        {isFounder && user.role !== "admin" && (
+          <div className="mt-6 pt-5 border-t border-white/10">
+            {suspendErr && <p className="text-rose-300 text-sm mb-3">{suspendErr}</p>}
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-white/80 text-sm font-medium">
+                  {suspendedAt ? "Account suspended" : "Suspend this member"}
+                </p>
+                <p className="text-white/40 text-xs mt-0.5">
+                  {suspendedAt
+                    ? "They are blocked from signing in."
+                    : "Signs them out everywhere and blocks sign-in."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={toggleSuspend}
+                disabled={suspendBusy}
+                className={`shrink-0 rounded-full text-sm font-medium px-5 py-2 disabled:opacity-40 transition-colors ${
+                  suspendedAt
+                    ? "bg-emerald-400 text-black hover:bg-emerald-300"
+                    : "bg-rose-500/90 text-white hover:bg-rose-500"
+                }`}
+              >
+                {suspendBusy ? "Working…" : suspendedAt ? "Unsuspend" : "Suspend"}
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>
