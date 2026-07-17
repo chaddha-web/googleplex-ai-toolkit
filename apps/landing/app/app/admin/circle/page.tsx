@@ -11,7 +11,6 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-context";
 import { authedFetch, AUTH_BASE } from "@/lib/auth-client";
@@ -138,15 +137,7 @@ export default function AdminCirclePage() {
   if (!user || user.role !== "admin") return null;
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <header className="border-b border-white/10 px-6 py-4 flex items-center gap-4">
-        <Link href="/app/admin" className="text-white/60 hover:text-white text-sm">
-          ← Admin
-        </Link>
-        <h1 className="text-lg font-medium">Circle moderation</h1>
-      </header>
-
-      <main className="max-w-4xl mx-auto px-6 py-10">
+    <section className="max-w-4xl mx-auto">
         {error && (
           <div className="mb-6 rounded-lg border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-rose-200 text-sm">
             {error}
@@ -177,8 +168,7 @@ export default function AdminCirclePage() {
             </div>
           )}
         </div>
-      </main>
-    </div>
+    </section>
   );
 }
 

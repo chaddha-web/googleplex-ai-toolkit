@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-context";
 import {
@@ -50,19 +49,7 @@ export default function AdminSettings() {
   if (!user || user.role !== "admin") return null;
 
   return (
-    <main className="min-h-screen bg-black text-white font-sans">
-      <nav className="w-full px-6 py-6 border-b border-white/5">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <Link href="/app/admin" className="text-white/60 hover:text-white text-sm">
-            ← Admin
-          </Link>
-          <span className="text-white/40 text-xs tracking-[0.3em] uppercase">
-            Settings
-          </span>
-        </div>
-      </nav>
-
-      <section className="max-w-4xl mx-auto px-6 py-12 space-y-14">
+    <section className="max-w-4xl mx-auto space-y-14">
         <div>
           <h1 className="font-serif text-4xl md:text-5xl tracking-tight">
             Platform <em className="font-serif-i text-white/60">settings</em>
@@ -204,8 +191,7 @@ export default function AdminSettings() {
             )}
           </>
         ) : null}
-      </section>
-    </main>
+    </section>
   );
 }
 

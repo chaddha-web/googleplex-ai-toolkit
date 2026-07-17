@@ -12,7 +12,6 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-context";
 import { email, type CampaignRow, type CampaignDetail, type EmailAudience } from "@/lib/auth-client";
@@ -206,14 +205,8 @@ export default function CampaignsPage() {
   const sortedList = useMemo(() => list ?? [], [list]);
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <header className="border-b border-white/10 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/app/admin" className="text-white/60 hover:text-white text-sm">
-            ← Admin
-          </Link>
-          <h1 className="text-lg font-medium">Email campaigns</h1>
-        </div>
+    <>
+      <div className="flex items-center justify-end mb-4">
         <button
           type="button"
           onClick={newDraft}
@@ -221,9 +214,9 @@ export default function CampaignsPage() {
         >
           New campaign
         </button>
-      </header>
+      </div>
 
-      <main className="grid grid-cols-1 lg:grid-cols-[280px_1fr_1fr] gap-0 min-h-[calc(100vh-65px)]">
+      <main className="grid grid-cols-1 lg:grid-cols-[260px_1fr_1fr] gap-0 border border-white/10 rounded-2xl overflow-hidden min-h-[70vh]">
         {/* List */}
         <aside className="border-r border-white/10 p-4 overflow-y-auto">
           <div className="text-xs uppercase tracking-widest text-white/40 mb-3">All campaigns</div>
@@ -346,12 +339,12 @@ export default function CampaignsPage() {
             <iframe
               title="email-preview"
               srcDoc={previewHtml}
-              className="w-full h-[calc(100vh-180px)] bg-[#0a0a0a]"
+              className="w-full h-[70vh] bg-[#0a0a0a]"
             />
           </div>
         </section>
       </main>
-    </div>
+    </>
   );
 }
 

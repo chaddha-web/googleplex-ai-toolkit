@@ -12,7 +12,6 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-context";
 import { sessions, type AdminSessionRow } from "@/lib/auth-client";
@@ -109,14 +108,9 @@ export default function LogsPage() {
   }, [rows]);
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <header className="border-b border-white/10 px-6 py-4 flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-4">
-          <Link href="/app/admin" className="text-white/60 hover:text-white text-sm">
-            ← Admin
-          </Link>
-          <h1 className="text-lg font-medium">Logs · sessions</h1>
-        </div>
+    <>
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
+        <h1 className="font-serif text-3xl tracking-tight">Logs</h1>
         <div className="flex items-center gap-2 ml-auto">
           <ScopeTab scope={scope} setScope={setScope} value="active" />
           <ScopeTab scope={scope} setScope={setScope} value="recent" />
@@ -135,9 +129,9 @@ export default function LogsPage() {
             Refresh
           </button>
         </div>
-      </header>
+      </div>
 
-      <main className="px-6 py-6 max-w-[1400px] mx-auto">
+      <main className="max-w-[1400px] mx-auto">
         <div className="flex gap-6 text-sm mb-6">
           <Stat label="Active" value={stats.active} />
           <Stat label="Revoked (in view)" value={stats.revoked} />
@@ -235,7 +229,7 @@ export default function LogsPage() {
           (including any rotated descendants), so a single click signs the user out fully.
         </p>
       </main>
-    </div>
+    </>
   );
 }
 

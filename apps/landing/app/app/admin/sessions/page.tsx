@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-context";
 import { sessions, type AdminSessionRow, type OnlineMember } from "@/lib/auth-client";
+// (breadcrumb + chrome now come from the admin shell layout)
 
 function ago(ms: number): string {
   const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
@@ -106,21 +106,8 @@ export default function AdminSessionsPage() {
   if (!user || user.role !== "admin") return null;
 
   return (
-    <main className="min-h-screen bg-black text-white font-sans">
-      <nav className="relative z-20 w-full px-6 py-6 border-b border-white/5">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <Link href="/app/admin" className="flex items-center gap-2 text-white">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="GoogolPlex" className="h-7 w-auto object-contain" />
-            <span className="font-semibold text-lg tracking-tight">GoogolPlex</span>
-          </Link>
-          <div className="text-white/40 text-xs tracking-[0.3em] uppercase">Live sessions</div>
-        </div>
-      </nav>
-
-      <section className="max-w-6xl mx-auto px-6 py-14">
-        <Link href="/app/admin" className="text-white/40 hover:text-white text-xs">← Back to admin</Link>
-        <p className="mt-6 text-white/40 text-xs tracking-[0.3em] uppercase">Live sessions</p>
+    <section className="max-w-6xl mx-auto">
+        <p className="text-white/40 text-xs tracking-[0.3em] uppercase">Live sessions</p>
         <h1 className="font-serif text-4xl md:text-5xl tracking-tight mt-2">
           Who&apos;s <em className="font-serif-i text-white/60">on</em> right now.
         </h1>
@@ -265,7 +252,6 @@ export default function AdminSessionsPage() {
           &ldquo;Active&rdquo; = a live (unexpired, unrevoked) session. &ldquo;Online&rdquo; = a heartbeat in the last minute.
           Last-active updates each time the member&apos;s app refreshes its token (~15 min) or sends a heartbeat.
         </p>
-      </section>
-    </main>
+    </section>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-context";
 import {
@@ -58,14 +57,11 @@ export default function WithdrawalReviewPage() {
   if (!user || user.role !== "admin") return null;
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <header className="border-b border-white/10 px-6 py-4 flex items-center gap-4">
-        <Link href="/app/admin" className="text-white/60 hover:text-white text-sm">← Admin</Link>
-        <h1 className="text-lg font-medium">Withdrawal review</h1>
+    <section className="max-w-4xl mx-auto">
+      <div className="flex items-center gap-4 mb-6">
+        <h1 className="font-serif text-3xl tracking-tight">Withdrawal review</h1>
         <button onClick={load} className="ml-auto text-white/50 hover:text-white text-xs">↻ Refresh</button>
-      </header>
-
-      <main className="max-w-4xl mx-auto px-6 py-10">
+      </div>
         <p className="text-white/50 text-sm mb-6">
           Large withdrawals (above the review threshold) are held here. The member&apos;s
           balance is already debited — <span className="text-white/70">approve</span> to
@@ -115,7 +111,6 @@ export default function WithdrawalReviewPage() {
             ))}
           </div>
         )}
-      </main>
-    </div>
+    </section>
   );
 }

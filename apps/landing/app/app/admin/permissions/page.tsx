@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-context";
 import {
@@ -102,21 +101,8 @@ export default function AdminPermissionsPage() {
   if (!user || user.role !== "admin") return null;
 
   return (
-    <main className="min-h-screen bg-black text-white font-sans">
-      <nav className="relative z-20 w-full px-6 py-6 border-b border-white/5">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <Link href="/app/admin" className="flex items-center gap-2 text-white">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="GoogolPlex" className="h-7 w-auto object-contain" />
-            <span className="font-semibold text-lg tracking-tight">GoogolPlex</span>
-          </Link>
-          <div className="text-white/40 text-xs tracking-[0.3em] uppercase">Admin access</div>
-        </div>
-      </nav>
-
-      <section className="max-w-5xl mx-auto px-6 py-14">
-        <Link href="/app/admin" className="text-white/40 hover:text-white text-xs">← Back to admin</Link>
-        <p className="mt-6 text-white/40 text-xs tracking-[0.3em] uppercase">Permission manager</p>
+    <section className="max-w-5xl mx-auto">
+        <p className="text-white/40 text-xs tracking-[0.3em] uppercase">Permission manager</p>
         <h1 className="font-serif text-4xl md:text-5xl tracking-tight mt-2">
           Admin <em className="font-serif-i text-white/60">access</em>.
         </h1>
@@ -257,7 +243,6 @@ export default function AdminPermissionsPage() {
             </div>
           </>
         )}
-      </section>
-    </main>
+    </section>
   );
 }

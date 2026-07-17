@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-context";
@@ -28,21 +27,19 @@ export default function AdminGlobePage() {
   if (!user || user.role !== "admin") return null;
 
   return (
-    <div className="min-h-screen bg-black text-white overflow-hidden">
-      <header className="relative z-10 border-b border-white/10 px-6 py-4 flex items-center gap-4">
-        <Link href="/app/admin" className="text-white/60 hover:text-white text-sm">
-          ← Admin
-        </Link>
-        <h1 className="text-lg font-medium">Customer globe</h1>
-        <span className="ml-auto inline-flex items-center gap-2 text-xs text-emerald-300">
+    <>
+      <div className="flex items-center justify-end mb-4">
+        <span className="inline-flex items-center gap-2 text-xs text-emerald-300">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
           </span>
           LIVE · refreshes every 30s
         </span>
-      </header>
-      <AdminGlobe />
-    </div>
+      </div>
+      <div className="rounded-2xl overflow-hidden border border-white/10">
+        <AdminGlobe />
+      </div>
+    </>
   );
 }

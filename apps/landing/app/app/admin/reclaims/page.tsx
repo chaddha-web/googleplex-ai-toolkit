@@ -11,7 +11,6 @@
  */
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-context";
 import { tokenReclaims, type TokenReclaimRow } from "@/lib/auth-client";
@@ -46,14 +45,9 @@ export default function ReclaimsPage() {
   }, [user]);
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <header className="border-b border-white/10 px-6 py-4 flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-4">
-          <Link href="/app/admin" className="text-white/60 hover:text-white text-sm">
-            ← Admin
-          </Link>
-          <h1 className="text-lg font-medium">Token reclaims</h1>
-        </div>
+    <section className="max-w-[1200px] mx-auto">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-8">
+        <h1 className="font-serif text-3xl tracking-tight">Token reclaims</h1>
         <button
           type="button"
           onClick={load}
@@ -61,9 +55,7 @@ export default function ReclaimsPage() {
         >
           Refresh
         </button>
-      </header>
-
-      <main className="px-6 py-6 max-w-[1200px] mx-auto">
+      </div>
         <div className="flex gap-8 mb-8">
           <Stat label="Admin holdings (tokens)" value={(totals?.tokens ?? 0).toLocaleString()} />
           <Stat label="USD released to members" value={`$${(totals?.usd ?? 0).toFixed(2)}`} />
@@ -120,8 +112,7 @@ export default function ReclaimsPage() {
           Each row is a member exiting the liquidity that backed their tokens. Their reference number
           is their member ID at the time of exit. Append-only — exits cannot be reversed here.
         </p>
-      </main>
-    </div>
+    </section>
   );
 }
 

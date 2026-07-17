@@ -11,7 +11,6 @@
  */
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-context";
 import {
@@ -142,15 +141,11 @@ export default function MailPage() {
   const open = tab === "inbox" ? inOpen : sentOpen;
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <header className="border-b border-white/10 px-6 py-4 flex items-center justify-between">
+    <>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div className="flex items-center gap-4">
-          <Link href="/app/admin" className="text-white/60 hover:text-white text-sm">
-            ← Admin
-          </Link>
-          <h1 className="text-lg font-medium">Mail</h1>
           {/* Tabs */}
-          <div className="ml-2 flex items-center gap-1 rounded-full bg-white/5 p-1">
+          <div className="flex items-center gap-1 rounded-full bg-white/5 p-1">
             {(["inbox", "sent"] as Tab[]).map((t) => (
               <button
                 key={t}
@@ -187,9 +182,9 @@ export default function MailPage() {
           </svg>
           {refreshing ? "Refreshing…" : "Refresh"}
         </button>
-      </header>
+      </div>
 
-      <main className="grid grid-cols-1 md:grid-cols-[360px_1fr] min-h-[calc(100vh-65px)]">
+      <main className="grid grid-cols-1 md:grid-cols-[360px_1fr] border border-white/10 rounded-2xl overflow-hidden min-h-[70vh]">
         <aside className="border-r border-white/10 overflow-y-auto">
           {tab === "inbox" ? (
             !inList ? (
@@ -347,7 +342,7 @@ export default function MailPage() {
           {busy && <div className="p-4 text-white/40 text-sm">Loading…</div>}
         </section>
       </main>
-    </div>
+    </>
   );
 }
 

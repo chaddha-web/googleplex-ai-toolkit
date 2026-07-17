@@ -162,21 +162,8 @@ export default function AdminHome() {
       );
 
   return (
-    <main className="min-h-screen bg-black text-white font-sans">
-      <nav className="relative z-20 w-full px-6 py-6 border-b border-white/5">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 text-white">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="GoogolPlex" className="h-7 w-auto object-contain" />
-            <span className="font-semibold text-lg tracking-tight">GoogolPlex</span>
-          </Link>
-          <div className="text-white/40 text-xs tracking-[0.3em] uppercase">
-            Admin
-          </div>
-        </div>
-      </nav>
-
-      <section className="max-w-6xl mx-auto px-6 py-14">
+    <>
+      <section className="max-w-6xl mx-auto">
         <p className="text-white/40 text-xs tracking-[0.3em] uppercase">
           Admin panel
         </p>
@@ -415,83 +402,6 @@ export default function AdminHome() {
           </div>
         </div>
 
-        <div className="mt-10 flex gap-3 flex-wrap">
-          <Link
-            href="/app/admin/campaigns"
-            className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
-          >
-            Email campaigns
-          </Link>
-          <Link
-            href="/app/admin/inbox"
-            className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
-          >
-            Inbox
-          </Link>
-          <Link
-            href="/app/admin/circle"
-            className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
-          >
-            Circle
-          </Link>
-          <Link
-            href="/app/admin/globe"
-            className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
-          >
-            Live globe
-          </Link>
-          <Link
-            href="/app/admin/sessions"
-            className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
-          >
-            Live sessions
-          </Link>
-          <Link
-            href="/app/admin/withdrawals"
-            className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
-          >
-            Withdrawal review
-          </Link>
-          <Link
-            href="/app/admin/logs"
-            className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
-          >
-            Logs
-          </Link>
-          <Link
-            href="/app/admin/reclaims"
-            className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
-          >
-            Token reclaims
-          </Link>
-          <Link
-            href="/app/admin/settings"
-            className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
-          >
-            Settings
-          </Link>
-          {isFounder && (
-            <Link
-              href="/app/admin/permissions"
-              className="liquid-glass rounded-full px-6 py-3 text-amber-200 text-sm font-medium hover:bg-white/5 transition-colors ring-1 ring-amber-300/25"
-            >
-              Admin access
-            </Link>
-          )}
-          <Link
-            href="/app"
-            className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors"
-          >
-            ← User dashboard
-          </Link>
-          <button
-            type="button"
-            onClick={signOut}
-            className="text-white/40 hover:text-white text-sm transition-colors px-2 py-3"
-          >
-            Sign out
-          </button>
-        </div>
       </section>
 
       {consentFor && (
@@ -517,7 +427,7 @@ export default function AdminHome() {
           onClose={() => setMemberFor(null)}
         />
       )}
-    </main>
+    </>
   );
 }
 
