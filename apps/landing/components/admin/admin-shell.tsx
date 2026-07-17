@@ -62,6 +62,12 @@ const ICONS: Record<string, ReactNode> = {
     </>
   ),
   shield: <path d="M12 3l7 2.5v6c0 4.5-3 6.8-7 8.5-4-1.7-7-4-7-8.5v-6z" />,
+  bank: (
+    <>
+      <path d="M3 21h18M5 21V10m4 11V10m6 11V10m4 11V10" />
+      <path d="M12 3l8 4.5H4z" />
+    </>
+  ),
   search: <path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM20 20l-3.5-3.5" />,
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   x: <path d="M6 6l12 12M18 6 6 18" />,
@@ -109,6 +115,7 @@ const NAV: NavGroup[] = [
     label: "Money",
     items: [
       { label: "Withdrawals", href: "/app/admin/withdrawals", icon: "download", cap: "withdrawals" },
+      { label: "Treasury", href: "/app/admin/treasury", icon: "bank" },
       { label: "Token reclaims", href: "/app/admin/reclaims", icon: "rotate" }
     ]
   },
@@ -129,7 +136,8 @@ const NAV: NavGroup[] = [
   {
     label: "System",
     items: [
-      { label: "Logs", href: "/app/admin/logs", icon: "file" },
+      { label: "Audit log", href: "/app/admin/audit", icon: "file", cap: "settings" },
+      { label: "Logs", href: "/app/admin/logs", icon: "activity" },
       { label: "Settings", href: "/app/admin/settings", icon: "settings", cap: "settings" },
       { label: "Admin access", href: "/app/admin/permissions", icon: "shield", founder: true }
     ]

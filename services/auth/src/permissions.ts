@@ -12,7 +12,9 @@ export const CAPABILITIES = [
   "withdrawals", // approve/reject the withdrawal review queue
   "suspend", // suspend / unsuspend members
   "flush", // sweep member deposits to treasury (moves real funds)
-  "settings" // AI/wallet secrets, withdrawal limits, other settings writes
+  "settings", // AI/wallet secrets, withdrawal limits, audit-log view
+  "comms", // send email campaigns to members
+  "moderation" // moderate the Circle (questions + comments)
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];

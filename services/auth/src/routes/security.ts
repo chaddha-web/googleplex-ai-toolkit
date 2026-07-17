@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { stmts } from "../db.js";
 import { verifyAccessToken, verifySecureToken } from "../jwt.js";
 import { permsForUser } from "../permissions.js";
+import { recordAudit } from "../audit.js";
 import { notify } from "../notify.js";
 
 export async function securityRoutes(app: FastifyInstance) {
@@ -31,6 +32,13 @@ export async function securityRoutes(app: FastifyInstance) {
           `🛑 <b>Account suspended</b> (member self-secured via login alert)\n` +
             `${user.email}\nID: <code>${user.code11}</code>`
         );
+        recordAudit({
+          actorId: user.id,
+          actorEmail: user.email,
+          action: "member.self_secure",
+          targetId: user.id,
+          targetLabel: user.code11
+        });
       }
       return reply.send({ ok: true, suspended: true });
     }
@@ -63,6 +71,14 @@ export async function securityRoutes(app: FastifyInstance) {
       stmts.user.setSuspended.run({ id: user.id, suspended_at: now, updated_at: now });
       stmts.refresh.revokeAllForUser.run(now, user.id);
       notify(`🛑 <b>Account suspended</b> by ${me.email}\n${user.email} · <code>${user.code11}</code>`);
+      recordAudit({
+        actorId: me.id,
+        actorEmail: me.email,
+        action: "member.suspend",
+        targetId: user.id,
+        targetLabel: user.code11,
+        detail: { email: user.email }
+      });
     }
     return reply.send({ ok: true, suspended: true });
   });
@@ -86,6 +102,14 @@ export async function securityRoutes(app: FastifyInstance) {
     const now = Date.now();
     stmts.user.clearSuspended.run({ id: user.id, updated_at: now });
     notify(`✅ <b>Account unsuspended</b> by ${me.email}\n${user.email} · <code>${user.code11}</code>`);
+    recordAudit({
+      actorId: me.id,
+      actorEmail: me.email,
+      action: "member.unsuspend",
+      targetId: user.id,
+      targetLabel: user.code11,
+      detail: { email: user.email }
+    });
     return reply.send({ ok: true });
   });
 }

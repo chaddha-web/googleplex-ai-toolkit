@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { db, stmts } from "../db.js";
 import { verifyAccessToken } from "../jwt.js";
 import { isAbusive, ABUSE_MESSAGE } from "../moderation.js";
+import { permsForUser } from "../permissions.js";
 
 // Prepared statements (colocated — community is self-contained).
 const q = {
@@ -150,6 +151,10 @@ export async function communityRoutes(app: FastifyInstance) {
     if (!user) return null;
     if (user.role !== "admin") {
       reply.code(403).send({ error: "Admin only." });
+      return null;
+    }
+    if (!permsForUser(user).includes("moderation")) {
+      reply.code(403).send({ error: "You don't have permission to moderate the Circle." });
       return null;
     }
     return user;

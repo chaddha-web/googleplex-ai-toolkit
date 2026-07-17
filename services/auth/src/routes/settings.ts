@@ -3,6 +3,7 @@ import { stmts } from "../db.js";
 import { verifyAccessToken } from "../jwt.js";
 import { encryptSecret, decryptSecret, maskSecret } from "../crypto.js";
 import { permsForUser, isFounder } from "../permissions.js";
+import { recordAudit } from "../audit.js";
 import { notify } from "../notify.js";
 
 const INTERNAL_TOKEN = process.env.INTERNAL_SERVICE_TOKEN;
@@ -146,6 +147,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     if (value === "") {
       stmts.settings.delete.run(key);
       notify(`⚙️ <b>Setting cleared</b>\n<code>${key}</code>\nby ${me.email}`);
+      recordAudit({ actorId: me.id, actorEmail: me.email, action: "settings.clear", targetLabel: key });
       return reply.send({ ok: true, cleared: true });
     }
     setValue(key, value);
@@ -153,6 +155,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     // form (e.g. "sk-…abcd"). Non-secrets show the literal value.
     const shown = isSecret(key) ? maskSecret(value) : value;
     notify(`⚙️ <b>Setting updated</b>\n<code>${key}</code> = ${shown}\nby ${me.email}`);
+    recordAudit({ actorId: me.id, actorEmail: me.email, action: "settings.set", targetLabel: key, detail: { value: shown } });
     return reply.send({ ok: true });
   });
 
@@ -174,6 +177,14 @@ export async function settingsRoutes(app: FastifyInstance) {
     }
     stmts.user.promoteByCode.run({ code11, updated_at: Date.now() });
     notify(`👑 <b>New admin</b>\n${target.email}\nID: <code>${code11}</code> (by ${me.email})`);
+    recordAudit({
+      actorId: me.id,
+      actorEmail: me.email,
+      action: "admin.promote",
+      targetId: target.id,
+      targetLabel: code11,
+      detail: { email: target.email }
+    });
     return reply.send({ ok: true, email: target.email });
   });
 

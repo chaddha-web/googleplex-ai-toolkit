@@ -8,6 +8,7 @@ import {
   serializePerms,
   type Capability
 } from "../permissions.js";
+import { recordAudit } from "../audit.js";
 import { notify } from "../notify.js";
 
 /**
@@ -91,6 +92,14 @@ export async function adminManagerRoutes(app: FastifyInstance) {
       `🔑 <b>Admin permissions updated</b> by ${me.email}\n` +
         `${target.email} · <code>${target.code11}</code>\ngranted: ${granted}`
     );
+    recordAudit({
+      actorId: me.id,
+      actorEmail: me.email,
+      action: "admin.permissions",
+      targetId: target.id,
+      targetLabel: target.code11,
+      detail: { granted }
+    });
     return reply.send({ ok: true, permissions: JSON.parse(json) as Capability[] });
   });
 
@@ -114,6 +123,14 @@ export async function adminManagerRoutes(app: FastifyInstance) {
 
     stmts.user.demoteById.run({ id: target.id, updated_at: Date.now() });
     notify(`⬇️ <b>Admin demoted</b> by ${me.email}\n${target.email} · <code>${target.code11}</code>`);
+    recordAudit({
+      actorId: me.id,
+      actorEmail: me.email,
+      action: "admin.demote",
+      targetId: target.id,
+      targetLabel: target.code11,
+      detail: { email: target.email }
+    });
     return reply.send({ ok: true });
   });
 }

@@ -373,6 +373,27 @@ export async function getAdminSettings(): Promise<AdminSettings> {
   };
 }
 
+// ── Admin action audit log ────────────────────────────────────────────────
+
+export type AdminAuditEvent = {
+  id: string;
+  actor_id: string | null;
+  actor_email: string | null;
+  action: string;
+  target_id: string | null;
+  target_label: string | null;
+  detail: string | null;
+  created_at: number;
+};
+
+/** Founder / settings-capable admins — the who-did-what-when trail. */
+export async function adminAudit(limit = 200): Promise<AdminAuditEvent[]> {
+  const res = await authedFetch(`${AUTH_BASE}/auth/admin/audit?limit=${limit}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not load the audit log.");
+  return Array.isArray(data.events) ? data.events : [];
+}
+
 // ── Admin permission manager (founder only) ───────────────────────────────
 
 /** The granular admin capabilities the main admin can grant to sub-admins. */
@@ -380,7 +401,9 @@ export const ADMIN_CAPABILITIES = [
   { key: "withdrawals", label: "Approve withdrawals", desc: "Review queue — approve, reject, broadcast." },
   { key: "suspend", label: "Suspend members", desc: "Block member sign-in and kill sessions." },
   { key: "flush", label: "Treasury flush", desc: "Sweep member deposits to treasury (moves funds)." },
-  { key: "settings", label: "Settings & secrets", desc: "AI/wallet keys, withdrawal limits." }
+  { key: "settings", label: "Settings & secrets", desc: "AI/wallet keys, withdrawal limits, audit log." },
+  { key: "comms", label: "Send campaigns", desc: "Send email campaigns to members." },
+  { key: "moderation", label: "Moderate the Circle", desc: "Create/close questions; moderate comments." }
 ] as const;
 export type Capability = (typeof ADMIN_CAPABILITIES)[number]["key"];
 
@@ -435,6 +458,82 @@ export async function setAdminSetting(key: string, value: string): Promise<void>
 const WALLET_BASE = (
   process.env.NEXT_PUBLIC_WALLET_BASE || "http://localhost:4201"
 ).replace(/\/$/, "");
+
+// ── Admin: accounting / ledger / system transactions ──────────────────────
+
+export type Accounting = {
+  holdingsUsd: number;
+  depositsUsd: number;
+  withdrawnUsd: number;
+  pendingUsd: number;
+  byChain: Record<string, number>;
+  counts: {
+    members: number;
+    deposits: number;
+    withdrawals: number;
+    pendingWithdrawals: number;
+    sweeps: number;
+    ledgerEntries: number;
+  };
+};
+
+/** Platform-wide money totals for the treasury dashboard. */
+export async function adminAccounting(): Promise<Accounting> {
+  const res = await authedFetch(`${WALLET_BASE}/wallet/admin/accounting`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not load accounting.");
+  return data as Accounting;
+}
+
+export type LedgerEntry = {
+  id: string;
+  userId: string;
+  chain: string | null;
+  symbol: string;
+  amount: number;
+  usd: number;
+  kind: string;
+  txHash: string | null;
+  refId: string | null;
+  createdAt: number | null;
+};
+
+/** Every credit/debit against member balances (deposits, withdrawals, refunds…). */
+export async function adminLedger(
+  opts: { limit?: number; kind?: string; userId?: string } = {}
+): Promise<LedgerEntry[]> {
+  const q = new URLSearchParams();
+  if (opts.limit) q.set("limit", String(opts.limit));
+  if (opts.kind) q.set("kind", opts.kind);
+  if (opts.userId) q.set("userId", opts.userId);
+  const res = await authedFetch(`${WALLET_BASE}/wallet/admin/ledger?${q.toString()}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not load the ledger.");
+  return Array.isArray(data.entries) ? data.entries : [];
+}
+
+export type SystemTx = {
+  id: string;
+  type: "deposit" | "withdrawal" | "sweep";
+  direction: "in" | "out" | "sweep";
+  userId: string;
+  chain: string;
+  symbol: string;
+  amount: number;
+  usd: number;
+  txHash: string | null;
+  dest?: string | null;
+  status: string;
+  at: number | null;
+};
+
+/** Unified on-chain feed: deposits, broadcast withdrawals, treasury sweeps. */
+export async function adminTransactions(limit = 100): Promise<SystemTx[]> {
+  const res = await authedFetch(`${WALLET_BASE}/wallet/admin/transactions?limit=${limit}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not load transactions.");
+  return Array.isArray(data.transactions) ? data.transactions : [];
+}
 
 /** Admin: usable (ledger DB) USD totals per user id. */
 export async function adminWalletBalances(): Promise<Record<string, number>> {

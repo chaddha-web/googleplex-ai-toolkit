@@ -9,6 +9,7 @@ import {
   swaps 
 } from "./db/schema.js";
 import { requireAuth, requireInternal, requireRole, requireCapability } from "./lib/guard.js";
+import { auditToAuth } from "./audit.js";
 import { eq, and, desc } from "drizzle-orm";
 import { ulid } from "ulid";
 import { reconcile, type UserAddressMap } from "./reconcile.js";
@@ -48,6 +49,22 @@ function toRawUnits(coinAmount: number, decimals: number): bigint {
   const p = Math.min(decimals, 6);
   const head = BigInt(Math.ceil(coinAmount * 10 ** p));
   return head * 10n ** BigInt(Math.max(0, decimals - p));
+}
+
+// Display helpers for the admin accounting/ledger/transaction views. Raw base
+// units → human amount and USD (best-effort; unknown tokens price at 0). Number()
+// is fine here — these views only read, they never move money.
+function toAmount(chain: string | null | undefined, symbol: string, raw: string): number {
+  const t = findToken((chain ?? "") as any, symbol);
+  const dec = t?.decimals ?? 18;
+  try {
+    return Number(BigInt(raw)) / 10 ** dec;
+  } catch {
+    return 0;
+  }
+}
+function toUsd(chain: string | null | undefined, symbol: string, raw: string): number {
+  return toAmount(chain, symbol, raw) * (priceUsd(symbol as any) ?? 0);
 }
 
 // Auth service base — in prod this is the internal container address
@@ -1288,6 +1305,13 @@ export async function walletRoutes(app: FastifyInstance) {
     }
     await db.update(withdrawals).set({ status: "broadcast", broadcast_at: Date.now(), tx_hash: txHash }).where(eq(withdrawals.id, w.id));
     notify(`✅ <b>Withdrawal approved + sent</b>\n${w.symbol} on ${w.chain}\ntx <code>${txHash}</code> · by ${admin.sub}`);
+    auditToAuth({
+      actorId: admin.sub,
+      action: "withdrawal.approve",
+      targetId: w.id,
+      targetLabel: w.user_id,
+      detail: { chain: w.chain, symbol: w.symbol, txHash }
+    });
     return reply.send({ ok: true, txHash });
   });
 
@@ -1317,7 +1341,150 @@ export async function walletRoutes(app: FastifyInstance) {
       tx.update(withdrawals).set({ status: "rejected" }).where(eq(withdrawals.id, w.id)).run();
     });
     notify(`🚫 <b>Withdrawal rejected + refunded</b>\n${w.symbol} on ${w.chain}\nuser <code>${w.user_id}</code> · by ${admin.sub}`);
+    auditToAuth({
+      actorId: admin.sub,
+      action: "withdrawal.reject",
+      targetId: w.id,
+      targetLabel: w.user_id,
+      detail: { chain: w.chain, symbol: w.symbol }
+    });
     return reply.send({ ok: true });
+  });
+
+  // ── Accounting metrics — platform-wide money totals for the admin dash ────
+  app.get("/wallet/admin/accounting", async (req: any, reply) => {
+    if (!(await requireRole(req, reply, "admin"))) return;
+
+    const balRows = rawDb.prepare(`SELECT chain, symbol, raw FROM ledger_balances`).all() as any[];
+    let holdingsUsd = 0;
+    const byChain: Record<string, number> = {};
+    for (const b of balRows) {
+      const u = toUsd(b.chain, b.symbol, b.raw);
+      holdingsUsd += u;
+      byChain[b.chain] = (byChain[b.chain] ?? 0) + u;
+    }
+
+    const sumUsd = (rows: any[], chainKey = "chain", symKey = "symbol", rawKey = "amount_raw") =>
+      rows.reduce((n, r) => n + toUsd(r[chainKey], r[symKey], r[rawKey]), 0);
+
+    const dep = rawDb.prepare(`SELECT chain, symbol, amount_raw FROM deposits`).all() as any[];
+    const wOut = rawDb
+      .prepare(`SELECT chain, symbol, amount_raw FROM withdrawals WHERE status IN ('broadcast','confirmed')`)
+      .all() as any[];
+    const wPend = rawDb
+      .prepare(`SELECT chain, symbol, amount_raw FROM withdrawals WHERE status='awaiting_approval'`)
+      .all() as any[];
+
+    const one = (sql: string) => (rawDb.prepare(sql).get() as any)?.n ?? 0;
+
+    return reply.send({
+      holdingsUsd,
+      depositsUsd: sumUsd(dep),
+      withdrawnUsd: sumUsd(wOut),
+      pendingUsd: sumUsd(wPend),
+      byChain,
+      counts: {
+        members: one(`SELECT COUNT(DISTINCT user_id) n FROM ledger_balances WHERE raw != '0'`),
+        deposits: dep.length,
+        withdrawals: one(`SELECT COUNT(*) n FROM withdrawals`),
+        pendingWithdrawals: wPend.length,
+        sweeps: one(`SELECT COUNT(*) n FROM treasury_sweeps`),
+        ledgerEntries: one(`SELECT COUNT(*) n FROM ledger_entries`)
+      }
+    });
+  });
+
+  // ── Ledger explorer — every credit/debit against member balances ──────────
+  app.get("/wallet/admin/ledger", async (req: any, reply) => {
+    if (!(await requireRole(req, reply, "admin"))) return;
+    const limit = Math.min(Math.max(Number(req.query?.limit) || 200, 1), 500);
+    const kind = req.query?.kind ? String(req.query.kind) : null;
+    const userId = req.query?.userId ? String(req.query.userId) : null;
+    const where: string[] = [];
+    const params: any = { limit };
+    if (kind) {
+      where.push("kind = @kind");
+      params.kind = kind;
+    }
+    if (userId) {
+      where.push("user_id = @userId");
+      params.userId = userId;
+    }
+    const rows = rawDb
+      .prepare(
+        `SELECT id, user_id, chain, symbol, delta_raw, kind, ref_tx_hash, ref_id, created_at
+         FROM ledger_entries
+         ${where.length ? "WHERE " + where.join(" AND ") : ""}
+         ORDER BY created_at DESC LIMIT @limit`
+      )
+      .all(params) as any[];
+    return reply.send({
+      entries: rows.map((r) => ({
+        id: r.id,
+        userId: r.user_id,
+        chain: r.chain,
+        symbol: r.symbol,
+        amount: toAmount(r.chain, r.symbol, r.delta_raw),
+        usd: toUsd(r.chain, r.symbol, r.delta_raw),
+        kind: r.kind,
+        txHash: r.ref_tx_hash,
+        refId: r.ref_id,
+        createdAt: r.created_at
+      }))
+    });
+  });
+
+  // ── System transactions — unified on-chain feed (deposits, withdrawals, sweeps) ─
+  app.get("/wallet/admin/transactions", async (req: any, reply) => {
+    if (!(await requireRole(req, reply, "admin"))) return;
+    const limit = Math.min(Math.max(Number(req.query?.limit) || 100, 1), 300);
+
+    type Tx = {
+      id: string;
+      type: "deposit" | "withdrawal" | "sweep";
+      direction: "in" | "out" | "sweep";
+      userId: string;
+      chain: string;
+      symbol: string;
+      amount: number;
+      usd: number;
+      txHash: string | null;
+      dest?: string | null;
+      status: string;
+      at: number | null;
+    };
+    const tx: Tx[] = [];
+
+    for (const d of rawDb
+      .prepare(`SELECT id, user_id, chain, symbol, amount_raw, tx_hash, confirmed_at FROM deposits ORDER BY confirmed_at DESC LIMIT @limit`)
+      .all({ limit }) as any[]) {
+      tx.push({
+        id: d.id, type: "deposit", direction: "in", userId: d.user_id, chain: d.chain, symbol: d.symbol,
+        amount: toAmount(d.chain, d.symbol, d.amount_raw), usd: toUsd(d.chain, d.symbol, d.amount_raw),
+        txHash: d.tx_hash, status: "confirmed", at: d.confirmed_at
+      });
+    }
+    for (const w of rawDb
+      .prepare(`SELECT id, user_id, chain, symbol, amount_raw, tx_hash, dest_address, status, broadcast_at, requested_at FROM withdrawals WHERE tx_hash IS NOT NULL ORDER BY broadcast_at DESC LIMIT @limit`)
+      .all({ limit }) as any[]) {
+      tx.push({
+        id: w.id, type: "withdrawal", direction: "out", userId: w.user_id, chain: w.chain, symbol: w.symbol,
+        amount: toAmount(w.chain, w.symbol, w.amount_raw), usd: toUsd(w.chain, w.symbol, w.amount_raw),
+        txHash: w.tx_hash, dest: w.dest_address, status: w.status, at: w.broadcast_at ?? w.requested_at
+      });
+    }
+    for (const s of rawDb
+      .prepare(`SELECT id, user_id, chain, symbol, amount_raw, tx_hash, kind, status, created_at FROM treasury_sweeps WHERE tx_hash IS NOT NULL ORDER BY created_at DESC LIMIT @limit`)
+      .all({ limit }) as any[]) {
+      tx.push({
+        id: s.id, type: "sweep", direction: "sweep", userId: s.user_id, chain: s.chain, symbol: s.symbol,
+        amount: toAmount(s.chain, s.symbol, s.amount_raw), usd: toUsd(s.chain, s.symbol, s.amount_raw),
+        txHash: s.tx_hash, status: s.status, at: s.created_at
+      });
+    }
+
+    tx.sort((a, b) => (b.at ?? 0) - (a.at ?? 0));
+    return reply.send({ transactions: tx.slice(0, limit) });
   });
 
   // Set / clear a user's per-user withdrawal-limit override. null clears a field.
@@ -1393,6 +1560,13 @@ export async function walletRoutes(app: FastifyInstance) {
             .map((l) => `${l.kind} ${l.amount} ${l.symbol} (${l.chain}) — ${l.status}`)
             .join("\n")
       );
+      auditToAuth({
+        actorId: admin.sub,
+        action: "treasury.flush",
+        targetId: String(userId),
+        targetLabel: String(userId),
+        detail: { legs: result.legs.length }
+      });
       return reply.send({ ...result });
     } catch (e) {
       return reply.code(400).send({ error: (e as Error).message });
@@ -1432,6 +1606,12 @@ export async function walletRoutes(app: FastifyInstance) {
       }
     }
     notify(`💸 <b>Batch treasury flush</b>\n${swept} users · ${legs} legs · by ${admin.sub}`);
+    auditToAuth({
+      actorId: admin.sub,
+      action: "treasury.flush_all",
+      targetLabel: `${swept} users`,
+      detail: { swept, legs }
+    });
     return reply.send({ ok: true, usersSwept: swept, legs });
   });
 }

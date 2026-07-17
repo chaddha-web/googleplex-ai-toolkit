@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import crypto from "node:crypto";
 import { db, stmts } from "../db.js";
 import { verifyAccessToken } from "../jwt.js";
+import { permsForUser } from "../permissions.js";
 import { sendRawEmail } from "../email.js";
 import {
   renderMarkdown,
@@ -249,6 +250,9 @@ export async function emailRoutes(app: FastifyInstance) {
   app.post("/auth/admin/campaigns/:id/test", async (req: any, reply) => {
     const me = await requireAdmin(req, reply);
     if (!me) return;
+    if (!permsForUser(me).includes("comms")) {
+      return reply.code(403).send({ error: "You don't have permission to send campaigns." });
+    }
     const c = stmts.email.campaignById.get(req.params.id) as any;
     if (!c) return reply.code(404).send({ error: "No such campaign." });
     const body = (req.body ?? {}) as { to?: string };
@@ -284,6 +288,9 @@ export async function emailRoutes(app: FastifyInstance) {
   app.post("/auth/admin/campaigns/:id/send", async (req: any, reply) => {
     const me = await requireAdmin(req, reply);
     if (!me) return;
+    if (!permsForUser(me).includes("comms")) {
+      return reply.code(403).send({ error: "You don't have permission to send campaigns." });
+    }
     const c = stmts.email.campaignById.get(req.params.id) as any;
     if (!c) return reply.code(404).send({ error: "No such campaign." });
     if (c.status !== "draft") {

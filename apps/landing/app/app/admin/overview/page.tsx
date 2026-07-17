@@ -10,7 +10,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAdminAccess, can, Can } from "@/components/admin/access";
 import { StatCard } from "@/components/admin/ui";
-import { sessions, listAllUsers, adminWithdrawalQueue } from "@/lib/auth-client";
+import {
+  sessions,
+  listAllUsers,
+  adminWithdrawalQueue,
+  adminAudit,
+  type AdminAuditEvent
+} from "@/lib/auth-client";
+import { actionLabel, auditAgo } from "@/components/admin/audit";
 
 function QuickLink({ href, title, desc }: { href: string; title: string; desc: string }) {
   return (
@@ -21,6 +28,38 @@ function QuickLink({ href, title, desc }: { href: string; title: string; desc: s
       <p className="text-sm text-white">{title}</p>
       <p className="text-white/40 text-xs mt-1">{desc}</p>
     </Link>
+  );
+}
+
+function RecentActions() {
+  const [rows, setRows] = useState<AdminAuditEvent[] | null>(null);
+  useEffect(() => {
+    adminAudit(6).then(setRows).catch(() => setRows([]));
+  }, []);
+  if (rows === null) {
+    return (
+      <div className="mt-4 liquid-glass rounded-2xl px-6 py-8 text-center text-white/40 text-sm">Loading…</div>
+    );
+  }
+  if (rows.length === 0) {
+    return (
+      <div className="mt-4 liquid-glass rounded-2xl px-6 py-8 text-center text-white/40 text-sm">
+        No admin actions recorded yet.
+      </div>
+    );
+  }
+  return (
+    <div className="mt-4 liquid-glass rounded-2xl divide-y divide-white/5">
+      {rows.map((e) => (
+        <div key={e.id} className="px-5 py-3 flex items-center gap-3 text-sm">
+          <span className="text-white/40 text-xs w-16 shrink-0">{auditAgo(e.created_at)}</span>
+          <span className="text-white/80 truncate">
+            <span className="text-white/50">{e.actor_email ?? "admin"}</span> {actionLabel(e.action)}
+            {e.target_label && <span className="font-mono text-white/50 text-xs"> {e.target_label}</span>}
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -114,12 +153,16 @@ export function OverviewBody({
 
       <div className="mt-10">
         <h2 className="font-serif text-2xl tracking-tight">Recent admin actions</h2>
-        <div className="mt-4 liquid-glass rounded-2xl px-6 py-8 text-center">
-          <p className="text-white/50 text-sm">The admin audit feed lands in Phase 2.</p>
-          <p className="text-white/30 text-xs mt-1.5">
-            Every suspend, flush, permission change, and withdrawal approval will be recorded here — who, what, when, and why.
-          </p>
-        </div>
+        <Can
+          capability="settings"
+          fallback={
+            <div className="mt-4 liquid-glass rounded-2xl px-6 py-6 text-center text-white/40 text-sm">
+              The audit log is visible to the founder and settings-capable admins.
+            </div>
+          }
+        >
+          <RecentActions />
+        </Can>
       </div>
     </>
   );
