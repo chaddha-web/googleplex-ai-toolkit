@@ -36,7 +36,12 @@ const NONSECRET_KEYS = new Set([
   "wd.daily_usd",
   "wd.review_threshold_usd",
   "wd.signup_cooldown_hours",
-  "wd.pwchange_cooldown_hours"
+  "wd.pwchange_cooldown_hours",
+  // Financial config — JSON blobs, validated in validateFinanceValue().
+  "wd.minimums", // { "<chain>:<symbol>": minAmountInToken }
+  "wd.fees", // { "<chain>:<symbol>": flatFeeInToken }  (founder-only)
+  "flush.thresholds", // { eth, bsc, tron, btc } USD auto-flush thresholds
+  "sale.wallets" // { eth, bsc, tron, btc } receive addresses  (founder-only)
 ]);
 const SECRET_KEYS = new Set([
   "ai.key.anthropic",
@@ -53,6 +58,55 @@ function isSecret(key: string): boolean {
 }
 function isAllowed(key: string): boolean {
   return NONSECRET_KEYS.has(key) || SECRET_KEYS.has(key);
+}
+
+// Money-destination / money-affecting config only the founder may change.
+const FOUNDER_ONLY_KEYS = new Set(["wd.fees", "sale.wallets"]);
+const FINANCE_KEYS = new Set(["wd.minimums", "wd.fees", "flush.thresholds", "sale.wallets"]);
+
+const ADDR_RE: Record<string, RegExp> = {
+  eth: /^0x[0-9a-fA-F]{40}$/,
+  bsc: /^0x[0-9a-fA-F]{40}$/,
+  tron: /^T[1-9A-HJ-NP-Za-km-z]{33}$/,
+  btc: /^(bc1[a-z0-9]{20,80}|[13][a-km-zA-HJ-NP-Z1-9]{25,39})$/
+};
+
+/** Validate a finance JSON blob before storing. Returns an error string, or null if OK. */
+function validateFinanceValue(key: string, value: string): string | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return "Value must be valid JSON.";
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return "Value must be a JSON object.";
+  }
+  const obj = parsed as Record<string, unknown>;
+  if (key === "wd.minimums" || key === "wd.fees") {
+    for (const [k, v] of Object.entries(obj)) {
+      if (!/^(eth|bsc|tron|btc):[A-Z0-9]+$/.test(k)) return `Bad key "${k}" (want "<chain>:<symbol>").`;
+      if (typeof v !== "number" || !Number.isFinite(v) || v < 0) return `"${k}" must be a number ≥ 0.`;
+    }
+    return null;
+  }
+  if (key === "flush.thresholds") {
+    for (const [k, v] of Object.entries(obj)) {
+      if (!["eth", "bsc", "tron", "btc"].includes(k)) return `Bad chain "${k}".`;
+      if (typeof v !== "number" || !Number.isFinite(v) || v < 0) return `"${k}" must be a number ≥ 0.`;
+    }
+    return null;
+  }
+  if (key === "sale.wallets") {
+    for (const [k, v] of Object.entries(obj)) {
+      if (!["eth", "bsc", "tron", "btc"].includes(k)) return `Bad chain "${k}".`;
+      if (typeof v !== "string") return `"${k}" must be an address string.`;
+      const addr = v.trim();
+      if (addr !== "" && !ADDR_RE[k]!.test(addr)) return `"${k}" is not a valid ${k.toUpperCase()} address.`;
+    }
+    return null;
+  }
+  return null;
 }
 
 /** Read a setting's plaintext value (decrypts secrets). null if unset. */
@@ -142,6 +196,16 @@ export async function settingsRoutes(app: FastifyInstance) {
     const key = typeof body.key === "string" ? body.key : "";
     const value = typeof body.value === "string" ? body.value : "";
     if (!isAllowed(key)) return reply.code(400).send({ error: "Unknown setting key." });
+
+    // Money-destination / fee config is founder-only, even for settings-capable admins.
+    if (FOUNDER_ONLY_KEYS.has(key) && !isFounder(me.email)) {
+      return reply.code(403).send({ error: "Only the main admin can change this setting." });
+    }
+    // Validate finance JSON blobs before storing.
+    if (FINANCE_KEYS.has(key) && value !== "") {
+      const err = validateFinanceValue(key, value);
+      if (err) return reply.code(400).send({ error: err });
+    }
 
     // Empty value clears the setting (lets you wipe a key).
     if (value === "") {
@@ -246,6 +310,25 @@ export async function settingsRoutes(app: FastifyInstance) {
       reviewThresholdUsd: num("wd.review_threshold_usd"),
       signupCooldownHours: num("wd.signup_cooldown_hours"),
       pwchangeCooldownHours: num("wd.pwchange_cooldown_hours")
+    });
+  });
+
+  // ── Internal: financial config (minimums, fees, flush thresholds, sale wallets)
+  // for the wallet service. Non-secret. ──────────────────────────────────────
+  app.get("/internal/settings/finance", async (req, reply) => {
+    if (!requireInternal(req, reply)) return;
+    const parse = (k: string): Record<string, unknown> => {
+      try {
+        return JSON.parse(readValue(k) || "{}");
+      } catch {
+        return {};
+      }
+    };
+    return reply.send({
+      minimums: parse("wd.minimums"),
+      fees: parse("wd.fees"),
+      flushThresholds: parse("flush.thresholds"),
+      saleWallets: parse("sale.wallets")
     });
   });
 

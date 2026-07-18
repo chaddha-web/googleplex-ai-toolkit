@@ -161,7 +161,10 @@ services:
       - ./media:/srv/media
     labels:
       - traefik.enable=true
-      - traefik.http.routers.auth.rule=Host(`auth.${DOMAIN}`)
+      # /internal/* must never be reachable from the public internet (it returns
+      # decrypted keys etc.). Service-to-service calls use internal DNS
+      # (http://auth:4200) and bypass Traefik, so excluding it here is safe.
+      - traefik.http.routers.auth.rule=Host(`auth.${DOMAIN}`) && !PathPrefix(`/internal`)
       - traefik.http.routers.auth.entrypoints=websecure
       - traefik.http.routers.auth.tls.certresolver=le
       - traefik.http.services.auth.loadbalancer.server.port=4200
@@ -186,7 +189,7 @@ services:
       - wallet-data:/data
     labels:
       - traefik.enable=true
-      - traefik.http.routers.wallet.rule=Host(`wallet.${DOMAIN}`)
+      - traefik.http.routers.wallet.rule=Host(`wallet.${DOMAIN}`) && !PathPrefix(`/internal`)
       - traefik.http.routers.wallet.entrypoints=websecure
       - traefik.http.routers.wallet.tls.certresolver=le
       - traefik.http.services.wallet.loadbalancer.server.port=4201

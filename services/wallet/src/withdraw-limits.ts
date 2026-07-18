@@ -68,6 +68,44 @@ export async function effectiveLimits(userId: string): Promise<Limits> {
   };
 }
 
+// ── Finance config (minimums, fees, flush thresholds, sale wallets) ─────────
+
+export type FinanceConfig = {
+  minimums: Record<string, number>; // "<chain>:<symbol>" -> min in token
+  fees: Record<string, number>; // "<chain>:<symbol>" -> flat fee in token
+  flushThresholds: Record<string, number>; // chain -> USD
+  saleWallets: Record<string, string>; // chain -> address
+};
+
+const EMPTY_FINANCE: FinanceConfig = { minimums: {}, fees: {}, flushThresholds: {}, saleWallets: {} };
+let financeCache: { at: number; cfg: FinanceConfig } | null = null;
+
+/** Platform finance config from auth (cached 60s). Empty on any failure. */
+export async function financeConfig(): Promise<FinanceConfig> {
+  if (financeCache && Date.now() - financeCache.at < 60_000) return financeCache.cfg;
+  let cfg = EMPTY_FINANCE;
+  if (INTERNAL) {
+    try {
+      const res = await fetch(`${AUTH_BASE}/internal/settings/finance`, {
+        headers: { Authorization: `Bearer ${INTERNAL}` }
+      });
+      if (res.ok) {
+        const d = (await res.json()) as Partial<FinanceConfig>;
+        cfg = {
+          minimums: d.minimums ?? {},
+          fees: d.fees ?? {},
+          flushThresholds: d.flushThresholds ?? {},
+          saleWallets: d.saleWallets ?? {}
+        };
+      }
+    } catch {
+      /* keep empty */
+    }
+  }
+  financeCache = { at: Date.now(), cfg };
+  return cfg;
+}
+
 /** Cooldown gate. Fails CLOSED (deny) if eligibility can't be verified. */
 export async function checkCooldown(
   userId: string

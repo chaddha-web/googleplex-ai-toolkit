@@ -105,7 +105,7 @@ export function familyForChain(chain: string): TreasuryFamily {
 }
 
 // ── Admin-imported per-chain keys (override the generated treasury) ────────
-const AUTH_BASE = (process.env.AUTH_BASE_URL || "http://localhost:4200").replace(/\/$/, "");
+const AUTH_BASE = (process.env.AUTH_BASE_URL || "http://auth:4200").replace(/\/$/, "");
 const INTERNAL = process.env.INTERNAL_SERVICE_TOKEN;
 type ImportedKeys = Record<string, { address: string | null; privkey: string | null }>;
 let importedCache: { at: number; keys: ImportedKeys } | null = null;

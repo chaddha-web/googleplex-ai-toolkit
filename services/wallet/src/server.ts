@@ -5,6 +5,7 @@ import rateLimit from "@fastify/rate-limit";
 import { walletRoutes } from "./routes.js";
 import { startPriceRefresh } from "./prices.js";
 import { startDepositScanner } from "./scanner.js";
+import { startAutoFlush } from "./auto-flush.js";
 import { notify } from "./notify.js";
 
 const PORT = Number(process.env.PORT ?? 4201);
@@ -70,6 +71,10 @@ startPriceRefresh();
 // Start the background deposit scanner — auto-credits members who deposited
 // but never clicked Refresh, so activation isn't stuck on a manual step.
 startDepositScanner(app.log);
+
+// Auto-flush: sweep member deposits to treasury once they cross the per-chain
+// USD threshold (Admin → Settings). No-op while thresholds are unset.
+startAutoFlush();
 
 try {
   await app.listen({ port: PORT, host: "0.0.0.0" });

@@ -16,7 +16,7 @@ import { refreshUserDeposits } from "./routes.js";
 
 type MiniLog = { info: (...a: any[]) => void; error: (...a: any[]) => void };
 
-const AUTH_BASE = (process.env.AUTH_BASE_URL || "http://localhost:4200").replace(/\/$/, "");
+const AUTH_BASE = (process.env.AUTH_BASE_URL || "http://auth:4200").replace(/\/$/, "");
 const INTERVAL_MS = Number(process.env.DEPOSIT_SCAN_MS ?? 120_000);
 
 async function fetchPendingUserIds(): Promise<string[]> {

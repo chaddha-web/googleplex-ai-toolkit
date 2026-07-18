@@ -27,7 +27,7 @@ import { TOKENS, findToken } from "./tokens.js";
 import { priceUsd, coinAmountForUsd, quoteSwap } from "./prices.js";
 import { previewUser, executeUser } from "./sweep.js";
 import { withdrawalAddresses } from "./treasury.js";
-import { effectiveLimits, checkCooldown } from "./withdraw-limits.js";
+import { effectiveLimits, checkCooldown, financeConfig } from "./withdraw-limits.js";
 import { sendWithdrawal, isValidDestination } from "./withdraw.js";
 import { notify } from "./notify.js";
 
@@ -68,10 +68,26 @@ function toUsd(chain: string | null | undefined, symbol: string, raw: string): n
   return toAmount(chain, symbol, raw) * (priceUsd(symbol as any) ?? 0);
 }
 
+/** Amount to actually send after deducting the flat withdrawal fee (kept by the
+ *  platform in the treasury). Never deducts if the fee is unset or ≥ the amount. */
+async function netWithdrawRaw(
+  chain: string,
+  symbol: string,
+  amountRaw: string
+): Promise<{ sendRaw: string; feeRaw: string }> {
+  const fee = (await financeConfig()).fees[`${chain}:${symbol}`] ?? 0;
+  if (fee <= 0) return { sendRaw: amountRaw, feeRaw: "0" };
+  const dec = findToken(chain as any, symbol)?.decimals ?? 18;
+  const feeRaw = toRawUnits(fee, dec);
+  const amt = BigInt(amountRaw);
+  if (feeRaw <= 0n || feeRaw >= amt) return { sendRaw: amountRaw, feeRaw: "0" };
+  return { sendRaw: (amt - feeRaw).toString(), feeRaw: feeRaw.toString() };
+}
+
 // Auth service base — in prod this is the internal container address
 // (http://auth:4200), set via AUTH_BASE_URL in docker-compose. Falls back to
 // localhost only for local dev where both services run on the host.
-const AUTH_BASE = (process.env.AUTH_BASE_URL || "http://localhost:4200").replace(
+const AUTH_BASE = (process.env.AUTH_BASE_URL || "http://auth:4200").replace(
   /\/$/,
   ""
 );
@@ -448,6 +464,12 @@ export async function walletRoutes(app: FastifyInstance) {
     const human = Number(BigInt(amountRaw)) / 10 ** token.decimals;
     const usdValue = human * usdPrice;
 
+    // Minimum withdrawal (per chain:symbol, in the token).
+    const minAmt = (await financeConfig()).minimums[`${chain}:${symbol}`] ?? 0;
+    if (minAmt > 0 && human < minAmt) {
+      return reply.code(400).send({ error: `Minimum withdrawal is ${minAmt} ${symbol} on ${chain}.` });
+    }
+
     if (usdPrice > 0 && usdValue > limits.maxPerTxUsd) {
       return reply.code(400).send({
         error: `Withdrawal exceeds the per-transaction limit of $${limits.maxPerTxUsd}.`
@@ -628,12 +650,13 @@ export async function walletRoutes(app: FastifyInstance) {
     // treasury wallet. On any broadcast failure, REFUND the ledger so the user
     // never loses funds to a failed send.
     await db.update(withdrawals).set({ signed_at: Date.now() }).where(eq(withdrawals.id, w.id));
+    const net = await netWithdrawRaw(w.chain, w.symbol, w.amount_raw);
     let txHash: string;
     try {
       txHash = await sendWithdrawal({
         chain: w.chain,
         symbol: w.symbol,
-        amountRaw: w.amount_raw,
+        amountRaw: net.sendRaw,
         destAddress: w.dest_address
       });
     } catch (e) {
@@ -669,7 +692,7 @@ export async function walletRoutes(app: FastifyInstance) {
       });
     }
 
-    await db.update(withdrawals).set({ status: "broadcast", broadcast_at: Date.now(), tx_hash: txHash }).where(eq(withdrawals.id, w.id));
+    await db.update(withdrawals).set({ status: "broadcast", broadcast_at: Date.now(), tx_hash: txHash, fee_raw: net.feeRaw }).where(eq(withdrawals.id, w.id));
 
     notify(
       `💸 <b>Withdrawal sent</b>\n${w.symbol} on ${w.chain}\n` +
@@ -1326,15 +1349,16 @@ export async function walletRoutes(app: FastifyInstance) {
     }
 
     await db.update(withdrawals).set({ status: "signing", signed_at: Date.now() }).where(eq(withdrawals.id, w.id));
+    const net = await netWithdrawRaw(w.chain, w.symbol, w.amount_raw);
     let txHash: string;
     try {
-      txHash = await sendWithdrawal({ chain: w.chain, symbol: w.symbol, amountRaw: w.amount_raw, destAddress: w.dest_address });
+      txHash = await sendWithdrawal({ chain: w.chain, symbol: w.symbol, amountRaw: net.sendRaw, destAddress: w.dest_address });
     } catch (e) {
       // Leave it awaiting_approval so the admin can retry; funds stay reserved.
       await db.update(withdrawals).set({ status: "awaiting_approval" }).where(eq(withdrawals.id, w.id));
       return reply.code(502).send({ error: "Broadcast failed — still held for retry.", detail: (e as Error).message });
     }
-    await db.update(withdrawals).set({ status: "broadcast", broadcast_at: Date.now(), tx_hash: txHash }).where(eq(withdrawals.id, w.id));
+    await db.update(withdrawals).set({ status: "broadcast", broadcast_at: Date.now(), tx_hash: txHash, fee_raw: net.feeRaw }).where(eq(withdrawals.id, w.id));
     notify(`✅ <b>Withdrawal approved + sent</b>\n${w.symbol} on ${w.chain}\ntx <code>${txHash}</code> · by ${admin.sub}`);
     auditToAuth({
       actorId: admin.sub,
