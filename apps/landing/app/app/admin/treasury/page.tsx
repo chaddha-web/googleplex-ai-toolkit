@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { StatCard, CoinIcon } from "@/components/admin/ui";
+import { StatCard, TokenLogo, ChainBadge } from "@/components/admin/ui";
 import {
   adminAccounting,
   adminTransactions,
@@ -150,9 +150,12 @@ export default function TreasuryPage() {
               (tw.holdings ?? []).map((h) => (
                 <div key={h.chain + h.symbol} className="rounded-xl bg-white/[0.03] border border-white/10 px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <CoinIcon symbol={h.symbol} />
-                    <p className="text-white/50 text-xs">
-                      {h.symbol} <span className="text-white/30">· {h.chain.toUpperCase()}</span>
+                    <TokenLogo symbol={h.symbol} />
+                    <p className="text-white/50 text-xs inline-flex items-center gap-1.5">
+                      {h.symbol}
+                      <span className="text-white/30">·</span>
+                      <ChainBadge chain={h.chain} />
+                      {h.chain.toUpperCase()}
                     </p>
                   </div>
                   <p className="text-white/90 text-lg mt-2">{amt(h.amount)}</p>

@@ -35,6 +35,36 @@ export function CoinIcon({ symbol, size = 26 }: { symbol: string; size?: number 
   );
 }
 
+const MEDIA_COINS = "https://ggakingclub.com/media/coins";
+const LOGO_EXT: Record<string, string> = { PARTY: "png" };
+
+/** Real self-hosted coin logo (same media bucket the member wallet uses), with a
+ *  brand-glyph fallback if the image is missing. */
+export function TokenLogo({ symbol, size = 26 }: { symbol: string; size?: number }) {
+  const [failed, setFailed] = useState(false);
+  const sym = symbol.toUpperCase();
+  if (failed) return <CoinIcon symbol={sym} size={size} />;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={`${MEDIA_COINS}/${sym.toLowerCase()}.${LOGO_EXT[sym] ?? "svg"}`}
+      alt={sym}
+      width={size}
+      height={size}
+      onError={() => setFailed(true)}
+      className="rounded-full shrink-0 object-contain"
+      style={{ width: size, height: size }}
+    />
+  );
+}
+
+const CHAIN_NATIVE: Record<string, string> = { eth: "ETH", bsc: "BNB", tron: "TRX", btc: "BTC" };
+
+/** A chain's badge = its native-coin logo (BSC→BNB, TRON→TRX, ETH→ETH, BTC→BTC). */
+export function ChainBadge({ chain, size = 16 }: { chain: string; size?: number }) {
+  return <TokenLogo symbol={CHAIN_NATIVE[chain.toLowerCase()] ?? chain} size={size} />;
+}
+
 export function Surface({
   className,
   children
