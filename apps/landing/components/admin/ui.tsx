@@ -10,6 +10,31 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
+const COIN_STYLE: Record<string, { bg: string; content: string; dark?: boolean }> = {
+  USDT: { bg: "#26A17B", content: "₮" },
+  USDC: { bg: "#2775CA", content: "$" },
+  BNB: { bg: "#F3BA2F", content: "BNB", dark: true },
+  TRX: { bg: "#EB0029", content: "TRX" },
+  ETH: { bg: "#627EEA", content: "Ξ" },
+  BTC: { bg: "#F7931A", content: "₿" },
+  PARTY: { bg: "#8A68FF", content: "P" }
+};
+
+/** Brand-colored coin mark. Self-contained (no external logo assets). */
+export function CoinIcon({ symbol, size = 26 }: { symbol: string; size?: number }) {
+  const c = COIN_STYLE[symbol] ?? { bg: "#3f3f46", content: symbol.slice(0, 3) };
+  const fontSize = c.content.length > 1 ? Math.round(size * 0.34) : Math.round(size * 0.5);
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded-full font-semibold shrink-0"
+      style={{ width: size, height: size, background: c.bg, color: c.dark ? "#1a1a1a" : "#fff", fontSize }}
+      aria-hidden="true"
+    >
+      {c.content}
+    </span>
+  );
+}
+
 export function Surface({
   className,
   children
