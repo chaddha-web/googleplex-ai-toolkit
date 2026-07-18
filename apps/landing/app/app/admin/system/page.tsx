@@ -81,15 +81,14 @@ export default function SystemPage() {
       <h2 className="mt-10 text-white/40 text-[11px] tracking-[0.2em] uppercase">Governance</h2>
       <div className="mt-3 liquid-glass rounded-2xl px-6 py-5 flex items-center justify-between gap-4 flex-wrap">
         <p className="text-white/70 text-sm">
-          Proposals, protocol params, sybil console and treasury live in the operator app.
+          Signal voting runs through the <span className="text-white/90">Circle</span> (live). Token-weighted
+          on-chain governance is built and ships once GGX is deployed.
         </p>
         <a
-          href="https://admin.ggakingclub.com"
-          target="_blank"
-          rel="noreferrer"
+          href="/app/admin/circle"
           className="rounded-full bg-white/10 text-white text-sm font-medium px-4 py-2 hover:bg-white/15 shrink-0"
         >
-          Open governance ↗
+          Open Circle →
         </a>
       </div>
     </section>

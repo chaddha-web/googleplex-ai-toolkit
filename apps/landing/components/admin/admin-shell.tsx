@@ -142,8 +142,7 @@ const NAV: NavGroup[] = [
       { label: "Logs", href: "/app/admin/logs", icon: "activity" },
       { label: "System health", href: "/app/admin/system", icon: "activity" },
       { label: "Settings", href: "/app/admin/settings", icon: "settings", cap: "settings" },
-      { label: "Admin access", href: "/app/admin/permissions", icon: "shield", founder: true },
-      { label: "Governance", href: "https://admin.ggakingclub.com", icon: "bank", external: true, founder: true }
+      { label: "Admin access", href: "/app/admin/permissions", icon: "shield", founder: true }
     ]
   }
 ];
