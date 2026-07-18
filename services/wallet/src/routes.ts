@@ -1529,13 +1529,14 @@ export async function walletRoutes(app: FastifyInstance) {
     try {
       const snap = await reconcile(addresses, { force: !!req.query?.force });
       // Per-chain breakdown so the admin can see WHICH chain/address holds what.
+      // Use aggregate()'s perChain amounts — already scaled by token decimals
+      // (snap.perChain is RAW base units, which is what caused the huge numbers).
       const holdings: Array<{ chain: string; symbol: string; amount: number; usd: number }> = [];
-      for (const chain of ["eth", "bsc", "tron", "btc"] as const) {
-        const per = (snap.perChain as any)[chain] ?? {};
-        for (const [symbol, valStr] of Object.entries(per)) {
-          const amount = Number(valStr as string);
-          if (!Number.isFinite(amount) || amount <= 0) continue;
-          holdings.push({ chain, symbol, amount, usd: amount * (priceUsd(symbol as any) ?? 0) });
+      for (const b of snap.byLogicalAsset) {
+        const price = priceUsd(b.asset) ?? 0;
+        for (const pc of b.perChain) {
+          if (!(pc.amount > 0)) continue;
+          holdings.push({ chain: pc.chain, symbol: b.asset, amount: pc.amount, usd: pc.amount * price });
         }
       }
       holdings.sort((a, b) => b.usd - a.usd || b.amount - a.amount);
