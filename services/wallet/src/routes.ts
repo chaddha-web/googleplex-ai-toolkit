@@ -1539,12 +1539,14 @@ export async function walletRoutes(app: FastifyInstance) {
         }
       }
       holdings.sort((a, b) => b.usd - a.usd || b.amount - a.amount);
+      // Total across everything priced, including native gas coins.
+      const totalUsd = holdings.reduce((s, h) => s + h.usd, 0);
       return reply.send({
         configured: true,
         addresses,
         balances: snap.byLogicalAsset,
         holdings,
-        totalUsd: snap.usdTotal,
+        totalUsd,
         fetchedAt: snap.fetchedAt
       });
     } catch (e) {

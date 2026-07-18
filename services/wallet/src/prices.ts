@@ -58,43 +58,90 @@ export function lastPriceRefresh(): number {
   return lastRefreshOk;
 }
 
-/**
- * Fetch fresh prices from CoinGecko and update the cache. Best-effort: on any
- * error we leave the existing cache intact and return false.
- */
-export async function refreshPrices(): Promise<boolean> {
+async function withTimeout<T>(fn: (signal: AbortSignal) => Promise<T>, ms = 8_000): Promise<T> {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), ms);
+  try {
+    return await fn(ac.signal);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Binance spot pairs for our gas coins — reliable from datacenter IPs (unlike
+// CoinGecko's free tier, which rate-limits/blocks server IPs).
+const BINANCE_PAIRS: Record<string, string> = {
+  ETH: "ETHUSDT",
+  BNB: "BNBUSDT",
+  BTC: "BTCUSDT",
+  TRX: "TRXUSDT"
+};
+
+async function fetchBinance(): Promise<Record<string, number>> {
+  const url =
+    "https://api.binance.com/api/v3/ticker/price?symbols=" +
+    encodeURIComponent(JSON.stringify(Object.values(BINANCE_PAIRS)));
+  return withTimeout(async (signal) => {
+    const res = await fetch(url, { signal, headers: { accept: "application/json" } });
+    if (!res.ok) return {};
+    const arr = (await res.json()) as Array<{ symbol: string; price: string }>;
+    const out: Record<string, number> = {};
+    for (const [asset, pair] of Object.entries(BINANCE_PAIRS)) {
+      const px = Number(arr.find((x) => x.symbol === pair)?.price);
+      if (Number.isFinite(px) && px > 0) out[asset] = px;
+    }
+    return out;
+  });
+}
+
+async function fetchCoinGecko(): Promise<Record<string, number>> {
   const ids = Array.from(new Set(Object.values(COINGECKO_IDS)));
   const url =
     "https://api.coingecko.com/api/v3/simple/price?ids=" +
     encodeURIComponent(ids.join(",")) +
     "&vs_currencies=usd";
-
   const headers: Record<string, string> = { accept: "application/json" };
-  // Optional pro/demo key — CoinGecko free tier needs none.
   const key = process.env.COINGECKO_API_KEY;
   if (key) headers["x-cg-demo-api-key"] = key;
-
-  try {
-    const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), 8_000);
-    const res = await fetch(url, { headers, signal: ac.signal });
-    clearTimeout(timer);
-    if (!res.ok) return false;
-
+  return withTimeout(async (signal) => {
+    const res = await fetch(url, { headers, signal });
+    if (!res.ok) return {};
     const data = (await res.json()) as Record<string, { usd?: number }>;
+    const out: Record<string, number> = {};
     for (const [asset, id] of Object.entries(COINGECKO_IDS)) {
       const usd = data[id!]?.usd;
-      if (typeof usd === "number" && usd > 0) {
-        liveUsd[asset] = usd;
-      }
+      if (typeof usd === "number" && usd > 0) out[asset] = usd;
     }
-    // PARTY always fixed.
-    liveUsd.PARTY = FIXED_USD.PARTY!;
-    lastRefreshOk = Date.now();
-    return true;
+    return out;
+  });
+}
+
+/**
+ * Refresh the price cache from Binance (primary, for gas coins) + CoinGecko
+ * (fills stablecoins + any gaps). Best-effort: on total failure we keep the
+ * existing cache. Returns true if either source updated at least one price.
+ */
+export async function refreshPrices(): Promise<boolean> {
+  let ok = false;
+  try {
+    for (const [asset, px] of Object.entries(await fetchBinance())) {
+      liveUsd[asset] = px;
+      ok = true;
+    }
   } catch {
-    return false;
+    /* ignore — try CoinGecko next */
   }
+  try {
+    for (const [asset, px] of Object.entries(await fetchCoinGecko())) {
+      liveUsd[asset] = px;
+      ok = true;
+    }
+  } catch {
+    /* ignore — keep last-good cache */
+  }
+  liveUsd.PARTY = FIXED_USD.PARTY!;
+  if (ok) lastRefreshOk = Date.now();
+  return ok;
 }
 
 let started = false;
