@@ -8,9 +8,15 @@ export const proposals = pgTable("proposals", {
   action_kind: text("action_kind"),
   action_payload: jsonb("action_payload"),
   status: text("status").notNull().default("draft"),
+  // Voting model: 'one_member' (1 person = 1 vote) or 'token_weighted' (GGX balance).
+  voting_mode: text("voting_mode").notNull().default("one_member"),
+  // Tron snapshot block captured at submit-time for token_weighted proposals.
+  snapshot_block: integer("snapshot_block"),
   voting_starts_at: timestamp("voting_starts_at", { withTimezone: true }),
   voting_ends_at: timestamp("voting_ends_at", { withTimezone: true }),
-  quorum: integer("quorum").default(1),
+  // Minimum total participating weight for the vote to count. BigInt string so it
+  // holds both a member count (one_member) and a raw token amount (token_weighted).
+  quorum: text("quorum").notNull().default("1"),
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow()
 });
 
@@ -18,7 +24,8 @@ export const votes = pgTable("votes", {
   proposal_id: text("proposal_id").notNull(),
   voter_id: uuid("voter_id").notNull(),
   direction: text("direction").notNull(),
-  weight: integer("weight").notNull().default(1),
+  // BigInt string: "1" for one_member, or the snapshot GGX balance for token_weighted.
+  weight: text("weight").notNull().default("1"),
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow()
 }, (t) => ({
   pk: primaryKey({ columns: [t.proposal_id, t.voter_id] })

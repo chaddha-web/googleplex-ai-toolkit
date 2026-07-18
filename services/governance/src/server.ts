@@ -4,7 +4,7 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import { governanceRoutes } from "./routes.js";
 import { db } from "./lib/db.js";
-import { proposals, proposal_executions, votes } from "./lib/schema.js";
+import { proposals, votes } from "./lib/schema.js";
 import { and, lt, eq } from "drizzle-orm";
 
 const PORT = Number(process.env.PORT ?? 4202);
@@ -29,18 +29,20 @@ setInterval(async () => {
     
     for (const p of ending) {
       const tally = await db.select().from(votes).where(eq(votes.proposal_id, p.id));
-      let yes = 0, no = 0;
+      // Weight-aware: "1" per voter in one_member mode, snapshot GGX balance in
+      // token_weighted mode. Same code path serves both.
+      let yes = 0n,
+        no = 0n;
       for (const v of tally) {
-        if (v.direction === "yes") yes++;
-        else if (v.direction === "no") no++;
+        const w = BigInt(v.weight);
+        if (v.direction === "yes") yes += w;
+        else if (v.direction === "no") no += w;
       }
-
-      if (yes > no && (yes + no) >= (p.quorum ?? 1)) {
-        await db.update(proposals).set({ status: "passed" }).where(eq(proposals.id, p.id));
-        // Execution logic ...
-      } else {
-        await db.update(proposals).set({ status: "failed" }).where(eq(proposals.id, p.id));
-      }
+      const quorum = BigInt(p.quorum ?? "1");
+      const passed = yes > no && yes + no >= quorum;
+      await db.update(proposals).set({ status: passed ? "passed" : "failed" }).where(eq(proposals.id, p.id));
+      // NOTE: on-chain execution of a passed proposal is deliberately NOT wired
+      // here — see "Governance Stack — Deployment Scope" (phase G3).
     }
   } catch (e) {
     app.log.error(e);
