@@ -1528,10 +1528,22 @@ export async function walletRoutes(app: FastifyInstance) {
     }
     try {
       const snap = await reconcile(addresses, { force: !!req.query?.force });
+      // Per-chain breakdown so the admin can see WHICH chain/address holds what.
+      const holdings: Array<{ chain: string; symbol: string; amount: number; usd: number }> = [];
+      for (const chain of ["eth", "bsc", "tron", "btc"] as const) {
+        const per = (snap.perChain as any)[chain] ?? {};
+        for (const [symbol, valStr] of Object.entries(per)) {
+          const amount = Number(valStr as string);
+          if (!Number.isFinite(amount) || amount <= 0) continue;
+          holdings.push({ chain, symbol, amount, usd: amount * (priceUsd(symbol as any) ?? 0) });
+        }
+      }
+      holdings.sort((a, b) => b.usd - a.usd || b.amount - a.amount);
       return reply.send({
         configured: true,
         addresses,
         balances: snap.byLogicalAsset,
+        holdings,
         totalUsd: snap.usdTotal,
         fetchedAt: snap.fetchedAt
       });

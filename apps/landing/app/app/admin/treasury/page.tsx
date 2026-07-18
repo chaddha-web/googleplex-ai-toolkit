@@ -144,18 +144,18 @@ export default function TreasuryPage() {
             <p className="text-3xl font-light">{usd(tw.totalUsd)}</p>
           </div>
           <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {tw.balances.filter((b) => b.total > 0).length === 0 ? (
+            {(tw.holdings ?? []).length === 0 ? (
               <p className="text-white/40 text-sm col-span-full">All balances are zero.</p>
             ) : (
-              tw.balances
-                .filter((b) => b.total > 0)
-                .map((b) => (
-                  <div key={b.asset} className="rounded-xl bg-white/[0.03] border border-white/10 px-4 py-3">
-                    <p className="text-white/50 text-xs">{b.asset}</p>
-                    <p className="text-white/90 text-lg">{amt(b.total)}</p>
-                    {b.usd != null && <p className="text-white/40 text-xs">{usd(b.usd)}</p>}
-                  </div>
-                ))
+              (tw.holdings ?? []).map((h) => (
+                <div key={h.chain + h.symbol} className="rounded-xl bg-white/[0.03] border border-white/10 px-4 py-3">
+                  <p className="text-white/50 text-xs">
+                    {h.symbol} <span className="text-white/30">· {h.chain.toUpperCase()}</span>
+                  </p>
+                  <p className="text-white/90 text-lg">{amt(h.amount)}</p>
+                  {h.usd > 0 && <p className="text-white/40 text-xs">{usd(h.usd)}</p>}
+                </div>
+              ))
             )}
           </div>
           <div className="mt-5 space-y-1.5">

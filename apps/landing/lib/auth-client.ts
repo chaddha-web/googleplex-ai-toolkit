@@ -580,6 +580,8 @@ export type TreasuryWallets = {
   configured: boolean;
   addresses: { eth: string; bsc: string; tron: string; btc: string };
   balances: AssetBalance[];
+  /** Per-chain breakdown — which chain/address actually holds each balance. */
+  holdings?: { chain: string; symbol: string; amount: number; usd: number }[];
   totalUsd: number;
   fetchedAt?: number;
 };
