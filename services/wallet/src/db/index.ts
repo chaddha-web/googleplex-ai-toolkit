@@ -132,6 +132,16 @@ sqlite.exec(`
     updated_at           INTEGER
   );
 
+  -- 4-eyes: distinct admin approvals for a held withdrawal. Broadcast only fires
+  -- once COUNT(DISTINCT admin_id) reaches WITHDRAWAL_APPROVALS_REQUIRED (default 1).
+  CREATE TABLE IF NOT EXISTS withdrawal_approvals (
+    withdrawal_id TEXT NOT NULL,
+    admin_id      TEXT NOT NULL,
+    admin_email   TEXT,
+    created_at    INTEGER NOT NULL,
+    PRIMARY KEY (withdrawal_id, admin_id)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_ledger_entries_user ON ledger_entries (user_id, created_at);
   CREATE INDEX IF NOT EXISTS idx_withdrawals_user    ON withdrawals (user_id, requested_at);
   CREATE INDEX IF NOT EXISTS idx_deposits_user       ON deposits (user_id, confirmed_at);

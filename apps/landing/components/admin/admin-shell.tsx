@@ -26,6 +26,7 @@ import {
   can,
   type AdminAccess
 } from "@/components/admin/access";
+import { listAllUsers, type AdminUserRow } from "@/lib/auth-client";
 import type { Capability, User } from "@/lib/auth-client";
 
 // ── Icons (inline, currentColor, stroke) ─────────────────────────────────────
@@ -99,6 +100,7 @@ type NavItem = {
   icon: string;
   cap?: Capability;
   founder?: boolean;
+  external?: boolean;
 };
 type NavGroup = { label?: string; items: NavItem[] };
 
@@ -138,8 +140,10 @@ const NAV: NavGroup[] = [
     items: [
       { label: "Audit log", href: "/app/admin/audit", icon: "file", cap: "settings" },
       { label: "Logs", href: "/app/admin/logs", icon: "activity" },
+      { label: "System health", href: "/app/admin/system", icon: "activity" },
       { label: "Settings", href: "/app/admin/settings", icon: "settings", cap: "settings" },
-      { label: "Admin access", href: "/app/admin/permissions", icon: "shield", founder: true }
+      { label: "Admin access", href: "/app/admin/permissions", icon: "shield", founder: true },
+      { label: "Governance", href: "https://admin.ggakingclub.com", icon: "bank", external: true, founder: true }
     ]
   }
 ];
@@ -207,20 +211,35 @@ function SidebarBody({
             )}
             {g.items.map((item) => {
               const active = isActive(pathname, item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={onNavigate}
-                  className={cn(
-                    "group relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] transition-colors",
-                    active ? "bg-white/[0.08] text-white" : "text-white/55 hover:text-white hover:bg-white/[0.04]",
-                    item.founder && !active && "text-amber-200/80 hover:text-amber-100"
-                  )}
-                >
+              const cls = cn(
+                "group relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] transition-colors",
+                active ? "bg-white/[0.08] text-white" : "text-white/55 hover:text-white hover:bg-white/[0.04]",
+                item.founder && !active && "text-amber-200/80 hover:text-amber-100"
+              );
+              const inner = (
+                <>
                   {active && <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-white" />}
                   <Icon name={item.icon} className={active ? "opacity-100" : "opacity-70"} />
                   <span className="truncate">{item.label}</span>
+                </>
+              );
+              if (item.external) {
+                return (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={onNavigate}
+                    className={cls}
+                  >
+                    {inner}
+                  </a>
+                );
+              }
+              return (
+                <Link key={item.href} href={item.href} onClick={onNavigate} className={cls}>
+                  {inner}
                 </Link>
               );
             })}
@@ -264,15 +283,36 @@ function CommandPalette({
 }) {
   const router = useRouter();
   const [q, setQ] = useState("");
+  const [members, setMembers] = useState<AdminUserRow[] | null>(null);
   useEffect(() => {
     if (!open) setQ("");
   }, [open]);
+  // Lazily load members the first time the palette opens (for jump-to-member).
+  useEffect(() => {
+    if (open && members === null) {
+      listAllUsers()
+        .then((r) => setMembers(r.users))
+        .catch(() => setMembers([]));
+    }
+  }, [open, members]);
   if (!open) return null;
-  const filtered = items.filter((i) => i.label.toLowerCase().includes(q.trim().toLowerCase()));
+  const query = q.trim().toLowerCase();
+  const filtered = items.filter((i) => i.label.toLowerCase().includes(query));
+  const memberHits =
+    query.length >= 2 && members
+      ? members
+          .filter((m) =>
+            [m.code11, m.email, m.firstName, m.lastName, `${m.firstName} ${m.lastName}`].some((f) =>
+              (f ?? "").toLowerCase().includes(query)
+            )
+          )
+          .slice(0, 6)
+      : [];
   const go = (href: string) => {
     onClose();
     router.push(href);
   };
+  const gotoMember = (code: string) => go(`/app/admin?q=${encodeURIComponent(code)}`);
   return (
     <div
       className="fixed inset-0 z-[70] bg-black/60 flex items-start justify-center px-4 pt-[14vh]"
@@ -284,27 +324,49 @@ function CommandPalette({
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && filtered[0]) go(filtered[0].href);
+            if (e.key === "Enter") {
+              if (memberHits[0]) gotoMember(memberHits[0].code11);
+              else if (filtered[0]) go(filtered[0].href);
+            }
             if (e.key === "Escape") onClose();
           }}
-          placeholder="Jump to a section…"
+          placeholder="Jump to a section or member…"
           className="w-full bg-transparent px-4 py-3.5 text-sm text-white outline-none border-b border-white/10 placeholder:text-white/30"
         />
-        <div className="max-h-72 overflow-y-auto py-1">
-          {filtered.length === 0 ? (
-            <p className="px-4 py-6 text-center text-white/30 text-sm">No matches</p>
-          ) : (
-            filtered.map((i) => (
-              <button
-                key={i.href}
-                type="button"
-                onClick={() => go(i.href)}
-                className="w-full text-left px-4 py-2.5 text-sm text-white/70 hover:bg-white/5 hover:text-white flex items-center justify-between"
-              >
-                <span>{i.label}</span>
-                {i.group && <span className="text-white/25 text-[11px]">{i.group}</span>}
-              </button>
-            ))
+        <div className="max-h-80 overflow-y-auto py-1">
+          {filtered.map((i) => (
+            <button
+              key={i.href}
+              type="button"
+              onClick={() => go(i.href)}
+              className="w-full text-left px-4 py-2.5 text-sm text-white/70 hover:bg-white/5 hover:text-white flex items-center justify-between"
+            >
+              <span>{i.label}</span>
+              {i.group && <span className="text-white/25 text-[11px]">{i.group}</span>}
+            </button>
+          ))}
+          {memberHits.length > 0 && (
+            <>
+              <p className="px-4 pt-3 pb-1 text-[10px] tracking-[0.2em] uppercase text-white/30">Members</p>
+              {memberHits.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => gotoMember(m.code11)}
+                  className="w-full text-left px-4 py-2.5 text-sm text-white/70 hover:bg-white/5 hover:text-white flex items-center justify-between gap-3"
+                >
+                  <span className="truncate">
+                    {m.firstName} {m.lastName} <span className="text-white/40">{m.email}</span>
+                  </span>
+                  <span className="font-mono text-white/30 text-[11px] shrink-0">{m.code11}</span>
+                </button>
+              ))}
+            </>
+          )}
+          {filtered.length === 0 && memberHits.length === 0 && (
+            <p className="px-4 py-6 text-center text-white/30 text-sm">
+              {query.length >= 2 && members === null ? "Loading members…" : "No matches"}
+            </p>
           )}
         </div>
       </div>

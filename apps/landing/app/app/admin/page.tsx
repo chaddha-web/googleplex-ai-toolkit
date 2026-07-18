@@ -83,6 +83,12 @@ export default function AdminHome() {
     if (user && user.role !== "admin") router.replace("/app");
   }, [user, router]);
 
+  // Prefill the search from ?q= — powers the ⌘K "jump to member".
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q");
+    if (q) setQuery(q);
+  }, []);
+
   const lastLoadRef = useRef(0);
   async function load() {
     // Throttle manual refreshes to once per 3s.

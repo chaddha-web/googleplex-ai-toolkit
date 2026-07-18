@@ -1263,11 +1263,17 @@ export async function walletRoutes(app: FastifyInstance) {
       .where(eq(withdrawals.status, status))
       .orderBy(desc(withdrawals.requested_at))
       .limit(200);
+    const REQUIRED = Math.max(1, Number(process.env.WITHDRAWAL_APPROVALS_REQUIRED ?? 1));
+    const meId = req.user?.sub;
     return reply.send({
+      required: REQUIRED,
       withdrawals: rows.map((w) => {
         const t = findToken(w.chain as any, w.symbol);
         const amount = t ? Number(BigInt(w.amount_raw)) / 10 ** t.decimals : 0;
         const usd = amount * (priceUsd(w.symbol as any) ?? 0);
+        const appr = rawDb
+          .prepare(`SELECT admin_id FROM withdrawal_approvals WHERE withdrawal_id = ?`)
+          .all(w.id) as any[];
         return {
           id: w.id,
           userId: w.user_id,
@@ -1277,7 +1283,10 @@ export async function walletRoutes(app: FastifyInstance) {
           usd,
           destAddress: w.dest_address,
           requestedAt: w.requested_at,
-          status: w.status
+          status: w.status,
+          approvals: appr.length,
+          required: REQUIRED,
+          mineApproved: meId ? appr.some((a) => a.admin_id === meId) : false
         };
       })
     });
@@ -1294,6 +1303,27 @@ export async function walletRoutes(app: FastifyInstance) {
       .limit(1);
     if (rows.length === 0) return reply.code(404).send({ error: "No withdrawal awaiting approval with that id." });
     const w = rows[0]!;
+
+    // 4-eyes: record this admin's distinct approval; only broadcast once the
+    // required number of distinct admins have approved (default 1 = immediate).
+    const REQUIRED = Math.max(1, Number(process.env.WITHDRAWAL_APPROVALS_REQUIRED ?? 1));
+    rawDb
+      .prepare(`INSERT OR IGNORE INTO withdrawal_approvals (withdrawal_id, admin_id, admin_email, created_at) VALUES (?, ?, ?, ?)`)
+      .run(w.id, admin.sub, (admin as any).email ?? null, Date.now());
+    const approvals = (rawDb
+      .prepare(`SELECT COUNT(DISTINCT admin_id) n FROM withdrawal_approvals WHERE withdrawal_id = ?`)
+      .get(w.id) as any).n as number;
+    if (approvals < REQUIRED) {
+      auditToAuth({
+        actorId: admin.sub,
+        action: "withdrawal.approve_vote",
+        targetId: w.id,
+        targetLabel: w.user_id,
+        detail: { approvals, required: REQUIRED }
+      });
+      return reply.send({ ok: true, pending: true, approvals, required: REQUIRED });
+    }
+
     await db.update(withdrawals).set({ status: "signing", signed_at: Date.now() }).where(eq(withdrawals.id, w.id));
     let txHash: string;
     try {
@@ -1487,6 +1517,27 @@ export async function walletRoutes(app: FastifyInstance) {
     return reply.send({ transactions: tx.slice(0, limit) });
   });
 
+  // Read a user's override + effective limits (prefills the admin form).
+  app.get("/wallet/admin/users/:id/withdraw-limits", async (req: any, reply) => {
+    if (!(await requireRole(req, reply, "admin"))) return;
+    const o = rawDb
+      .prepare(`SELECT max_per_tx_usd, daily_usd, review_threshold_usd FROM user_withdraw_limits WHERE user_id = ?`)
+      .get(req.params.id) as any;
+    const eff = await effectiveLimits(String(req.params.id));
+    return reply.send({
+      override: {
+        maxPerTxUsd: o?.max_per_tx_usd ?? null,
+        dailyUsd: o?.daily_usd ?? null,
+        reviewThresholdUsd: o?.review_threshold_usd ?? null
+      },
+      effective: {
+        maxPerTxUsd: eff.maxPerTxUsd,
+        dailyUsd: eff.dailyUsd,
+        reviewThresholdUsd: eff.reviewThresholdUsd
+      }
+    });
+  });
+
   // Set / clear a user's per-user withdrawal-limit override. null clears a field.
   app.post("/wallet/admin/users/:id/withdraw-limits", async (req: any, reply) => {
     if (!(await requireRole(req, reply, "admin"))) return;
@@ -1504,6 +1555,17 @@ export async function walletRoutes(app: FastifyInstance) {
       daily_usd: norm(b.dailyUsd),
       review_threshold_usd: norm(b.reviewThresholdUsd),
       updated_at: Date.now()
+    });
+    auditToAuth({
+      actorId: req.user?.sub,
+      action: "withdrawal.set_limits",
+      targetId: String(req.params.id),
+      targetLabel: String(req.params.id),
+      detail: {
+        maxPerTxUsd: norm(b.maxPerTxUsd),
+        dailyUsd: norm(b.dailyUsd),
+        reviewThresholdUsd: norm(b.reviewThresholdUsd)
+      }
     });
     return reply.send({ ok: true });
   });

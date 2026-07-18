@@ -535,6 +535,47 @@ export async function adminTransactions(limit = 100): Promise<SystemTx[]> {
   return Array.isArray(data.transactions) ? data.transactions : [];
 }
 
+export type WithdrawLimits = {
+  maxPerTxUsd: number | null;
+  dailyUsd: number | null;
+  reviewThresholdUsd: number | null;
+};
+
+/** A member's override limits + the effective values (override → global fallback). */
+export async function getUserWithdrawLimits(
+  id: string
+): Promise<{ override: WithdrawLimits; effective: WithdrawLimits }> {
+  const res = await authedFetch(`${WALLET_BASE}/wallet/admin/users/${id}/withdraw-limits`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not load limits.");
+  return data as { override: WithdrawLimits; effective: WithdrawLimits };
+}
+
+/** Set a member's override. Null / blank fields fall back to the global limit. */
+export async function setUserWithdrawLimits(id: string, body: WithdrawLimits): Promise<void> {
+  const res = await authedFetch(`${WALLET_BASE}/wallet/admin/users/${id}/withdraw-limits`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not save limits.");
+}
+
+/** Best-effort liveness ping of the auth + wallet services (public /health). */
+export async function systemHealth(): Promise<{ auth: boolean; wallet: boolean }> {
+  const ping = async (url: string) => {
+    try {
+      const r = await fetch(url, { cache: "no-store" });
+      return r.ok;
+    } catch {
+      return false;
+    }
+  };
+  const [auth, wallet] = await Promise.all([ping(`${AUTH_BASE}/health`), ping(`${WALLET_BASE}/health`)]);
+  return { auth, wallet };
+}
+
 /** Admin: usable (ledger DB) USD totals per user id. */
 export async function adminWalletBalances(): Promise<Record<string, number>> {
   const res = await authedFetch(`${WALLET_BASE}/wallet/admin/balances`);
@@ -572,6 +613,10 @@ export type PendingWithdrawal = {
   destAddress: string;
   requestedAt: number;
   status: string;
+  /** 4-eyes: distinct approvals so far, required count, and whether I approved. */
+  approvals?: number;
+  required?: number;
+  mineApproved?: boolean;
 };
 
 /** Admin: withdrawals held for approval. */
@@ -583,7 +628,9 @@ export async function adminWithdrawalQueue(): Promise<PendingWithdrawal[]> {
 }
 
 /** Admin: approve a held withdrawal → broadcast. */
-export async function approveWithdrawal(id: string): Promise<{ txHash: string }> {
+export async function approveWithdrawal(
+  id: string
+): Promise<{ txHash?: string; pending?: boolean; approvals?: number; required?: number }> {
   const res = await authedFetch(`${WALLET_BASE}/wallet/admin/withdrawals/${id}/approve`, { method: "POST" });
   const d = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(d.error || "Approve failed.");
