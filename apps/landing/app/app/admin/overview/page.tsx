@@ -8,13 +8,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useAdminAccess, can, Can } from "@/components/admin/access";
+import { Can } from "@/components/admin/access";
 import { StatCard } from "@/components/admin/ui";
 import {
   sessions,
   listAllUsers,
-  adminWithdrawalQueue,
+  adminAccounting,
   adminAudit,
+  type Accounting,
   type AdminAuditEvent
 } from "@/lib/auth-client";
 import { actionLabel, auditAgo } from "@/components/admin/audit";
@@ -67,40 +68,26 @@ export function OverviewBody({
   demo
 }: {
   /** Preview seed — when set, skips live fetches and shows these figures. */
-  demo?: { online: number; members: number; pending: number | "restricted" };
+  demo?: { online: number; members: number };
 } = {}) {
-  const access = useAdminAccess();
   const [online, setOnline] = useState<number | null>(demo ? demo.online : null);
   const [members, setMembers] = useState<number | null>(demo ? demo.members : null);
-  const [pending, setPending] = useState<number | null | "restricted">(demo ? demo.pending : null);
+  const [acct, setAcct] = useState<Accounting | null>(null);
 
   useEffect(() => {
     if (demo) return;
     let alive = true;
     sessions.online().then((r) => alive && setOnline(r.count)).catch(() => {});
     listAllUsers().then((r) => alive && setMembers(r.total)).catch(() => {});
+    adminAccounting().then((a) => alive && setAcct(a)).catch(() => {});
     return () => {
       alive = false;
     };
-  }, []);
-
-  useEffect(() => {
-    if (demo) return;
-    if (!access.ready) return;
-    let alive = true;
-    if (can(access, "withdrawals")) {
-      adminWithdrawalQueue()
-        .then((q) => alive && setPending(q.length))
-        .catch(() => alive && setPending(null));
-    } else {
-      setPending("restricted");
-    }
-    return () => {
-      alive = false;
-    };
-  }, [access.ready, access.isFounder, access.perms]);
+  }, [demo]);
 
   const fmt = (n: number | null) => (n === null ? "…" : n.toLocaleString());
+  const usd = (n: number | undefined) =>
+    n == null ? "…" : "$" + n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 
   return (
     <>
@@ -109,7 +96,7 @@ export function OverviewBody({
         The <em className="font-serif-i text-white/60">control</em> room.
       </h1>
 
-      <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="mt-8 grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
           label="Online now"
           value={
@@ -118,18 +105,60 @@ export function OverviewBody({
               {fmt(online)}
             </span>
           }
-          hint="members using the platform"
+          hint="using the platform"
           href="/app/admin/sessions"
         />
         <StatCard label="Members" value={fmt(members)} hint="total registered" href="/app/admin" />
         <StatCard
+          label="Deposits in"
+          value={usd(acct?.depositsUsd)}
+          hint={acct ? `${acct.counts.deposits} deposits` : ""}
+          tone="emerald"
+          href="/app/admin/treasury"
+        />
+        <StatCard
+          label="Member holdings"
+          value={usd(acct?.holdingsUsd)}
+          hint="ledger balances"
+          href="/app/admin/treasury"
+        />
+        <StatCard
+          label="Withdrawn out"
+          value={usd(acct?.withdrawnUsd)}
+          hint={acct ? `${acct.counts.withdrawals} total` : ""}
+          tone="rose"
+          href="/app/admin/treasury"
+        />
+        <StatCard
           label="Pending withdrawals"
-          value={pending === "restricted" ? "—" : pending === null ? "…" : pending.toLocaleString()}
-          hint={pending === "restricted" ? "needs withdrawals capability" : "awaiting review"}
-          tone={typeof pending === "number" && pending > 0 ? "amber" : "default"}
+          value={usd(acct?.pendingUsd)}
+          hint={acct ? `${acct.counts.pendingWithdrawals} awaiting` : ""}
+          tone={acct && acct.counts.pendingWithdrawals > 0 ? "amber" : "default"}
           href="/app/admin/withdrawals"
         />
+        <StatCard
+          label="Ledger entries"
+          value={acct ? acct.counts.ledgerEntries.toLocaleString() : "…"}
+          hint="credits + debits"
+          href="/app/admin/treasury"
+        />
+        <StatCard
+          label="Treasury sweeps"
+          value={acct ? acct.counts.sweeps.toLocaleString() : "…"}
+          hint="flushes to treasury"
+          href="/app/admin/treasury"
+        />
       </div>
+
+      {acct && Object.keys(acct.byChain).length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {Object.entries(acct.byChain).map(([c, v]) => (
+            <span key={c} className="liquid-glass rounded-full px-3 py-1.5 text-xs text-white/70">
+              {c.toUpperCase()} · {usd(v)}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="mt-10">
         <h2 className="font-serif text-2xl tracking-tight">Jump to</h2>

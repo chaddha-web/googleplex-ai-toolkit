@@ -17,7 +17,7 @@ export default function AdminPreviewPage() {
       title="Overview"
       previewAs={{ name: "Founder", founder: true, perms: ["withdrawals", "suspend", "flush", "settings"] }}
     >
-      <OverviewBody demo={{ online: 12, members: 1284, pending: 3 }} />
+      <OverviewBody demo={{ online: 12, members: 1284 }} />
     </AdminShell>
   );
 }
