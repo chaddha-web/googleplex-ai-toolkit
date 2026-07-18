@@ -140,18 +140,10 @@ export async function privKeyForChain(
   return loadTreasuryPriv(familyForChain(chain));
 }
 
-async function safeTreasuryAddress(family: TreasuryFamily): Promise<string> {
-  try {
-    return await treasuryAddress(family);
-  } catch {
-    return "";
-  }
-}
-
 /**
- * The company payout addresses per chain — the admin-imported funded-wallet
- * address if set, else the derived KMS treasury address for the family. Empty
- * string when neither is configured. This is where withdrawals are sent FROM.
+ * The company payout addresses per chain — ONLY the admin-imported funded-wallet
+ * addresses (set in Admin → Settings). Empty string for chains the operator
+ * hasn't configured, so the admin view never shows auto-derived / unset wallets.
  */
 export async function withdrawalAddresses(): Promise<{
   eth: string;
@@ -160,13 +152,10 @@ export async function withdrawalAddresses(): Promise<{
   btc: string;
 }> {
   const imp = await importedKeys();
-  const evm = await safeTreasuryAddress("evm");
-  const tron = await safeTreasuryAddress("tron");
-  const btc = await safeTreasuryAddress("btc");
   return {
-    eth: imp.eth?.address?.trim() || evm,
-    bsc: imp.bsc?.address?.trim() || evm,
-    tron: imp.tron?.address?.trim() || tron,
-    btc: imp.btc?.address?.trim() || btc
+    eth: imp.eth?.address?.trim() || "",
+    bsc: imp.bsc?.address?.trim() || "",
+    tron: imp.tron?.address?.trim() || "",
+    btc: imp.btc?.address?.trim() || ""
   };
 }
