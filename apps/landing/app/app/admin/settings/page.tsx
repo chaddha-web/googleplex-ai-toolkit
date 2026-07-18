@@ -25,6 +25,27 @@ const CHAINS = [
   { id: "btc", label: "Bitcoin (BTC)" }
 ] as const;
 
+// Withdrawable (chain, token) pairs — mirrors the wallet token registry.
+const WD_ASSETS: { chain: string; symbol: string }[] = [
+  { chain: "eth", symbol: "ETH" },
+  { chain: "eth", symbol: "USDT" },
+  { chain: "eth", symbol: "USDC" },
+  { chain: "bsc", symbol: "BNB" },
+  { chain: "bsc", symbol: "USDT" },
+  { chain: "bsc", symbol: "USDC" },
+  { chain: "tron", symbol: "TRX" },
+  { chain: "tron", symbol: "USDT" },
+  { chain: "tron", symbol: "PARTY" },
+  { chain: "btc", symbol: "BTC" }
+];
+
+const FIN_CHAINS = [
+  { id: "eth", label: "Ethereum" },
+  { id: "bsc", label: "BNB Chain" },
+  { id: "tron", label: "Tron" },
+  { id: "btc", label: "Bitcoin" }
+] as const;
+
 export default function AdminSettings() {
   const { user } = useAuth();
   const router = useRouter();
@@ -126,6 +147,11 @@ export default function AdminSettings() {
               ))}
             </Section>
 
+            {/* ── Withdrawal rules / auto-flush / sale wallets ───── */}
+            <RulesEditor settings={settings} isFounder={isFounder} />
+            <ThresholdsEditor settings={settings} />
+            <SaleWalletsEditor settings={settings} isFounder={isFounder} />
+
             {/* ── Community ─────────────────────────────────────── */}
             <Section
               title="Community"
@@ -226,6 +252,8 @@ const inputCls =
   "flex-1 bg-[#141414] rounded-xl px-3 py-2 text-sm text-white placeholder:text-white/40 outline-none focus:ring-2 focus:ring-[#8A68FF]/60";
 const btnCls =
   "shrink-0 rounded-xl px-3 py-2 text-xs font-medium bg-white text-black hover:bg-white/90 transition-colors disabled:opacity-40 outline-none focus-visible:ring-2 focus-visible:ring-[#8A68FF]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent";
+const inputSm =
+  "bg-[#141414] rounded-lg px-2.5 py-1.5 text-sm text-white placeholder:text-white/30 outline-none focus:ring-2 focus:ring-[#8A68FF]/60";
 
 function useSave(k: string) {
   const [busy, setBusy] = useState(false);
@@ -376,6 +404,252 @@ function PromoteAdmin() {
           {err && <p className="text-rose-300/90 text-xs mt-1">{err}</p>}
         </div>
       </Row>
+    </Section>
+  );
+}
+
+function parseJsonObj(v: unknown): Record<string, unknown> {
+  try {
+    const o = JSON.parse((v as string) || "{}");
+    return o && typeof o === "object" && !Array.isArray(o) ? o : {};
+  } catch {
+    return {};
+  }
+}
+
+function numObj(rec: Record<string, string>): Record<string, number> {
+  const o: Record<string, number> = {};
+  for (const [k, v] of Object.entries(rec)) {
+    const t = v.trim();
+    if (t === "") continue;
+    const n = Number(t);
+    if (Number.isFinite(n) && n >= 0) o[k] = n;
+  }
+  return o;
+}
+
+// ── Withdrawal rules: per-asset minimum + flat fee ───────────────────────────
+function RulesEditor({ settings, isFounder }: { settings: Settings; isFounder: boolean }) {
+  const seed = (src: Record<string, unknown>) =>
+    Object.fromEntries(
+      WD_ASSETS.map((a) => {
+        const k = `${a.chain}:${a.symbol}`;
+        const v = src[k];
+        return [k, typeof v === "number" ? String(v) : ""];
+      })
+    );
+  const [mins, setMins] = useState<Record<string, string>>(() => seed(parseJsonObj(settings["wd.minimums"])));
+  const [fees, setFees] = useState<Record<string, string>>(() => seed(parseJsonObj(settings["wd.fees"])));
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function save() {
+    setBusy(true);
+    setErr(null);
+    setMsg(null);
+    try {
+      await setAdminSetting("wd.minimums", JSON.stringify(numObj(mins)));
+      if (isFounder) await setAdminSetting("wd.fees", JSON.stringify(numObj(fees)));
+      setMsg("Saved. Blank = no minimum / no fee.");
+      setTimeout(() => setMsg(null), 2500);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Section
+      title="Withdrawal rules"
+      subtitle="Per-asset minimum and flat fee (deducted from the payout, kept in treasury). Blank = none."
+    >
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-[10px] tracking-[0.2em] uppercase text-white/40 border-b border-white/10">
+              <th className="px-1 py-2 font-medium">Asset</th>
+              <th className="px-1 py-2 font-medium">Min (token)</th>
+              <th className="px-1 py-2 font-medium">Fee (token){isFounder ? "" : " · founder"}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {WD_ASSETS.map((a) => {
+              const k = `${a.chain}:${a.symbol}`;
+              return (
+                <tr key={k} className="border-b border-white/5">
+                  <td className="px-1 py-2 text-white/80 whitespace-nowrap">
+                    {a.symbol} <span className="text-white/40 text-xs">· {a.chain.toUpperCase()}</span>
+                  </td>
+                  <td className="px-1 py-2">
+                    <input
+                      value={mins[k]}
+                      onChange={(e) => setMins({ ...mins, [k]: e.target.value })}
+                      placeholder="0"
+                      inputMode="decimal"
+                      className={`${inputSm} w-28`}
+                    />
+                  </td>
+                  <td className="px-1 py-2">
+                    <input
+                      value={fees[k]}
+                      onChange={(e) => setFees({ ...fees, [k]: e.target.value })}
+                      placeholder="0"
+                      inputMode="decimal"
+                      disabled={!isFounder}
+                      className={`${inputSm} w-28 ${isFounder ? "" : "opacity-40"}`}
+                    />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-4 flex items-center gap-3">
+        <button type="button" onClick={save} disabled={busy} className={btnCls}>
+          {busy ? "…" : "Save rules"}
+        </button>
+        {msg && <span className="text-emerald-300 text-xs">{msg}</span>}
+        {err && <span className="text-rose-300/90 text-xs">{err}</span>}
+      </div>
+      {!isFounder && <p className="text-white/30 text-xs mt-2">Fees are founder-only; you can set minimums.</p>}
+    </Section>
+  );
+}
+
+// ── Auto-flush thresholds (per chain, USD) ───────────────────────────────────
+function ThresholdsEditor({ settings }: { settings: Settings }) {
+  const init = parseJsonObj(settings["flush.thresholds"]);
+  const [vals, setVals] = useState<Record<string, string>>(() =>
+    Object.fromEntries(FIN_CHAINS.map((c) => [c.id, typeof init[c.id] === "number" ? String(init[c.id]) : ""]))
+  );
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function save() {
+    setBusy(true);
+    setErr(null);
+    setMsg(null);
+    try {
+      await setAdminSetting("flush.thresholds", JSON.stringify(numObj(vals)));
+      setMsg("Saved. Blank / 0 = auto-flush off for that chain.");
+      setTimeout(() => setMsg(null), 2500);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Section
+      title="Auto-flush"
+      subtitle="When a member's on-chain balance on a chain crosses this USD amount, it's swept to treasury automatically. Blank / 0 = off."
+    >
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {FIN_CHAINS.map((c) => (
+          <label key={c.id} className="block">
+            <span className="text-white/50 text-xs">{c.label} ($)</span>
+            <input
+              value={vals[c.id]}
+              onChange={(e) => setVals({ ...vals, [c.id]: e.target.value })}
+              placeholder="off"
+              inputMode="decimal"
+              className={`${inputSm} w-full mt-1`}
+            />
+          </label>
+        ))}
+      </div>
+      <div className="mt-4 flex items-center gap-3">
+        <button type="button" onClick={save} disabled={busy} className={btnCls}>
+          {busy ? "…" : "Save thresholds"}
+        </button>
+        {msg && <span className="text-emerald-300 text-xs">{msg}</span>}
+        {err && <span className="text-rose-300/90 text-xs">{err}</span>}
+      </div>
+    </Section>
+  );
+}
+
+// ── Sale wallets (receive addresses; founder-only, type-to-confirm) ──────────
+function SaleWalletsEditor({ settings, isFounder }: { settings: Settings; isFounder: boolean }) {
+  const init = parseJsonObj(settings["sale.wallets"]);
+  const [vals, setVals] = useState<Record<string, string>>(() =>
+    Object.fromEntries(FIN_CHAINS.map((c) => [c.id, typeof init[c.id] === "string" ? (init[c.id] as string) : ""]))
+  );
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function save() {
+    setBusy(true);
+    setErr(null);
+    setMsg(null);
+    const o: Record<string, string> = {};
+    for (const c of FIN_CHAINS) {
+      const t = (vals[c.id] ?? "").trim();
+      if (t !== "") o[c.id] = t;
+    }
+    try {
+      await setAdminSetting("sale.wallets", JSON.stringify(o));
+      setMsg("Saved.");
+      setConfirm("");
+      setTimeout(() => setMsg(null), 2500);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!isFounder) {
+    return (
+      <Section title="Sale wallets" subtitle="Receive addresses for studio + product purchases.">
+        <p className="text-white/40 text-sm">Only the main admin can set the sale wallets.</p>
+      </Section>
+    );
+  }
+
+  return (
+    <Section
+      title="Sale wallets"
+      subtitle="Where studio + product purchases are received, per chain. Founder-only."
+    >
+      <div className="space-y-3">
+        {FIN_CHAINS.map((c) => (
+          <Row key={c.id} label={c.label}>
+            <input
+              value={vals[c.id]}
+              onChange={(e) => setVals({ ...vals, [c.id]: e.target.value })}
+              placeholder={`${c.label} receive address`}
+              className={`${inputCls} font-mono text-xs`}
+            />
+          </Row>
+        ))}
+      </div>
+      <div className="mt-4">
+        <p className="text-white/40 text-xs mb-1.5">
+          This changes where purchase funds are received. Type{" "}
+          <span className="font-mono text-white/70">CONFIRM</span> to save.
+        </p>
+        <div className="flex items-center gap-3">
+          <input
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            placeholder="CONFIRM"
+            className={`${inputSm} w-32`}
+          />
+          <button type="button" onClick={save} disabled={busy || confirm.trim() !== "CONFIRM"} className={btnCls}>
+            {busy ? "…" : "Save sale wallets"}
+          </button>
+          {msg && <span className="text-emerald-300 text-xs">{msg}</span>}
+          {err && <span className="text-rose-300/90 text-xs">{err}</span>}
+        </div>
+      </div>
     </Section>
   );
 }
