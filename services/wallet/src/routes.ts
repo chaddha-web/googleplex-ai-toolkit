@@ -26,6 +26,7 @@ import { deriveUserAddresses } from "./hd.js";
 import { TOKENS, findToken } from "./tokens.js";
 import { priceUsd, coinAmountForUsd, quoteSwap } from "./prices.js";
 import { previewUser, executeUser } from "./sweep.js";
+import { withdrawalAddresses } from "./treasury.js";
 import { effectiveLimits, checkCooldown } from "./withdraw-limits.js";
 import { sendWithdrawal, isValidDestination } from "./withdraw.js";
 import { notify } from "./notify.js";
@@ -1515,6 +1516,28 @@ export async function walletRoutes(app: FastifyInstance) {
 
     tx.sort((a, b) => (b.at ?? 0) - (a.at ?? 0));
     return reply.send({ transactions: tx.slice(0, limit) });
+  });
+
+  // ── Withdrawal (treasury) wallet balances — live on-chain read ────────────
+  app.get("/wallet/admin/treasury-wallets", async (req: any, reply) => {
+    if (!(await requireRole(req, reply, "admin"))) return;
+    const addresses = await withdrawalAddresses();
+    const configured = !!(addresses.eth || addresses.bsc || addresses.tron || addresses.btc);
+    if (!configured) {
+      return reply.send({ configured: false, addresses, balances: [], totalUsd: 0 });
+    }
+    try {
+      const snap = await reconcile(addresses, { force: !!req.query?.force });
+      return reply.send({
+        configured: true,
+        addresses,
+        balances: snap.byLogicalAsset,
+        totalUsd: snap.usdTotal,
+        fetchedAt: snap.fetchedAt
+      });
+    } catch (e) {
+      return reply.code(502).send({ error: "On-chain read failed: " + (e as Error).message });
+    }
   });
 
   // Read a user's override + effective limits (prefills the admin form).

@@ -576,6 +576,22 @@ export async function systemHealth(): Promise<{ auth: boolean; wallet: boolean }
   return { auth, wallet };
 }
 
+export type TreasuryWallets = {
+  configured: boolean;
+  addresses: { eth: string; bsc: string; tron: string; btc: string };
+  balances: AssetBalance[];
+  totalUsd: number;
+  fetchedAt?: number;
+};
+
+/** Live on-chain balances of the company wallets that pay out withdrawals. */
+export async function adminTreasuryWallets(force = false): Promise<TreasuryWallets> {
+  const res = await authedFetch(`${WALLET_BASE}/wallet/admin/treasury-wallets${force ? "?force=1" : ""}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not load withdrawal wallets.");
+  return data as TreasuryWallets;
+}
+
 /** Admin: usable (ledger DB) USD totals per user id. */
 export async function adminWalletBalances(): Promise<Record<string, number>> {
   const res = await authedFetch(`${WALLET_BASE}/wallet/admin/balances`);

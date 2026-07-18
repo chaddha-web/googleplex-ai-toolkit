@@ -13,9 +13,11 @@ import {
   adminAccounting,
   adminTransactions,
   adminLedger,
+  adminTreasuryWallets,
   type Accounting,
   type SystemTx,
-  type LedgerEntry
+  type LedgerEntry,
+  type TreasuryWallets
 } from "@/lib/auth-client";
 
 const usd = (n: number) =>
@@ -67,12 +69,18 @@ export default function TreasuryPage() {
   const [acct, setAcct] = useState<Accounting | null>(null);
   const [tx, setTx] = useState<SystemTx[] | null>(null);
   const [ledger, setLedger] = useState<LedgerEntry[] | null>(null);
+  const [tw, setTw] = useState<TreasuryWallets | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     adminAccounting().then(setAcct).catch((e) => setError((e as Error).message));
     adminTransactions(100).then(setTx).catch(() => setTx([]));
     adminLedger({ limit: 100 }).then(setLedger).catch(() => setLedger([]));
+    adminTreasuryWallets()
+      .then(setTw)
+      .catch(() =>
+        setTw({ configured: false, addresses: { eth: "", bsc: "", tron: "", btc: "" }, balances: [], totalUsd: 0 })
+      );
   }, []);
 
   return (
@@ -113,6 +121,53 @@ export default function TreasuryPage() {
               {c.toUpperCase()} · {usd(v)}
             </span>
           ))}
+        </div>
+      )}
+
+      {/* Withdrawal (treasury) wallets */}
+      <h2 className="mt-12 font-serif text-2xl tracking-tight">
+        Withdrawal <em className="font-serif-i text-white/60">wallets</em>
+      </h2>
+      <p className="text-white/40 text-xs mt-1">
+        Live on-chain balance of the company wallets that pay out withdrawals — native coin included (gas).
+      </p>
+      {tw === null ? (
+        <div className="mt-4 liquid-glass rounded-2xl px-6 py-8 text-center text-white/40 text-sm">Loading…</div>
+      ) : !tw.configured ? (
+        <div className="mt-4 liquid-glass rounded-2xl px-6 py-6 text-center text-white/40 text-sm">
+          No withdrawal wallets configured yet — set them in Settings.
+        </div>
+      ) : (
+        <div className="mt-4 liquid-glass rounded-2xl p-6">
+          <div className="flex items-baseline justify-between flex-wrap gap-2">
+            <p className="text-white/40 text-[11px] tracking-[0.2em] uppercase">Total balance</p>
+            <p className="text-3xl font-light">{usd(tw.totalUsd)}</p>
+          </div>
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {tw.balances.filter((b) => b.total > 0).length === 0 ? (
+              <p className="text-white/40 text-sm col-span-full">All balances are zero.</p>
+            ) : (
+              tw.balances
+                .filter((b) => b.total > 0)
+                .map((b) => (
+                  <div key={b.asset} className="rounded-xl bg-white/[0.03] border border-white/10 px-4 py-3">
+                    <p className="text-white/50 text-xs">{b.asset}</p>
+                    <p className="text-white/90 text-lg">{amt(b.total)}</p>
+                    {b.usd != null && <p className="text-white/40 text-xs">{usd(b.usd)}</p>}
+                  </div>
+                ))
+            )}
+          </div>
+          <div className="mt-5 space-y-1.5">
+            {(["eth", "bsc", "tron", "btc"] as const).map((c) =>
+              tw.addresses[c] ? (
+                <div key={c} className="flex items-center gap-3 text-xs">
+                  <span className="text-white/40 uppercase w-10 shrink-0">{c}</span>
+                  <span className="font-mono text-white/60 truncate">{tw.addresses[c]}</span>
+                </div>
+              ) : null
+            )}
+          </div>
         </div>
       )}
 
