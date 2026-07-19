@@ -17,7 +17,7 @@ const KEY = new TextEncoder().encode(
 );
 
 const ACCESS_TTL_S = Number(process.env.ACCESS_TOKEN_TTL ?? 15 * 60);
-const REFRESH_TTL_S = Number(process.env.REFRESH_TOKEN_TTL ?? 30 * 24 * 60 * 60);
+const REFRESH_TTL_S = Number(process.env.REFRESH_TOKEN_TTL ?? 7 * 24 * 60 * 60);
 const ISS = "googolplex.auth";
 const AUD = "googolplex.client";
 
