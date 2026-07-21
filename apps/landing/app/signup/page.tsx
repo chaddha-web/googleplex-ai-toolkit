@@ -68,7 +68,7 @@ function FormRight() {
       const target = !user.profileCompletedAt
         ? "/app/setup/profile"
         : user.role === "admin"
-        ? "/app/admin"
+        ? "/app/admin/overview"
         : "/app";
       setSuccessName(user.firstName || firstName || "");
       setSuccessTarget(target);

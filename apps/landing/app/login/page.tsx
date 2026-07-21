@@ -55,7 +55,7 @@ function FormRight() {
       if (!user.profileCompletedAt) {
         router.push("/app/setup/profile");
       } else {
-        router.push(user.role === "admin" ? "/app/admin" : "/app");
+        router.push(user.role === "admin" ? "/app/admin/overview" : "/app");
       }
     } catch (err) {
       const e = err as Error & { attemptsLeft?: number };

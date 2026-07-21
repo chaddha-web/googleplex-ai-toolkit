@@ -66,7 +66,7 @@ export function SmartCta({
   }
   if (user.role === "admin") {
     return (
-      <Link href="/app/admin" className={className}>
+      <Link href="/app/admin/overview" className={className}>
         Open admin →
       </Link>
     );
