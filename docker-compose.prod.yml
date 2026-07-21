@@ -83,6 +83,13 @@ services:
       - traefik.http.routers.landing.entrypoints=websecure
       - traefik.http.routers.landing.tls.certresolver=le
       - traefik.http.services.landing.loadbalancer.server.port=3010
+      # The real admin panel is served by this same landing app at /app/admin.
+      # admin.${DOMAIN} routes here (a middleware sends the subdomain root to
+      # /app/admin/overview). The old mock apps/admin container is retired.
+      - traefik.http.routers.adminpanel.rule=Host(`admin.${DOMAIN}`)
+      - traefik.http.routers.adminpanel.entrypoints=websecure
+      - traefik.http.routers.adminpanel.tls.certresolver=le
+      - traefik.http.routers.adminpanel.service=landing
     networks:
       - gplex-net
     depends_on:
@@ -117,27 +124,9 @@ services:
     depends_on:
       - landing
 
-  admin:
-    image: gplex-monorepo:latest
-    container_name: gplex-admin
-    restart: unless-stopped
-    env_file: .env.prod
-    environment:
-      - PORT=3001
-      - NEXT_PUBLIC_AUTH_BASE=https://auth.${DOMAIN}
-    command: ["npm", "run", "start", "--workspace", "@googolplex/admin"]
-    expose:
-      - "3001"
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.admin.rule=Host(`admin.${DOMAIN}`)
-      - traefik.http.routers.admin.entrypoints=websecure
-      - traefik.http.routers.admin.tls.certresolver=le
-      - traefik.http.services.admin.loadbalancer.server.port=3001
-    networks:
-      - gplex-net
-    depends_on:
-      - landing
+  # NOTE: the old `admin` service (apps/admin — a shadcn mock Operator UI on
+  # :3001) was retired. The real admin panel is served by the landing app at
+  # /app/admin, and admin.${DOMAIN} now routes to landing (see its labels).
 
   auth:
     image: gplex-monorepo:latest
