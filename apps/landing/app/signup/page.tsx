@@ -8,7 +8,7 @@ import { AuthHero } from "@/components/auth-hero";
 import { OtpCells } from "@/components/otp-cells";
 import { ArrowLeft } from "@/components/icons";
 import { newIdempotencyKey } from "@/lib/fetch-retry";
-import { requestOtp, verifyOtp } from "@/lib/auth-client";
+import { requestOtp, verifyOtp, adminHandoffUrl } from "@/lib/auth-client";
 
 const SUCCESS_HOLD_MS = 1600;
 
@@ -68,7 +68,7 @@ function FormRight() {
       const target = !user.profileCompletedAt
         ? "/app/setup/profile"
         : user.role === "admin"
-        ? "https://admin.ggakingclub.com/overview"
+        ? adminHandoffUrl("/overview")
         : "/app";
       setSuccessName(user.firstName || firstName || "");
       setSuccessTarget(target);

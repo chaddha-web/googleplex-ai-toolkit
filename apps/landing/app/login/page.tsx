@@ -8,7 +8,7 @@ import { AuthHero } from "@/components/auth-hero";
 import { OtpCells } from "@/components/otp-cells";
 import { ArrowLeft } from "@/components/icons";
 import { newIdempotencyKey } from "@/lib/fetch-retry";
-import { requestOtp, verifyOtp } from "@/lib/auth-client";
+import { requestOtp, verifyOtp, adminHandoffUrl } from "@/lib/auth-client";
 
 function FormRight() {
   const router = useRouter();
@@ -56,10 +56,10 @@ function FormRight() {
         router.push("/app/setup/profile");
       } else {
         if (user.role === "admin") {
-          // The admin panel is served on admin.ggakingclub.com. If we're already
-          // on that origin, this is a same-origin nav (session persists); from the
-          // marketing origin it hands off to the subdomain login.
-          window.location.href = "https://admin.ggakingclub.com/overview";
+          // The admin panel is on admin.ggakingclub.com (separate origin). Hand
+          // the just-issued refresh token over via the #h= hash so there's no
+          // second login — even when signing in from the marketing origin.
+          window.location.href = adminHandoffUrl("/overview");
         } else {
           router.push("/app");
         }

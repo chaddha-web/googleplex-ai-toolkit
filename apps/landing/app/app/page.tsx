@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect } from "react";
 import { useAuth } from "@/components/auth-context";
-import { webHandoffUrl, type WalletStatus } from "@/lib/auth-client";
+import { webHandoffUrl, adminHandoffUrl, ADMIN_URL, type WalletStatus } from "@/lib/auth-client";
 
 export default function AppHome() {
   const { user, signOut } = useAuth();
@@ -81,7 +81,12 @@ export default function AppHome() {
         {user.role === "admin" && (
           <div className="mt-10">
             <a
-              href="https://admin.ggakingclub.com"
+              href={ADMIN_URL}
+              onClick={(e) => {
+                // Carry the session to the admin origin so no re-login is needed.
+                e.preventDefault();
+                window.location.href = adminHandoffUrl("/overview");
+              }}
               className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors inline-flex"
             >
               Open admin panel →

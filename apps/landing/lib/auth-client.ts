@@ -37,6 +37,21 @@ export function webHandoffUrl(path: string = "/"): string {
   return `${base}#h=${encodeURIComponent(refresh)}`;
 }
 
+/**
+ * The admin panel lives on the admin.ggakingclub.com origin, which has its own
+ * (empty) localStorage. Hand the current refresh token over via the `#h=` hash
+ * — the landing HashReceiver on that origin persists it and strips the hash —
+ * so opening the panel from an already-signed-in session doesn't force a
+ * second login. Same mechanism as webHandoffUrl.
+ */
+export const ADMIN_URL = "https://admin.ggakingclub.com";
+export function adminHandoffUrl(path: string = "/overview"): string {
+  const refresh = loadRefresh();
+  const base = `${ADMIN_URL}${path.startsWith("/") ? path : "/" + path}`;
+  if (!refresh) return base;
+  return `${base}#h=${encodeURIComponent(refresh)}`;
+}
+
 export type Role = "user" | "admin";
 export type WalletStatus =
   | "pending_password"

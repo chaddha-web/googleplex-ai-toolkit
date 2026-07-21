@@ -6,6 +6,8 @@ import {
   tryRestore,
   nextOnboardingPath,
   webHandoffUrl,
+  adminHandoffUrl,
+  ADMIN_URL,
   type User
 } from "@/lib/auth-client";
 
@@ -66,7 +68,14 @@ export function SmartCta({
   }
   if (user.role === "admin") {
     return (
-      <a href="https://admin.ggakingclub.com" className={className}>
+      <a
+        href={ADMIN_URL}
+        onClick={(e) => {
+          e.preventDefault();
+          window.location.href = adminHandoffUrl("/overview");
+        }}
+        className={className}
+      >
         Open admin →
       </a>
     );
