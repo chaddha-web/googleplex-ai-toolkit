@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { stmts } from "../db.js";
 import { verifyAccessToken, verifySecureToken } from "../jwt.js";
-import { permsForUser } from "../permissions.js";
+import { permsForUser, isFounder } from "../permissions.js";
 import { recordAudit } from "../audit.js";
 import { notify } from "../notify.js";
 
@@ -26,7 +26,7 @@ export async function securityRoutes(app: FastifyInstance) {
 
       const now = Date.now();
       if (!user.suspended_at) {
-        stmts.user.setSuspended.run({ id: user.id, suspended_at: now, updated_at: now });
+        stmts.user.setSuspended.run({ id: user.id, suspended_at: now, suspended_by: null, updated_at: now });
         stmts.refresh.revokeAllForUser.run(now, user.id);
         notify(
           `🛑 <b>Account suspended</b> (member self-secured via login alert)\n` +
@@ -68,7 +68,7 @@ export async function securityRoutes(app: FastifyInstance) {
 
     const now = Date.now();
     if (!user.suspended_at) {
-      stmts.user.setSuspended.run({ id: user.id, suspended_at: now, updated_at: now });
+      stmts.user.setSuspended.run({ id: user.id, suspended_at: now, suspended_by: me.id, updated_at: now });
       stmts.refresh.revokeAllForUser.run(now, user.id);
       notify(`🛑 <b>Account suspended</b> by ${me.email}\n${user.email} · <code>${user.code11}</code>`);
       recordAudit({
@@ -98,6 +98,14 @@ export async function securityRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const user = stmts.user.byId.get(id);
     if (!user) return reply.code(404).send({ error: "User not found." });
+    // Hierarchy: a sub-admin can't overturn a suspension the founder applied.
+    // Only the founder can lift what the founder set.
+    if (user.suspended_by && !isFounder(me.email)) {
+      const setter = stmts.user.byId.get(user.suspended_by);
+      if (isFounder(setter?.email)) {
+        return reply.code(403).send({ error: "Only the founder can lift a suspension the founder applied." });
+      }
+    }
 
     const now = Date.now();
     stmts.user.clearSuspended.run({ id: user.id, updated_at: now });

@@ -284,6 +284,7 @@ export type UserRow = {
   studio_unlocked_at: number | null;
   avatar_url: string | null;
   suspended_at: number | null;        // set when the member (or an alert) suspends the account
+  suspended_by: string | null;        // actor user id who applied the suspension (NULL = self/system)
   last_login_alert_at: number | null; // throttle for the login-alert email
   permissions: string | null;         // JSON array of granted admin capabilities (sub-admins)
   created_at: number;
@@ -318,6 +319,9 @@ try { db.exec(`ALTER TABLE users ADD COLUMN tokens_minted INTEGER NOT NULL DEFAU
 try { db.exec(`ALTER TABLE users ADD COLUMN tokens_minted_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN studio_unlocked_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN suspended_at INTEGER`); } catch {}
+// Who applied the suspension (actor user id). NULL = self-secure / system.
+// Used to enforce hierarchy: a sub-admin can't lift a founder-applied suspension.
+try { db.exec(`ALTER TABLE users ADD COLUMN suspended_by TEXT`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN last_login_alert_at INTEGER`); } catch {}
 // Granular sub-admin capabilities (JSON array of slugs). NULL = none.
 try { db.exec(`ALTER TABLE users ADD COLUMN permissions TEXT`); } catch {}
@@ -440,8 +444,8 @@ export const stmts = {
         updated_at = @updated_at
       WHERE id = @id
     `),
-    setSuspended: db.prepare(`UPDATE users SET suspended_at = @suspended_at, updated_at = @updated_at WHERE id = @id`),
-    clearSuspended: db.prepare(`UPDATE users SET suspended_at = NULL, updated_at = @updated_at WHERE id = @id`),
+    setSuspended: db.prepare(`UPDATE users SET suspended_at = @suspended_at, suspended_by = @suspended_by, updated_at = @updated_at WHERE id = @id`),
+    clearSuspended: db.prepare(`UPDATE users SET suspended_at = NULL, suspended_by = NULL, updated_at = @updated_at WHERE id = @id`),
     stampLoginAlert: db.prepare(`UPDATE users SET last_login_alert_at = @last_login_alert_at WHERE id = @id`)
   },
   otp: {

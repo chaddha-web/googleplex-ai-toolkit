@@ -35,6 +35,19 @@ export function isFounder(email: string | null | undefined): boolean {
   return !!FOUNDER_EMAIL && (email ?? "").trim().toLowerCase() === FOUNDER_EMAIL;
 }
 
+/**
+ * Hierarchy rule: the founder sits above every sub-admin. A sub-admin may run
+ * the platform, but may never act ON the founder (suspend, revoke, change, etc.)
+ * nor overturn what the founder did. Returns true when `actorEmail` is trying to
+ * act on the founder without being the founder — i.e. the action must be blocked.
+ */
+export function actingAgainstFounder(
+  actorEmail: string | null | undefined,
+  targetEmail: string | null | undefined
+): boolean {
+  return isFounder(targetEmail) && !isFounder(actorEmail);
+}
+
 /** Parse a stored permissions JSON string into a clean capability list. */
 export function parsePerms(json: string | null | undefined): Capability[] {
   if (!json) return [];

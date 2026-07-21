@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { db, stmts } from "../db.js";
 import { verifyAccessToken } from "../jwt.js";
 import { recordActivity, onlineMembers, onlineUserIds } from "../session-activity.js";
-import { isFounder } from "../permissions.js";
+import { actingAgainstFounder } from "../permissions.js";
 import { notify } from "../notify.js";
 
 /**
@@ -232,11 +232,10 @@ export async function sessionsRoutes(app: FastifyInstance) {
     if (!row) return reply.code(404).send({ error: "No such session." });
     if (row.revoked_at) return reply.send({ ok: true, alreadyRevoked: true });
     const target = stmts.user.byId.get(row.user_id);
-    // The founder is untouchable by sub-admins: only the founder may revoke a
-    // founder session (matches the founder-immunity on suspend / demote). Without
-    // this, any role=admin could kill the founder's session.
-    if (isFounder(target?.email) && !isFounder(me.email)) {
-      return reply.code(403).send({ error: "Only the founder can revoke a founder session." });
+    // Hierarchy: the founder is untouchable by sub-admins. Without this, any
+    // role=admin could kill the founder's session.
+    if (actingAgainstFounder(me.email, target?.email)) {
+      return reply.code(403).send({ error: "Not allowed — the founder is above your role." });
     }
     const now = Date.now();
     stmts.refresh.revokeFamily.run(now, row.family_id);
