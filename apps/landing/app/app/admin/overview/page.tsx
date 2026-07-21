@@ -106,47 +106,47 @@ export function OverviewBody({
             </span>
           }
           hint="using the platform"
-          href="/app/admin/sessions"
+          href="/sessions"
         />
-        <StatCard label="Members" value={fmt(members)} hint="total registered" href="/app/admin" />
+        <StatCard label="Members" value={fmt(members)} hint="total registered" href="/members" />
         <StatCard
           label="Deposits in"
           value={usd(acct?.depositsUsd)}
           hint={acct ? `${acct.counts.deposits} deposits` : ""}
           tone="emerald"
-          href="/app/admin/treasury"
+          href="/treasury"
         />
         <StatCard
           label="Member holdings"
           value={usd(acct?.holdingsUsd)}
           hint="ledger balances"
-          href="/app/admin/treasury"
+          href="/treasury"
         />
         <StatCard
           label="Withdrawn out"
           value={usd(acct?.withdrawnUsd)}
           hint={acct ? `${acct.counts.withdrawals} total` : ""}
           tone="rose"
-          href="/app/admin/treasury"
+          href="/treasury"
         />
         <StatCard
           label="Pending withdrawals"
           value={usd(acct?.pendingUsd)}
           hint={acct ? `${acct.counts.pendingWithdrawals} awaiting` : ""}
           tone={acct && acct.counts.pendingWithdrawals > 0 ? "amber" : "default"}
-          href="/app/admin/withdrawals"
+          href="/withdrawals"
         />
         <StatCard
           label="Ledger entries"
           value={acct ? acct.counts.ledgerEntries.toLocaleString() : "…"}
           hint="credits + debits"
-          href="/app/admin/treasury"
+          href="/treasury"
         />
         <StatCard
           label="Treasury sweeps"
           value={acct ? acct.counts.sweeps.toLocaleString() : "…"}
           hint="flushes to treasury"
-          href="/app/admin/treasury"
+          href="/treasury"
         />
       </div>
 
@@ -163,19 +163,19 @@ export function OverviewBody({
       <div className="mt-10">
         <h2 className="font-serif text-2xl tracking-tight">Jump to</h2>
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <QuickLink href="/app/admin" title="Members" desc="Search, inspect, suspend." />
-          <QuickLink href="/app/admin/sessions" title="Live sessions" desc="Who's on right now." />
+          <QuickLink href="/members" title="Members" desc="Search, inspect, suspend." />
+          <QuickLink href="/sessions" title="Live sessions" desc="Who's on right now." />
           <Can capability="withdrawals">
-            <QuickLink href="/app/admin/withdrawals" title="Withdrawals" desc="Review the payout queue." />
+            <QuickLink href="/withdrawals" title="Withdrawals" desc="Review the payout queue." />
           </Can>
-          <QuickLink href="/app/admin/campaigns" title="Email campaigns" desc="Compose and send." />
-          <QuickLink href="/app/admin/circle" title="Circle" desc="Moderate the community." />
-          <QuickLink href="/app/admin/globe" title="Live globe" desc="Where members are." />
+          <QuickLink href="/campaigns" title="Email campaigns" desc="Compose and send." />
+          <QuickLink href="/circle" title="Circle" desc="Moderate the community." />
+          <QuickLink href="/globe" title="Live globe" desc="Where members are." />
           <Can capability="settings">
-            <QuickLink href="/app/admin/settings" title="Settings" desc="Keys, limits, secrets." />
+            <QuickLink href="/settings" title="Settings" desc="Keys, limits, secrets." />
           </Can>
           <Can founder>
-            <QuickLink href="/app/admin/permissions" title="Admin access" desc="Manage sub-admins." />
+            <QuickLink href="/permissions" title="Admin access" desc="Manage sub-admins." />
           </Can>
         </div>
       </div>

@@ -55,7 +55,14 @@ function FormRight() {
       if (!user.profileCompletedAt) {
         router.push("/app/setup/profile");
       } else {
-        router.push(user.role === "admin" ? "/app/admin/overview" : "/app");
+        if (user.role === "admin") {
+          // The admin panel is served on admin.ggakingclub.com. If we're already
+          // on that origin, this is a same-origin nav (session persists); from the
+          // marketing origin it hands off to the subdomain login.
+          window.location.href = "https://admin.ggakingclub.com/overview";
+        } else {
+          router.push("/app");
+        }
       }
     } catch (err) {
       const e = err as Error & { attemptsLeft?: number };

@@ -80,12 +80,12 @@ export default function AppHome() {
 
         {user.role === "admin" && (
           <div className="mt-10">
-            <Link
-              href="/app/admin/overview"
+            <a
+              href="https://admin.ggakingclub.com"
               className="liquid-glass rounded-full px-6 py-3 text-white text-sm font-medium hover:bg-white/5 transition-colors inline-flex"
             >
               Open admin panel →
-            </Link>
+            </a>
           </div>
         )}
 

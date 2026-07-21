@@ -195,7 +195,7 @@ export default function AdminHome() {
                 : String(users.filter((u) => u.walletStatus === "active").length)
             }
           />
-          <Link href="/app/admin/sessions" className="block">
+          <Link href="/sessions" className="block">
             <Stat label="Online now" value={onlineNow === null ? "—" : String(onlineNow)} live />
           </Link>
         </div>
@@ -764,7 +764,7 @@ function MemberModal({
         {/* Active sessions */}
         <div className="mt-6 flex items-center justify-between">
           <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase">Active sessions</p>
-          <Link href="/app/admin/sessions" className="text-white/40 hover:text-white text-xs underline decoration-dotted">
+          <Link href="/sessions" className="text-white/40 hover:text-white text-xs underline decoration-dotted">
             All sessions →
           </Link>
         </div>

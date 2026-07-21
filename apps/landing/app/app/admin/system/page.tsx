@@ -85,7 +85,7 @@ export default function SystemPage() {
           on-chain governance is built and ships once GGX is deployed.
         </p>
         <a
-          href="/app/admin/circle"
+          href="/circle"
           className="rounded-full bg-white/10 text-white text-sm font-medium px-4 py-2 hover:bg-white/15 shrink-0"
         >
           Open Circle →

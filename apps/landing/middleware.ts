@@ -3,17 +3,34 @@ import type { NextRequest } from "next/server";
 
 const ADMIN_HOST = "admin.ggakingclub.com";
 
+// Clean top-level URLs served on the admin subdomain. The physical pages live at
+// /app/admin/** (under the shared /app auth Gate); these are rewritten onto that
+// path so the browser URL stays clean (admin.ggakingclub.com/sessions, etc.).
+// The index page (/app/admin, the members table) is exposed as /members.
+const ADMIN_SEGMENTS = new Set([
+  "overview", "members", "sessions", "withdrawals", "treasury", "reclaims",
+  "campaigns", "inbox", "circle", "globe", "audit", "logs", "system",
+  "settings", "permissions"
+]);
+
+/** Map a clean admin path (/sessions, /members) to its physical route. */
+function toPhysical(pathname: string): string {
+  if (pathname === "/members") return "/app/admin";
+  return "/app/admin" + pathname; // /sessions -> /app/admin/sessions
+}
+
+/** Map a physical path (/app/admin, /app/admin/sessions) to its clean URL. */
+function toClean(pathname: string): string {
+  if (pathname === "/app/admin") return "/members";
+  return pathname.slice("/app/admin".length); // /app/admin/sessions -> /sessions
+}
+
 /**
- * The real operator panel lives in this landing app at /app/admin, but it must
- * only be reachable via admin.ggakingclub.com — never the marketing domain.
- *
- * - On the admin subdomain: the bare root opens the panel (/app/admin/overview);
- *   /login and /app/** pass through so the normal auth flow works on this origin.
- * - On any other host: /app/admin/** is redirected onto the admin subdomain
- *   (path + query preserved), so ggakingclub.com/app/admin/* can't serve it.
- *
- * Authentication itself is enforced by the /app Gate + the admin role check;
- * this middleware only controls WHICH host the panel is served on.
+ * The operator panel is served ONLY on admin.ggakingclub.com, with clean URLs.
+ * The pages physically live at /app/admin/** in this same landing app (so they
+ * keep the /app auth Gate + admin role check). This middleware maps between the
+ * clean public URL and the physical route, and keeps the panel off the
+ * marketing domain.
  */
 export function middleware(req: NextRequest) {
   const host = (req.headers.get("host") ?? "").toLowerCase();
@@ -21,20 +38,37 @@ export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (isAdminHost) {
-    if (pathname === "/") {
+    // Never expose the physical /app/admin prefix — redirect it to the clean URL.
+    if (pathname === "/app/admin" || pathname.startsWith("/app/admin/")) {
       const url = req.nextUrl.clone();
-      url.pathname = "/app/admin/overview";
+      url.pathname = toClean(pathname);
       return NextResponse.redirect(url);
     }
+    // Bare subdomain root opens the overview.
+    if (pathname === "/") {
+      const url = req.nextUrl.clone();
+      url.pathname = "/overview";
+      return NextResponse.redirect(url);
+    }
+    // Clean admin path -> serve the physical page, URL stays clean.
+    const seg = pathname.split("/")[1] ?? "";
+    if (ADMIN_SEGMENTS.has(seg)) {
+      const url = req.nextUrl.clone();
+      url.pathname = toPhysical(pathname);
+      return NextResponse.rewrite(url);
+    }
+    // /login, /app/setup/*, assets, etc. pass through so auth flows work.
     return NextResponse.next();
   }
 
-  // Non-admin host: bounce any admin path to the admin subdomain.
+  // Marketing / member hosts: the panel is not served here. Bounce any admin
+  // path to the clean equivalent on the admin subdomain.
   if (pathname === "/app/admin" || pathname.startsWith("/app/admin/")) {
     const url = req.nextUrl.clone();
     url.hostname = ADMIN_HOST;
     url.port = "";
     url.protocol = "https:";
+    url.pathname = toClean(pathname);
     return NextResponse.redirect(url);
   }
 
@@ -42,5 +76,6 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/app/admin", "/app/admin/:path*"]
+  // Run on page routes only (skip _next internals + files with an extension).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.).*)"]
 };

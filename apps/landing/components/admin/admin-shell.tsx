@@ -104,51 +104,54 @@ type NavItem = {
 };
 type NavGroup = { label?: string; items: NavItem[] };
 
+// Clean URLs — the panel is served on admin.ggakingclub.com and middleware maps
+// these to the physical /app/admin/** routes. The members table (physical
+// /app/admin index) is exposed as /members.
 const NAV: NavGroup[] = [
-  { items: [{ label: "Overview", href: "/app/admin/overview", icon: "home" }] },
+  { items: [{ label: "Overview", href: "/overview", icon: "home" }] },
   {
     label: "People",
     items: [
-      { label: "Members", href: "/app/admin", icon: "users" },
-      { label: "Sessions", href: "/app/admin/sessions", icon: "activity" }
+      { label: "Members", href: "/members", icon: "users" },
+      { label: "Sessions", href: "/sessions", icon: "activity" }
     ]
   },
   {
     label: "Money",
     items: [
-      { label: "Withdrawals", href: "/app/admin/withdrawals", icon: "download", cap: "withdrawals" },
-      { label: "Treasury", href: "/app/admin/treasury", icon: "bank" },
-      { label: "Token reclaims", href: "/app/admin/reclaims", icon: "rotate" }
+      { label: "Withdrawals", href: "/withdrawals", icon: "download", cap: "withdrawals" },
+      { label: "Treasury", href: "/treasury", icon: "bank" },
+      { label: "Token reclaims", href: "/reclaims", icon: "rotate" }
     ]
   },
   {
     label: "Comms",
     items: [
-      { label: "Email campaigns", href: "/app/admin/campaigns", icon: "mail" },
-      { label: "Inbox", href: "/app/admin/inbox", icon: "inbox" }
+      { label: "Email campaigns", href: "/campaigns", icon: "mail" },
+      { label: "Inbox", href: "/inbox", icon: "inbox" }
     ]
   },
   {
     label: "Community",
     items: [
-      { label: "Circle", href: "/app/admin/circle", icon: "message" },
-      { label: "Live globe", href: "/app/admin/globe", icon: "globe" }
+      { label: "Circle", href: "/circle", icon: "message" },
+      { label: "Live globe", href: "/globe", icon: "globe" }
     ]
   },
   {
     label: "System",
     items: [
-      { label: "Audit log", href: "/app/admin/audit", icon: "file", cap: "settings" },
-      { label: "Logs", href: "/app/admin/logs", icon: "activity" },
-      { label: "System health", href: "/app/admin/system", icon: "activity" },
-      { label: "Settings", href: "/app/admin/settings", icon: "settings", cap: "settings" },
-      { label: "Admin access", href: "/app/admin/permissions", icon: "shield", founder: true }
+      { label: "Audit log", href: "/audit", icon: "file", cap: "settings" },
+      { label: "Logs", href: "/logs", icon: "activity" },
+      { label: "System health", href: "/system", icon: "activity" },
+      { label: "Settings", href: "/settings", icon: "settings", cap: "settings" },
+      { label: "Admin access", href: "/permissions", icon: "shield", founder: true }
     ]
   }
 ];
 
 function isActive(pathname: string, href: string): boolean {
-  if (href === "/app/admin") return pathname === "/app/admin";
+  if (href === "/members") return pathname === "/members";
   return pathname === href || pathname.startsWith(href + "/");
 }
 
@@ -189,7 +192,7 @@ function SidebarBody({
 }) {
   return (
     <div className="flex flex-col h-full">
-      <Link href="/app/admin/overview" onClick={onNavigate} className="flex items-center gap-2.5 px-2 pb-1">
+      <Link href="/overview" onClick={onNavigate} className="flex items-center gap-2.5 px-2 pb-1">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo.png" alt="GoogolPlex" className="h-6 w-auto object-contain" />
         <span className="font-semibold tracking-tight">GoogolPlex</span>
@@ -311,7 +314,7 @@ function CommandPalette({
     onClose();
     router.push(href);
   };
-  const gotoMember = (code: string) => go(`/app/admin?q=${encodeURIComponent(code)}`);
+  const gotoMember = (code: string) => go(`/members?q=${encodeURIComponent(code)}`);
   return (
     <div
       className="fixed inset-0 z-[70] bg-black/60 flex items-start justify-center px-4 pt-[14vh]"
@@ -450,7 +453,7 @@ function ShellInner({
             <Icon name="menu" />
           </button>
           <div className="flex items-center gap-2 text-sm min-w-0">
-            <Link href="/app/admin/overview" className="text-white/40 hover:text-white">Admin</Link>
+            <Link href="/overview" className="text-white/40 hover:text-white">Admin</Link>
             <span className="text-white/20">/</span>
             <span className="truncate">{title}</span>
           </div>

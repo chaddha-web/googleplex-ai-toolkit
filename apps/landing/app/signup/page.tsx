@@ -68,7 +68,7 @@ function FormRight() {
       const target = !user.profileCompletedAt
         ? "/app/setup/profile"
         : user.role === "admin"
-        ? "/app/admin/overview"
+        ? "https://admin.ggakingclub.com/overview"
         : "/app";
       setSuccessName(user.firstName || firstName || "");
       setSuccessTarget(target);
@@ -87,7 +87,8 @@ function FormRight() {
   useEffect(() => {
     if (stage !== "success") return;
     const t = setTimeout(() => {
-      router.push(successTarget);
+      if (successTarget.startsWith("http")) window.location.href = successTarget;
+      else router.push(successTarget);
     }, SUCCESS_HOLD_MS);
     return () => clearTimeout(t);
   }, [stage, successTarget, router]);
