@@ -56,9 +56,9 @@ function FormRight() {
         router.push("/app/setup/profile");
       } else {
         if (user.role === "admin") {
-          // The admin panel is on admin.ggakingclub.com (separate origin). Hand
-          // the just-issued refresh token over via the #h= hash so there's no
-          // second login — even when signing in from the marketing origin.
+          // The admin panel is on admin.ggakingclub.com (separate origin). The
+          // refresh cookie is shared across *.ggakingclub.com, so this is a
+          // plain redirect — the panel restores the session itself, no re-login.
           window.location.href = adminHandoffUrl("/overview");
         } else {
           router.push("/app");

@@ -26,30 +26,18 @@ export const WEB_URL = (
 ).replace(/\/$/, "");
 
 /**
- * Build a URL that hands the current refresh token to apps/web via a
- * `#h=<token>` hash. apps/web's HashReceiver picks it up, persists into
- * its own localStorage, then strips the hash so it never lingers.
+ * Cross-subdomain navigation is now a plain redirect — the refresh token lives
+ * in an httpOnly cookie shared across *.ggakingclub.com, so the destination
+ * origin restores the session itself (no token in the URL). These helpers just
+ * build the target URL.
  */
 export function webHandoffUrl(path: string = "/"): string {
-  const refresh = loadRefresh();
-  const base = `${WEB_URL}${path.startsWith("/") ? path : "/" + path}`;
-  if (!refresh) return base;
-  return `${base}#h=${encodeURIComponent(refresh)}`;
+  return `${WEB_URL}${path.startsWith("/") ? path : "/" + path}`;
 }
 
-/**
- * The admin panel lives on the admin.ggakingclub.com origin, which has its own
- * (empty) localStorage. Hand the current refresh token over via the `#h=` hash
- * — the landing HashReceiver on that origin persists it and strips the hash —
- * so opening the panel from an already-signed-in session doesn't force a
- * second login. Same mechanism as webHandoffUrl.
- */
 export const ADMIN_URL = "https://admin.ggakingclub.com";
 export function adminHandoffUrl(path: string = "/overview"): string {
-  const refresh = loadRefresh();
-  const base = `${ADMIN_URL}${path.startsWith("/") ? path : "/" + path}`;
-  if (!refresh) return base;
-  return `${base}#h=${encodeURIComponent(refresh)}`;
+  return `${ADMIN_URL}${path.startsWith("/") ? path : "/" + path}`;
 }
 
 export type Role = "user" | "admin";
@@ -108,12 +96,14 @@ type Tokens = {
   accessToken: string;
   /** ms epoch when the access token expires (server-issued ttl + now). */
   accessExpiresAt: number;
-  refreshToken: string;
   /** Refresh-row id of this device's session (sent as X-Current-Session). */
   sessionId: string | null;
 };
 
-const REFRESH_KEY = "gplex.refresh";
+// The refresh token now lives in an httpOnly cookie (set by the auth service),
+// not localStorage — JS can't read it. This stale key is cleaned up on load for
+// users migrating from the old localStorage scheme.
+const LEGACY_REFRESH_KEY = "gplex.refresh";
 const SESSION_ID_KEY = "gplex.session.id";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -133,15 +123,10 @@ export function subscribeAuth(fn: Listener): () => void {
   return () => listeners.delete(fn);
 }
 
-function persistRefresh(token: string | null) {
+/** One-time cleanup of the pre-cookie localStorage refresh token. */
+function purgeLegacyRefresh() {
   if (typeof window === "undefined") return;
-  if (token) localStorage.setItem(REFRESH_KEY, token);
-  else localStorage.removeItem(REFRESH_KEY);
-}
-
-function loadRefresh(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(REFRESH_KEY);
+  localStorage.removeItem(LEGACY_REFRESH_KEY);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -201,6 +186,9 @@ export async function verifyOtp(opts: {
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      // credentials:include so the browser stores the httpOnly refresh cookie
+      // the auth service sets on a successful verify.
+      credentials: "include",
       body: JSON.stringify({ email: opts.email, code: opts.code })
     },
     { retries: 2, baseDelayMs: 400 }
@@ -234,7 +222,9 @@ export async function tryRestore(): Promise<User | null> {
     return me;
   }
   if (restoreInFlight) return restoreInFlight;
-  if (!loadRefresh()) return null;
+  // Can't read the httpOnly cookie from JS, so always attempt a refresh; the
+  // server 401s (harmlessly) when there's no session cookie.
+  purgeLegacyRefresh();
   restoreInFlight = (async () => {
     try {
       // Go through the shared single-flight so a concurrent authedFetch
@@ -975,20 +965,18 @@ export const sessions = {
 };
 
 export async function signOut(): Promise<void> {
-  const refresh = loadRefresh();
-  if (refresh) {
-    try {
-      await fetch(`${AUTH_BASE}/auth/logout`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken: refresh })
-      });
-    } catch {
-      /* best-effort */
-    }
+  try {
+    // credentials:include so the auth service can read + revoke the refresh
+    // cookie and clear it. No token in the body anymore.
+    await fetch(`${AUTH_BASE}/auth/logout`, {
+      method: "POST",
+      credentials: "include"
+    });
+  } catch {
+    /* best-effort */
   }
   memTokens = null;
-  persistRefresh(null);
+  purgeLegacyRefresh();
   persistSessionId(null);
   emit(null);
 }
@@ -1041,17 +1029,15 @@ function refreshOnce(): Promise<string | null> {
   // NB: the in-flight check and assignment must be synchronous (no await
   // between them) so concurrent callers coalesce onto one request.
   if (refreshInFlight) return refreshInFlight;
-  const refresh = loadRefresh();
-  if (!refresh) return Promise.resolve(null);
   refreshInFlight = (async () => {
     try {
+      // The refresh token is sent automatically as the httpOnly cookie;
+      // credentials:include is required for the browser to attach it.
       const res = await fetch(`${AUTH_BASE}/auth/refresh`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken: refresh })
+        credentials: "include"
       });
       if (!res.ok) {
-        persistRefresh(null);
         memTokens = null;
         return null;
       }
@@ -1070,17 +1056,14 @@ function refreshOnce(): Promise<string | null> {
 function acceptTokens(data: {
   accessToken: string;
   accessTokenExpiresIn: number;
-  refreshToken: string;
   sessionId?: string | null;
 }) {
   const sid = data.sessionId ?? memTokens?.sessionId ?? loadSessionId();
   memTokens = {
     accessToken: data.accessToken,
     accessExpiresAt: Date.now() + data.accessTokenExpiresIn * 1000,
-    refreshToken: data.refreshToken,
     sessionId: sid ?? null
   };
-  persistRefresh(data.refreshToken);
   if (sid) persistSessionId(sid);
 }
 

@@ -16,15 +16,13 @@ import {
 import crypto from "node:crypto";
 import { notify } from "../notify.js";
 import { isFounder } from "../permissions.js";
+import { setRefreshCookie, clearRefreshCookie, readRefreshCookie } from "../cookies.js";
 import { encryptSecret, decryptSecret } from "../crypto.js";
 
 // 10 billion GoogolPlex Seva Credit — generated once, on demand, by an active
 // member against their deposited $1 (see POST /auth/seva/generate).
 const TOKENS_PER_MEMBER = 10_000_000_000;
 const SEVA_CREDIT_AMOUNT = TOKENS_PER_MEMBER;
-
-type RefreshBody = { refreshToken?: unknown };
-type LogoutBody = { refreshToken?: unknown };
 
 export async function authRoutes(app: FastifyInstance) {
   // ────────────────────────────────────────────────────────────────────────
@@ -45,22 +43,27 @@ export async function authRoutes(app: FastifyInstance) {
   // any failure (unknown/expired/reused). On reuse, the entire family is
   // burned (handled inside consumeRefreshToken).
   app.post("/auth/refresh", async (req, reply) => {
-    const body = (req.body ?? {}) as RefreshBody;
-    const presented = body.refreshToken;
-    if (typeof presented !== "string" || presented.length < 16) {
-      return reply.code(400).send({ error: "Missing refresh token." });
+    // The refresh token rides in an httpOnly cookie, never the body.
+    const presented = readRefreshCookie(req);
+    if (!presented || presented.length < 16) {
+      return reply.code(401).send({ error: "No session." });
     }
 
     const result = consumeRefreshToken(presented);
     if (!result.ok) {
+      // Burned / unknown / expired — drop the stale cookie so the client stops
+      // retrying with it.
+      clearRefreshCookie(req, reply);
       return reply.code(401).send({ error: `Invalid refresh token (${result.reason}).` });
     }
 
     const user = stmts.user.byId.get(result.userId);
     if (!user) {
+      clearRefreshCookie(req, reply);
       return reply.code(401).send({ error: "User no longer exists." });
     }
     if (user.suspended_at) {
+      clearRefreshCookie(req, reply);
       return reply.code(401).send({ error: "This account is suspended." });
     }
 
@@ -78,26 +81,25 @@ export async function authRoutes(app: FastifyInstance) {
     setReplacedBy(presentedHash, refresh.id);
 
     const accessToken = await signAccessToken(user);
+    setRefreshCookie(req, reply, refresh.token);
 
     return reply.send({
       ok: true,
       accessToken,
       accessTokenExpiresIn: TTL.access,
-      refreshToken: refresh.token,
-      refreshTokenExpiresAt: refresh.expiresAt,
       // New session id after rotation — UI must update its pinned value.
       sessionId: refresh.id
     });
   });
 
   // ────────────────────────────────────────────────────────────────────────
-  // POST /auth/logout — revoke a single refresh (this session only).
+  // POST /auth/logout — revoke this session's refresh + clear the cookie.
   app.post("/auth/logout", async (req, reply) => {
-    const body = (req.body ?? {}) as LogoutBody;
-    const token = body.refreshToken;
-    if (typeof token === "string" && token.length >= 16) {
+    const token = readRefreshCookie(req);
+    if (token && token.length >= 16) {
       revokeRefreshToken(token);
     }
+    clearRefreshCookie(req, reply);
     return reply.send({ ok: true });
   });
 

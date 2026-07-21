@@ -13,6 +13,7 @@ import {
 } from "../otp.js";
 import { sendSignupOtp, sendLoginOtp, sendWelcomeEmail, sendLoginAlertEmail } from "../emails.js";
 import { issueRefreshToken, signAccessToken, signSecureToken, TTL } from "../jwt.js";
+import { setRefreshCookie } from "../cookies.js";
 import { notify } from "../notify.js";
 import { lookupGeo } from "../geoip.js";
 
@@ -284,20 +285,20 @@ export async function otpRoutes(app: FastifyInstance) {
         .send({ error: "This account is suspended. Contact support to restore access." });
     }
 
-    // Issue access + refresh.
+    // Issue access + refresh. The refresh token goes into an httpOnly cookie
+    // (never the body / localStorage) — see cookies.ts.
     const accessToken = await signAccessToken(user);
     const refresh = issueRefreshToken({
       userId: user.id,
       userAgent: (req.headers["user-agent"] as string | undefined) ?? null,
       ip: req.ip
     });
+    setRefreshCookie(req, reply, refresh.token);
 
     return reply.send({
       ok: true,
       accessToken,
       accessTokenExpiresIn: TTL.access,
-      refreshToken: refresh.token,
-      refreshTokenExpiresAt: refresh.expiresAt,
       // The session id is the refresh row id. UIs pin it so they can mark
       // "this device" on the sessions list and protect it from revoke-others.
       sessionId: refresh.id,

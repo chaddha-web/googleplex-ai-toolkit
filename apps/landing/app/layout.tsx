@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { CookieConsent } from "@/components/cookie-consent";
 import { PresenceBeacon } from "@/components/presence-beacon";
-import { HashReceiver } from "@/components/hash-receiver";
 import "./globals.css";
 
 const SITE_URL =
@@ -140,7 +139,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="bg-black text-white">
-        <HashReceiver />
         {children}
         <CookieConsent />
         <PresenceBeacon />

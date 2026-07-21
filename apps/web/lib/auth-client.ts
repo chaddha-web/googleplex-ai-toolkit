@@ -85,13 +85,14 @@ type Tokens = {
   accessToken: string;
   /** ms epoch when the access token expires (server-issued ttl + now). */
   accessExpiresAt: number;
-  refreshToken: string;
   /** Refresh-row id of the current session — tagged on every API call as
    *  X-Current-Session so the sessions endpoint knows which row is "us". */
   sessionId: string | null;
 };
 
-const REFRESH_KEY = "gplex.refresh";
+// Refresh token now lives in an httpOnly cookie (shared across *.ggakingclub.com),
+// not localStorage. This stale key is purged on load for migrating users.
+const LEGACY_REFRESH_KEY = "gplex.refresh";
 const SESSION_ID_KEY = "gplex.session.id";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -111,15 +112,10 @@ export function subscribeAuth(fn: Listener): () => void {
   return () => listeners.delete(fn);
 }
 
-function persistRefresh(token: string | null) {
+/** One-time cleanup of the pre-cookie localStorage refresh token. */
+function purgeLegacyRefresh() {
   if (typeof window === "undefined") return;
-  if (token) localStorage.setItem(REFRESH_KEY, token);
-  else localStorage.removeItem(REFRESH_KEY);
-}
-
-function loadRefresh(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(REFRESH_KEY);
+  localStorage.removeItem(LEGACY_REFRESH_KEY);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -164,6 +160,8 @@ export async function verifyOtp(opts: {
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      // credentials:include so the browser stores the httpOnly refresh cookie.
+      credentials: "include",
       body: JSON.stringify({ email: opts.email, code: opts.code })
     },
     { retries: 2, baseDelayMs: 400 }
@@ -197,7 +195,9 @@ export async function tryRestore(): Promise<User | null> {
     return me;
   }
   if (restoreInFlight) return restoreInFlight;
-  if (!loadRefresh()) return null;
+  // Can't read the httpOnly cookie from JS — always attempt a refresh; the
+  // server 401s harmlessly when there's no session cookie.
+  purgeLegacyRefresh();
   restoreInFlight = (async () => {
     try {
       // Go through the shared single-flight so a concurrent authedFetch
@@ -554,20 +554,18 @@ export async function sessionHeartbeat(section: string): Promise<void> {
 }
 
 export async function signOut(): Promise<void> {
-  const refresh = loadRefresh();
-  if (refresh) {
-    try {
-      await fetch(`${AUTH_BASE}/auth/logout`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken: refresh })
-      });
-    } catch {
-      /* best-effort */
-    }
+  try {
+    // credentials:include so the auth service reads + revokes + clears the
+    // refresh cookie. No body token anymore.
+    await fetch(`${AUTH_BASE}/auth/logout`, {
+      method: "POST",
+      credentials: "include"
+    });
+  } catch {
+    /* best-effort */
   }
   memTokens = null;
-  persistRefresh(null);
+  purgeLegacyRefresh();
   persistSessionId(null);
   emit(null);
 }
@@ -620,17 +618,15 @@ function refreshOnce(): Promise<string | null> {
   // NB: the in-flight check and assignment must be synchronous (no await
   // between them) so concurrent callers coalesce onto one request.
   if (refreshInFlight) return refreshInFlight;
-  const refresh = loadRefresh();
-  if (!refresh) return Promise.resolve(null);
   refreshInFlight = (async () => {
     try {
+      // Refresh token sent automatically as the httpOnly cookie; credentials
+      // include is required for the browser to attach + store it.
       const res = await fetch(`${AUTH_BASE}/auth/refresh`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken: refresh })
+        credentials: "include"
       });
       if (!res.ok) {
-        persistRefresh(null);
         memTokens = null;
         return null;
       }
@@ -649,7 +645,6 @@ function refreshOnce(): Promise<string | null> {
 function acceptTokens(data: {
   accessToken: string;
   accessTokenExpiresIn: number;
-  refreshToken: string;
   sessionId?: string | null;
 }) {
   // Carry forward an existing sessionId if the server didn't include one
@@ -659,10 +654,8 @@ function acceptTokens(data: {
   memTokens = {
     accessToken: data.accessToken,
     accessExpiresAt: Date.now() + data.accessTokenExpiresIn * 1000,
-    refreshToken: data.refreshToken,
     sessionId: sid ?? null
   };
-  persistRefresh(data.refreshToken);
   if (sid) persistSessionId(sid);
 }
 
