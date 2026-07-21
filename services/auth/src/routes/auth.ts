@@ -15,6 +15,7 @@ import {
 } from "../jwt.js";
 import crypto from "node:crypto";
 import { notify } from "../notify.js";
+import { isFounder } from "../permissions.js";
 import { encryptSecret, decryptSecret } from "../crypto.js";
 
 // 10 billion GoogolPlex Seva Credit — generated once, on demand, by an active
@@ -486,8 +487,13 @@ export async function authRoutes(app: FastifyInstance) {
       notifications_opt_in: number;
       studio_unlocked_at: number | null;
       suspended_at: number | null;
+      suspended_by: string | null;
       created_at: number;
     }>;
+
+    // Resolve the founder's user id so the UI can tell which suspensions the
+    // founder applied (a sub-admin can't lift those — enforced server-side too).
+    const founderId = rows.find((r) => isFounder(r.email))?.id ?? null;
 
     return reply.send({
       ok: true,
@@ -510,6 +516,7 @@ export async function authRoutes(app: FastifyInstance) {
         notificationsOptIn: u.notifications_opt_in === 1,
         studioUnlocked: !!u.studio_unlocked_at,
         suspendedAt: u.suspended_at,
+        suspendedByFounder: !!u.suspended_by && u.suspended_by === founderId,
         createdAt: u.created_at
       }))
     });

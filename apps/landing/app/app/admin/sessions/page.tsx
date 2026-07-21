@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-context";
+import { useAdminAccess } from "@/components/admin/access";
 import { sessions, type AdminSessionRow, type OnlineMember } from "@/lib/auth-client";
 // (breadcrumb + chrome now come from the admin shell layout)
 
@@ -45,6 +46,7 @@ function device(ua: string | null): string {
 
 export default function AdminSessionsPage() {
   const { user } = useAuth();
+  const access = useAdminAccess();
   const router = useRouter();
   const [online, setOnline] = useState<OnlineMember[] | null>(null);
   const [rows, setRows] = useState<AdminSessionRow[] | null>(null);
@@ -229,6 +231,9 @@ export default function AdminSessionsPage() {
                         <td className="px-4 py-3 text-right">
                           {revoked ? (
                             <span className="text-white/30 text-xs">Revoked</span>
+                          ) : r.isFounder && !access.isFounder ? (
+                            // Hierarchy: a sub-admin can't revoke the founder's session.
+                            <span className="text-white/25 text-xs" title="The founder is above your role.">Protected</span>
                           ) : (
                             <button
                               type="button"

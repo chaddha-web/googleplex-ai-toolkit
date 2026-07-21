@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { db, stmts } from "../db.js";
 import { verifyAccessToken } from "../jwt.js";
 import { recordActivity, onlineMembers, onlineUserIds } from "../session-activity.js";
-import { actingAgainstFounder } from "../permissions.js";
+import { actingAgainstFounder, isFounder } from "../permissions.js";
 import { notify } from "../notify.js";
 
 /**
@@ -38,6 +38,7 @@ type SessionAdminPublic = SessionPublic & {
   code11: string;
   role: "user" | "admin";
   online?: boolean;
+  isFounder?: boolean; // row belongs to the founder — UI hides destructive actions for sub-admins
 };
 
 export async function sessionsRoutes(app: FastifyInstance) {
@@ -167,7 +168,8 @@ export async function sessionsRoutes(app: FastifyInstance) {
           last_name: r.last_name,
           code11: r.code11,
           role: r.role,
-          online: online.has(r.user_id)
+          online: online.has(r.user_id),
+          isFounder: isFounder(r.email)
         })
       );
     return reply.send({ sessions: filtered, scope, onlineCount: online.size });

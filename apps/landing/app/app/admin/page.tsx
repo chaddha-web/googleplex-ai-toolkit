@@ -315,6 +315,15 @@ export default function AdminHome() {
                       </Td>
                       <Td>
                         {u.suspendedAt ? (
+                          u.suspendedByFounder && !isFounder ? (
+                            // Hierarchy: the founder applied this — a sub-admin can't lift it.
+                            <span
+                              title="Suspended by the founder — only the founder can lift it."
+                              className="text-[10px] tracking-[0.15em] uppercase px-2 py-1 rounded-full bg-rose-500/10 text-rose-300/70 ring-1 ring-rose-400/25 cursor-not-allowed"
+                            >
+                              Suspended
+                            </span>
+                          ) : (
                           <button
                             type="button"
                             title="Suspended — click to lift"
@@ -333,6 +342,7 @@ export default function AdminHome() {
                           >
                             Suspended
                           </button>
+                          )
                         ) : (
                           (() => {
                             const t = tierOf(u);
@@ -429,6 +439,7 @@ export default function AdminHome() {
         <MemberModal
           user={memberFor}
           canSuspend={myPerms.includes("suspend")}
+          viewerIsFounder={isFounder}
           onChanged={markSuspended}
           onClose={() => setMemberFor(null)}
         />
@@ -552,11 +563,13 @@ function FlushModal({ user, onClose }: { user: AdminUserRow; onClose: () => void
 function MemberModal({
   user,
   canSuspend,
+  viewerIsFounder,
   onChanged,
   onClose
 }: {
   user: AdminUserRow;
   canSuspend: boolean;
+  viewerIsFounder: boolean;
   onChanged: (id: string, suspendedAt: number | null) => void;
   onClose: () => void;
 }) {
@@ -796,18 +809,28 @@ function MemberModal({
                     : "Signs them out everywhere and blocks sign-in."}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={toggleSuspend}
-                disabled={suspendBusy}
-                className={`shrink-0 rounded-full text-sm font-medium px-5 py-2 disabled:opacity-40 transition-colors ${
-                  suspendedAt
-                    ? "bg-emerald-400 text-black hover:bg-emerald-300"
-                    : "bg-rose-500/90 text-white hover:bg-rose-500"
-                }`}
-              >
-                {suspendBusy ? "Working…" : suspendedAt ? "Unsuspend" : "Suspend"}
-              </button>
+              {suspendedAt && user.suspendedByFounder && !viewerIsFounder ? (
+                // Hierarchy: the founder applied this — a sub-admin can't lift it.
+                <span
+                  title="Suspended by the founder — only the founder can lift it."
+                  className="shrink-0 rounded-full text-xs px-4 py-2 bg-white/5 text-white/40 ring-1 ring-white/10 cursor-not-allowed"
+                >
+                  Founder-locked
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={toggleSuspend}
+                  disabled={suspendBusy}
+                  className={`shrink-0 rounded-full text-sm font-medium px-5 py-2 disabled:opacity-40 transition-colors ${
+                    suspendedAt
+                      ? "bg-emerald-400 text-black hover:bg-emerald-300"
+                      : "bg-rose-500/90 text-white hover:bg-rose-500"
+                  }`}
+                >
+                  {suspendBusy ? "Working…" : suspendedAt ? "Unsuspend" : "Suspend"}
+                </button>
+              )}
             </div>
           </div>
         )}

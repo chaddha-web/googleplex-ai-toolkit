@@ -312,6 +312,7 @@ export type AdminUserRow = {
   tokensMinted: number;
   notificationsOptIn: boolean;
   suspendedAt: number | null;
+  suspendedByFounder?: boolean;
   createdAt: number;
 };
 
@@ -897,6 +898,7 @@ export type AdminSessionRow = SessionRow & {
   code11: string;
   role: "user" | "admin";
   online?: boolean;
+  isFounder?: boolean;
 };
 
 /** A member actively using the platform right now (live heartbeat). */
