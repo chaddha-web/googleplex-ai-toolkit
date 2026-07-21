@@ -1,7 +1,7 @@
 # Design — Refresh token in an httpOnly cookie (cross-subdomain session)
 
 Date: 2026-07-21
-Status: approved (pending spec review)
+Status: SHIPPED (commit d19cd4b, deployed + verified live 2026-07-21)
 
 ## Problem
 
