@@ -3,7 +3,24 @@ import { db, stmts } from "../db.js";
 import { verifyAccessToken } from "../jwt.js";
 import { recordActivity, onlineMembers, onlineUserIds } from "../session-activity.js";
 import { actingAgainstFounder, isFounder } from "../permissions.js";
+import { lookupGeo } from "../geoip.js";
 import { notify } from "../notify.js";
+
+const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
+
+/** Human "City, Country" (or Region/Country) from an IP, or null. */
+function areaLabel(ip: string | null | undefined): string | null {
+  const geo = lookupGeo(ip);
+  if (!geo) return null;
+  let country: string | null = null;
+  try {
+    country = geo.country ? regionNames.of(geo.country) ?? geo.country : null;
+  } catch {
+    country = geo.country || null;
+  }
+  const parts = [geo.city || geo.region || null, country].filter(Boolean);
+  return parts.length ? parts.join(", ") : null;
+}
 
 /**
  * Session management. A "session" is one row in refresh_tokens; the row id
@@ -39,6 +56,7 @@ type SessionAdminPublic = SessionPublic & {
   role: "user" | "admin";
   online?: boolean;
   isFounder?: boolean; // row belongs to the founder — UI hides destructive actions for sub-admins
+  area?: string | null; // resolved "City, Country" from the IP (hidden for the founder to sub-admins)
 };
 
 export async function sessionsRoutes(app: FastifyInstance) {
@@ -143,6 +161,14 @@ export async function sessionsRoutes(app: FastifyInstance) {
     const userId = req.query?.userId ? String(req.query.userId) : null;
     const q = String(req.query?.q || "").toLowerCase().trim();
     const online = onlineUserIds();
+    const viewerIsFounder = isFounder(me.email);
+
+    // Collapse repeats: the same person on the same device/IP can hold several
+    // live session families (e.g. re-logins, or sessions orphaned by the cookie
+    // migration that linger until they expire). Show one row per
+    // user+device+IP — the most recent (rows are already newest-first).
+    const seen = new Set<string>();
+
     const filtered = rows
       .filter((r) => (userId ? r.user_id === userId : true))
       .filter((r) =>
@@ -152,13 +178,22 @@ export async function sessionsRoutes(app: FastifyInstance) {
             (r.ip || "").toLowerCase().includes(q)
           : true
       )
-      .map(
-        (r): SessionAdminPublic => ({
+      .filter((r) => {
+        const key = `${r.user_id}|${r.ip ?? ""}|${r.user_agent ?? ""}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map((r): SessionAdminPublic => {
+        // Hierarchy/privacy: the founder's IP + location are hidden from every
+        // non-founder admin. The founder still sees their own.
+        const hideGeo = isFounder(r.email) && !viewerIsFounder;
+        return {
           id: r.id,
           user_id: r.user_id,
           family_id: r.family_id,
           user_agent: r.user_agent,
-          ip: r.ip,
+          ip: hideGeo ? null : r.ip,
           created_at: r.created_at,
           expires_at: r.expires_at,
           revoked_at: r.revoked_at,
@@ -169,9 +204,10 @@ export async function sessionsRoutes(app: FastifyInstance) {
           code11: r.code11,
           role: r.role,
           online: online.has(r.user_id),
-          isFounder: isFounder(r.email)
-        })
-      );
+          isFounder: isFounder(r.email),
+          area: hideGeo ? null : areaLabel(r.ip)
+        };
+      });
     return reply.send({ sessions: filtered, scope, onlineCount: online.size });
   });
 

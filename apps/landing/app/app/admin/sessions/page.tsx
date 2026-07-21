@@ -191,6 +191,7 @@ export default function AdminSessionsPage() {
                   <th className="px-4 py-3 font-medium">Member</th>
                   <th className="px-4 py-3 font-medium">Device</th>
                   <th className="px-4 py-3 font-medium">IP</th>
+                  <th className="px-4 py-3 font-medium">Area</th>
                   <th className="px-4 py-3 font-medium">Now</th>
                   <th className="px-4 py-3 font-medium">Last active</th>
                   <th className="px-4 py-3 font-medium">Signed in</th>
@@ -200,9 +201,9 @@ export default function AdminSessionsPage() {
               </thead>
               <tbody>
                 {rows === null ? (
-                  <tr><td colSpan={8} className="px-4 py-12 text-center text-white/40">Loading sessions…</td></tr>
+                  <tr><td colSpan={9} className="px-4 py-12 text-center text-white/40">Loading sessions…</td></tr>
                 ) : rows.length === 0 ? (
-                  <tr><td colSpan={8} className="px-4 py-12 text-center text-white/40">No sessions.</td></tr>
+                  <tr><td colSpan={9} className="px-4 py-12 text-center text-white/40">No sessions.</td></tr>
                 ) : (
                   rows.map((r) => {
                     const revoked = r.revoked_at != null;
@@ -213,7 +214,20 @@ export default function AdminSessionsPage() {
                           <p className="text-white/40 text-xs">{r.email}</p>
                         </td>
                         <td className="px-4 py-3 text-white/70">{device(r.user_agent)}</td>
-                        <td className="px-4 py-3 font-mono text-xs text-white/60">{r.ip ?? "—"}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-white/60">
+                          {r.isFounder && r.ip == null ? (
+                            <span className="text-white/25 not-italic" title="Hidden — the founder's location is private to sub-admins.">Hidden</span>
+                          ) : (
+                            r.ip ?? "—"
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-white/60">
+                          {r.isFounder && r.area == null && r.ip == null ? (
+                            <span className="text-white/25">Hidden</span>
+                          ) : (
+                            r.area ?? "—"
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           {r.online ? (
                             <span className="inline-flex items-center gap-1.5 text-emerald-300 text-xs">

@@ -904,6 +904,7 @@ export type AdminSessionRow = SessionRow & {
   role: "user" | "admin";
   online?: boolean;
   isFounder?: boolean;
+  area?: string | null;
 };
 
 /** A member actively using the platform right now (live heartbeat). */
