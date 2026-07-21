@@ -29,7 +29,9 @@ services:
       - --api.dashboard=false
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
-      - --providers.docker.network=gplex-net
+      # Default network Traefik dials backends on; wallet overrides to backend
+      # via its own traefik.docker.network label (it is not on the frontend net).
+      - --providers.docker.network=gplex-frontend
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
       # Auto-redirect HTTP → HTTPS
@@ -47,8 +49,10 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - letsencrypt:/letsencrypt
+    # Traefik sits on BOTH tiers so it can route to frontend + backend services.
     networks:
-      - gplex-net
+      - frontend-net
+      - backend-net
 
   landing:
     build:
@@ -90,8 +94,9 @@ services:
       - traefik.http.routers.adminpanel.entrypoints=websecure
       - traefik.http.routers.adminpanel.tls.certresolver=le
       - traefik.http.routers.adminpanel.service=landing
+      - traefik.docker.network=gplex-frontend
     networks:
-      - gplex-net
+      - frontend-net
     depends_on:
       - auth
 
@@ -119,8 +124,9 @@ services:
       - traefik.http.routers.web.entrypoints=websecure
       - traefik.http.routers.web.tls.certresolver=le
       - traefik.http.services.web.loadbalancer.server.port=3000
+      - traefik.docker.network=gplex-frontend
     networks:
-      - gplex-net
+      - frontend-net
     depends_on:
       - landing
 
@@ -157,8 +163,12 @@ services:
       - traefik.http.routers.auth.entrypoints=websecure
       - traefik.http.routers.auth.tls.certresolver=le
       - traefik.http.services.auth.loadbalancer.server.port=4200
+      - traefik.docker.network=gplex-frontend
+    # auth is dual-homed: the frontend tier (landing/web) calls it, AND wallet
+    # calls it from the backend tier. It is the only shared service.
     networks:
-      - gplex-net
+      - frontend-net
+      - backend-net
 
   wallet:
     image: gplex-monorepo:latest
@@ -182,8 +192,11 @@ services:
       - traefik.http.routers.wallet.entrypoints=websecure
       - traefik.http.routers.wallet.tls.certresolver=le
       - traefik.http.services.wallet.loadbalancer.server.port=4201
+      # wallet lives ONLY on the backend tier — unreachable from landing/web/media.
+      # Traefik reaches it via the backend net (override of the frontend default).
+      - traefik.docker.network=gplex-backend
     networks:
-      - gplex-net
+      - backend-net
     depends_on:
       - auth
 
@@ -207,15 +220,22 @@ services:
       - traefik.http.routers.media.entrypoints=websecure
       - traefik.http.routers.media.tls.certresolver=le
       - traefik.http.services.media.loadbalancer.server.port=80
+      - traefik.docker.network=gplex-frontend
     networks:
-      - gplex-net
+      - frontend-net
 
 volumes:
   auth-data:
   wallet-data:
   letsencrypt:
 
+# Micro-segmentation: the fund-moving wallet service sits on backend-net only,
+# isolated from the internet-facing landing/web/media tier. auth is dual-homed
+# (both tiers legitimately call it); Traefik straddles both to route ingress.
 networks:
-  gplex-net:
-    name: gplex-net
+  frontend-net:
+    name: gplex-frontend
+    driver: bridge
+  backend-net:
+    name: gplex-backend
     driver: bridge
