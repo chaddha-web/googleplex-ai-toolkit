@@ -44,6 +44,14 @@ export function middleware(req: NextRequest) {
       url.pathname = toClean(pathname);
       return NextResponse.redirect(url);
     }
+    // The member area (/app dashboard) is NOT served on the admin subdomain —
+    // only the panel + the auth flow. Bounce it to the panel. /app/setup/* is
+    // allowed through so an admin can still complete profile/wallet setup here.
+    if (pathname === "/app" || (pathname.startsWith("/app/") && !pathname.startsWith("/app/setup"))) {
+      const url = req.nextUrl.clone();
+      url.pathname = "/overview";
+      return NextResponse.redirect(url);
+    }
     // Bare subdomain root opens the overview.
     if (pathname === "/") {
       const url = req.nextUrl.clone();
