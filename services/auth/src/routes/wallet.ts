@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { db, stmts } from "../db.js";
 import crypto from "node:crypto";
 import { verifyAccessToken } from "../jwt.js";
+import { actingAgainstFounder } from "../permissions.js";
 import { notify } from "../notify.js";
 import { performLiquidityExit } from "../liquidity.js";
 import { sendWalletActivatedEmail, sendDepositEmail, sendWithdrawalEmail, sendWalletOtp } from "../emails.js";
@@ -523,6 +524,10 @@ export async function walletRoutes(app: FastifyInstance) {
     const { id } = req.params;
     const targetUser = stmts.user.byId.get(id);
     if (!targetUser) return reply.code(404).send({ error: "User not found." });
+    // Hierarchy: a sub-admin can't alter the founder's wallet status.
+    if (actingAgainstFounder(user.email, targetUser.email)) {
+      return reply.code(403).send({ error: "Not allowed — the founder is above your role." });
+    }
 
     const body = (req.body ?? {}) as WalletStatusBody;
     const newStatus = body.status;
