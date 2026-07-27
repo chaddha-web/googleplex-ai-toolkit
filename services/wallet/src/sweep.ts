@@ -9,7 +9,7 @@
  * the physical coins are consolidated. Every broadcast leg is recorded in the
  * ops-only `treasury_sweeps` audit table.
  *
- * EVM (ETH/BSC) is fully implemented (preview + execute). Tron and BTC report
+ * EVM (ETH/BSC/Polygon) is fully implemented (preview + execute). Tron and BTC report
  * as "pending" — their signing paths are not enabled until validated on-chain,
  * so nothing untested ever broadcasts real funds.
  */
@@ -50,7 +50,7 @@ export type SweepResult = {
   legs: Array<SweepLeg & { txHash?: string; status: string; error?: string }>;
 };
 
-const EVM_CHAINS = ["eth", "bsc"] as const;
+const EVM_CHAINS = ["eth", "bsc", "polygon"] as const;
 type EvmChain = (typeof EVM_CHAINS)[number];
 
 function human(raw: bigint, decimals: number): number {
@@ -228,7 +228,7 @@ export async function previewUser(userId: string): Promise<SweepPlan> {
   const plan: SweepPlan = {
     userId,
     userIndex: row.user_index,
-    supported: ["eth", "bsc", "tron", "btc"],
+    supported: ["eth", "bsc", "polygon", "tron", "btc"],
     pending: [],
     legs: [],
     skipped: []
@@ -236,6 +236,7 @@ export async function previewUser(userId: string): Promise<SweepPlan> {
   const evmTreasury = await treasuryAddress("evm");
   await planEvm("eth", row.eth, evmTreasury, plan);
   await planEvm("bsc", row.bsc, evmTreasury, plan);
+  await planEvm("polygon", row.polygon || row.eth, evmTreasury, plan);
   if (row.tron) await planTron(row.tron, await treasuryAddress("tron"), plan);
   if (row.btc) await planBtc(row.btc, await treasuryAddress("btc"), plan);
   return plan;
@@ -281,12 +282,13 @@ export async function executeUser(userId: string, adminId: string): Promise<Swee
     to: string
   ): SweepLeg => ({ chain, symbol, kind, amountRaw: raw.toString(), amount: human(raw, dec), from, to });
 
-  // ── EVM (ETH + BSC share the address/key) ──────────────────────────────
+  // ── EVM (ETH + BSC + Polygon share the address/key) ────────────────────
   try {
     const priv = deriveUserPrivKey(await masterMnemonic("evm"), "eth", row.user_index);
     const treasury = await treasuryAddress("evm");
     for (const chain of EVM_CHAINS) {
-      const addr = chain === "eth" ? row.eth : row.bsc;
+      const addr =
+        chain === "eth" ? row.eth : chain === "polygon" ? row.polygon || row.eth : row.bsc;
       const gasPrice = await evm.evmGasPrice(chain);
       const tokenGas = evm.EVM_ERC20_GAS * gasPrice;
       for (const t of TOKENS.filter((t) => t.chain === chain && !t.native && t.symbol !== "PARTY")) {

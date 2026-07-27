@@ -4,24 +4,32 @@
  * for the transaction history. (reconcile.ts reads balances; this reads the
  * transfers behind them.)
  *
- *   - EVM (ETH/BSC): Etherscan V2 unified API (one ETHERSCAN_API_KEY, chainid
- *     switch) for native + ERC20/BEP20 transfers. Falls back to viem getLogs
- *     (bounded) for tokens if no key is set.
+ *   - EVM (ETH/BSC/Polygon): Etherscan V2 unified API (one ETHERSCAN_API_KEY,
+ *     chainid switch) for native + ERC20/BEP20 transfers. Falls back to viem
+ *     getLogs (bounded) for tokens if no key is set.
  *   - TRON: TronGrid — TRC20 transfers + native TRX transfers (TRON_API_KEY).
  *   - BTC: mempool.space address txs (no key).
  *
  * All read-only; callers persist + dedupe by tx hash. Per-chain failures are
  * swallowed so one bad provider doesn't sink the whole scan.
+ *
+ * Transfers sent BY the company treasury are dropped (see `dropTreasurySends`)
+ * — otherwise a sweep's gas-funding leg, or a member withdrawing to their own
+ * deposit address, would be indexed as a fresh deposit and credited twice.
  */
 
 import { createHash } from "node:crypto";
 import { parseAbiItem } from "viem";
 import { ethClient } from "./chain/eth.js";
 import { bscClient } from "./chain/bsc.js";
+import { polygonClient } from "./chain/polygon.js";
 import { TOKENS } from "./tokens.js";
+import { treasurySenderAddresses } from "./treasury.js";
+
+type EvmScanChain = "eth" | "bsc" | "polygon";
 
 export type IncomingTransfer = {
-  chain: "eth" | "bsc" | "tron" | "btc";
+  chain: "eth" | "bsc" | "polygon" | "tron" | "btc";
   symbol: string;
   amountRaw: string; // base units
   txHash: string;
@@ -38,7 +46,15 @@ const BTC_API = process.env.BTC_API_URL ?? "https://mempool.space/api";
 const EVM_LOG_RANGE = BigInt(process.env.EVM_LOG_RANGE ?? 200_000);
 const ETH_RPC = process.env.ETH_RPC_URL ?? "";
 const BSC_RPC = process.env.BSC_RPC_URL ?? "";
+const POLYGON_RPC = process.env.POLYGON_RPC_URL ?? "";
 const isAlchemy = (u: string) => /alchemy\.com/i.test(u);
+
+/** Per-chain constants for the EVM scanners. Etherscan V2 uses one key + chainid. */
+const EVM_META: Record<EvmScanChain, { chainId: number; nativeSym: string; rpc: string }> = {
+  eth:     { chainId: 1,   nativeSym: "ETH", rpc: ETH_RPC },
+  bsc:     { chainId: 56,  nativeSym: "BNB", rpc: BSC_RPC },
+  polygon: { chainId: 137, nativeSym: "POL", rpc: POLYGON_RPC }
+};
 
 const TRANSFER_EVENT = parseAbiItem(
   "event Transfer(address indexed from, address indexed to, uint256 value)"
@@ -48,11 +64,10 @@ const lc = (s: string) => s.toLowerCase();
 
 // ── EVM via Etherscan V2 (preferred — full history) ─────────────────────────
 async function scanEvmEtherscan(
-  chain: "eth" | "bsc",
+  chain: EvmScanChain,
   address: string
 ): Promise<IncomingTransfer[]> {
-  const chainId = chain === "eth" ? 1 : 56;
-  const nativeSym = chain === "eth" ? "ETH" : "BNB";
+  const { chainId, nativeSym } = EVM_META[chain];
   const out: IncomingTransfer[] = [];
   const tokenByContract = new Map(
     TOKENS.filter((t) => t.chain === chain && !t.native).map((t) => [lc((t as any).address), t])
@@ -112,10 +127,11 @@ async function scanEvmEtherscan(
 
 // ── EVM via viem getLogs (fallback when no Etherscan key) ───────────────────
 async function scanEvmLogs(
-  chain: "eth" | "bsc",
+  chain: EvmScanChain,
   address: string
 ): Promise<IncomingTransfer[]> {
-  const client = chain === "eth" ? ethClient : bscClient;
+  const client =
+    chain === "eth" ? ethClient : chain === "polygon" ? polygonClient : bscClient;
   const tokens = TOKENS.filter((t) => t.chain === chain && !t.native);
   const out: IncomingTransfer[] = [];
   let latest: bigint;
@@ -156,16 +172,16 @@ async function scanEvmLogs(
 }
 
 // ── EVM via Alchemy getAssetTransfers (preferred — full history, no key) ────
-// Both our ETH + BSC RPCs are Alchemy, which exposes alchemy_getAssetTransfers:
-// a single call returns the full incoming-transfer history (native + ERC20)
-// with tx hash, sender, raw amount, and block timestamp. No block-range cap,
-// no extra API key — reuses the RPC we already have.
+// Our ETH + BSC + Polygon RPCs are all Alchemy, which exposes
+// alchemy_getAssetTransfers: a single call returns the full incoming-transfer
+// history (native + ERC20) with tx hash, sender, raw amount, and block
+// timestamp. No block-range cap, no extra API key — reuses the RPC we already
+// have (the same Alchemy key, one app per network).
 async function scanEvmAlchemy(
-  chain: "eth" | "bsc",
+  chain: EvmScanChain,
   address: string
 ): Promise<IncomingTransfer[]> {
-  const rpc = chain === "eth" ? ETH_RPC : BSC_RPC;
-  const nativeSym = chain === "eth" ? "ETH" : "BNB";
+  const { rpc, nativeSym } = EVM_META[chain];
   const tokenByContract = new Map(
     TOKENS.filter((t) => t.chain === chain && !t.native).map((t) => [lc((t as any).address), t])
   );
@@ -222,8 +238,8 @@ async function scanEvmAlchemy(
   return out;
 }
 
-async function scanEvm(chain: "eth" | "bsc", address: string): Promise<IncomingTransfer[]> {
-  const rpc = chain === "eth" ? ETH_RPC : BSC_RPC;
+async function scanEvm(chain: EvmScanChain, address: string): Promise<IncomingTransfer[]> {
+  const { rpc } = EVM_META[chain];
   // Prefer Alchemy's transfer API (full history, reuses our RPC key), then
   // Etherscan V2 (if a key is configured), then bounded getLogs as a last
   // resort.
@@ -339,22 +355,52 @@ async function scanBtc(address: string): Promise<IncomingTransfer[]> {
   return out;
 }
 
+/**
+ * Drop anything the treasury itself sent to a deposit address.
+ *
+ * Two ways company money lands on a user's deposit address, and neither is a
+ * deposit:
+ *   1. a sweep's `gas_fund` leg (treasury → user address, native coin, so the
+ *      token sweep can pay its own gas), and
+ *   2. a member withdrawing to their own deposit address (treasury → user).
+ *
+ * Without this filter both get indexed as deposits: credited to the ledger and
+ * announced by a "deposit received" email. Sender-based, so it holds for every
+ * chain and needs no per-leg bookkeeping.
+ */
+async function dropTreasurySends(transfers: IncomingTransfer[]): Promise<IncomingTransfer[]> {
+  if (transfers.length === 0) return transfers;
+  let senders: Set<string>;
+  try {
+    senders = await treasurySenderAddresses();
+  } catch {
+    // Can't resolve treasury addresses (KMS down / not configured). Indexing a
+    // gas-fund leg as a deposit is worse than indexing nothing, so drop the
+    // whole batch and let the next scan retry — deposits are re-read every time.
+    return [];
+  }
+  if (senders.size === 0) return transfers;
+  return transfers.filter((t) => !senders.has(t.from.toLowerCase()));
+}
+
 /** Scan every deposit address for incoming transfers across all chains. */
 export async function scanIncomingTransfers(addrs: {
   eth: string;
   bsc: string;
+  polygon: string;
   tron: string;
   btc: string;
 }): Promise<IncomingTransfer[]> {
   const results = await Promise.allSettled([
     scanEvm("eth", addrs.eth),
     scanEvm("bsc", addrs.bsc),
+    scanEvm("polygon", addrs.polygon),
     scanTron(addrs.tron),
     scanBtc(addrs.btc)
   ]);
   const out: IncomingTransfer[] = [];
   for (const r of results) if (r.status === "fulfilled") out.push(...r.value);
-  return out;
+  return dropTreasurySends(out);
 }
 
 // Minimal hex(41-prefixed) → Tron base58check, for native TRX sender display.

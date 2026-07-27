@@ -4,7 +4,7 @@
  * disk, no per-user keys generated, signup costs zero RPC calls.
  *
  * BIP-44 paths:
- *   EVM (ETH + BSC)  m/44'/60'/0'/0/i
+ *   EVM (ETH + BSC + Polygon)  m/44'/60'/0'/0/i
  *   BTC              m/44'/0'/0'/0/i   (encoded as native-segwit p2wpkh / bech32)
  *   TRON             m/44'/195'/0'/0/i
  */
@@ -22,7 +22,7 @@ import * as ecc from "tiny-secp256k1";
 
 bitcoin.initEccLib(ecc as never);
 
-export type Chain = "eth" | "bsc" | "tron" | "btc";
+export type Chain = "eth" | "bsc" | "polygon" | "tron" | "btc";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Mnemonic + master key
@@ -41,6 +41,7 @@ function accountPath(chain: Chain): string {
   switch (chain) {
     case "eth":
     case "bsc":
+    case "polygon":
       return "m/44'/60'/0'/0";
     case "btc":
       return "m/44'/0'/0'/0";
@@ -98,7 +99,7 @@ function uncompressedPubkey(compressed: Uint8Array): Uint8Array {
   return secp256k1.ProjectivePoint.fromHex(compressed).toRawBytes(false);
 }
 
-/** EVM (ETH and BSC share the same address space). */
+/** EVM (ETH, BSC and Polygon share the same address space). */
 export function evmAddressFromPubkey(compressedPubkey: Uint8Array): string {
   // viem expects an uncompressed pubkey hex with the leading 0x04 trimmed,
   // OR a compressed one — either works through publicKeyToAddress.
@@ -139,8 +140,9 @@ export function btcAddressFromPubkey(compressedPubkey: Uint8Array): string {
 
 export type UserAddresses = {
   userIndex: number;
-  eth: string; // also valid as the BSC address
+  eth: string; // also valid as the BSC + Polygon address
   bsc: string;
+  polygon: string;
   tron: string;
   btc: string;
 };
@@ -157,6 +159,7 @@ export function deriveUserAddresses(opts: {
     userIndex: opts.userIndex,
     eth,
     bsc: eth,
+    polygon: eth,
     tron: tronAddressFromPubkey(derivePubkey(opts.tronXpub, opts.userIndex)),
     btc: btcAddressFromPubkey(derivePubkey(opts.btcXpub, opts.userIndex))
   };

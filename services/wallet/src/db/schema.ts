@@ -19,6 +19,10 @@ export const userWalletAddresses = sqliteTable("user_wallet_addresses", {
   user_index: integer("user_index").notNull(),
   eth: text("eth").notNull(),
   bsc: text("bsc").notNull(),
+  // Same 0x address as eth/bsc (shared EVM derivation path). Stored explicitly
+  // so the column set mirrors the chain list and nothing has to know that
+  // Polygon happens to reuse the Ethereum address.
+  polygon: text("polygon").notNull().default(""),
   tron: text("tron").notNull(),
   btc: text("btc").notNull(),
   created_at: integer("created_at")

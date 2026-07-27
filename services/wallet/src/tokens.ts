@@ -4,7 +4,7 @@
  * a verification step on the relevant block explorer.
  */
 
-export type Chain = "eth" | "bsc" | "tron" | "btc";
+export type Chain = "eth" | "bsc" | "polygon" | "tron" | "btc";
 
 export type Token = {
   /** Public ticker shown in UI (uppercase). */
@@ -25,6 +25,8 @@ export const TOKENS: Token[] = [
   // ── Native gas tokens ───────────────────────────────────────────────────
   { symbol: "ETH",  chain: "eth",  native: true, decimals: 18, coingeckoId: "ethereum" },
   { symbol: "BNB",  chain: "bsc",  native: true, decimals: 18, coingeckoId: "binancecoin" },
+  // POL — renamed from MATIC in Sept 2024; the contract and decimals are unchanged.
+  { symbol: "POL",  chain: "polygon", native: true, decimals: 18, coingeckoId: "polygon-ecosystem-token" },
   { symbol: "TRX",  chain: "tron", native: true, decimals: 6,  coingeckoId: "tron" },
   { symbol: "BTC",  chain: "btc",  native: true, decimals: 8,  coingeckoId: "bitcoin" },
 
@@ -62,6 +64,27 @@ export const TOKENS: Token[] = [
     address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
     decimals: 18,
     coingeckoId: "usd-coin"
+  },
+
+  // ── Stablecoins on Polygon ──────────────────────────────────────────────
+  // Native (Circle-issued) only. The bridged USDC.e (0x2791Bca1…) is a
+  // different contract and is deliberately NOT a deposit path — a user who
+  // sends USDC.e would otherwise see a zero balance with no explanation.
+  {
+    symbol: "USDC",
+    chain: "polygon",
+    native: false,
+    address: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
+    decimals: 6,
+    coingeckoId: "usd-coin"
+  },
+  {
+    symbol: "USDT",
+    chain: "polygon",
+    native: false,
+    address: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
+    decimals: 6,
+    coingeckoId: "tether"
   },
 
   // ── Tron tokens ─────────────────────────────────────────────────────────

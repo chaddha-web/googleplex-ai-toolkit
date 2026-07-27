@@ -52,7 +52,7 @@ for (const f of FAMILIES) {
 
 console.log("\n──────────────────────────────────────────────────────────");
 console.log("FUND THESE COMPANY ADDRESSES (native gas + liquidity):\n");
-console.log(`  EVM (ETH + BSC):  ${addrs.evm}`);
+console.log(`  EVM (ETH + BSC + Polygon):  ${addrs.evm}`);
 console.log(`  TRON (TRX/TRC20): ${addrs.tron}`);
 console.log(`  BTC:              ${addrs.btc}`);
 console.log("\nReminder:");

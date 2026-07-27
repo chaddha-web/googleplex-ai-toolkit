@@ -8,7 +8,7 @@
  * the service never blocks on the network.
  *
  *   - Stablecoins (USDT, USDC): live, but pinned to $1 if the feed is down.
- *   - Gas coins (ETH, BNB, TRX, BTC): live from CoinGecko; null until first
+ *   - Gas coins (ETH, BNB, POL, TRX, BTC): live from CoinGecko; null until first
  *     successful fetch.
  *   - PARTY: platform-internal token, fixed at $10 (not on any exchange).
  */
@@ -26,6 +26,7 @@ const FIXED_USD: Record<string, number> = {
 const COINGECKO_IDS: Partial<Record<LogicalAsset, string>> = {
   ETH: "ethereum",
   BNB: "binancecoin",
+  POL: "polygon-ecosystem-token", // renamed from "matic-network" after the Sept 2024 POL migration
   TRX: "tron",
   BTC: "bitcoin",
   USDT: "tether",
@@ -74,7 +75,8 @@ const BINANCE_PAIRS: Record<string, string> = {
   ETH: "ETHUSDT",
   BNB: "BNBUSDT",
   BTC: "BTCUSDT",
-  TRX: "TRXUSDT"
+  TRX: "TRXUSDT",
+  POL: "POLUSDT"
 };
 
 async function fetchBinance(): Promise<Record<string, number>> {

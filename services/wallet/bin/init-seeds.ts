@@ -20,7 +20,7 @@ import { encryptSeed, saveCiphertext, type SeedFile } from "../src/kms.js";
 type Plan = { file: SeedFile; chain: "eth" | "btc" | "tron"; xpubVar: string };
 
 const PLAN: Plan[] = [
-  { file: "evm",  chain: "eth",  xpubVar: "EVM_MASTER_XPUB" }, // ETH + BSC
+  { file: "evm",  chain: "eth",  xpubVar: "EVM_MASTER_XPUB" }, // ETH + BSC + Polygon
   { file: "btc",  chain: "btc",  xpubVar: "BTC_MASTER_XPUB" },
   { file: "tron", chain: "tron", xpubVar: "TRON_MASTER_XPUB" }
 ];

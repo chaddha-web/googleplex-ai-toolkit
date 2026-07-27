@@ -23,6 +23,7 @@ sqlite.exec(`
     user_index INTEGER NOT NULL,
     eth        TEXT NOT NULL,
     bsc        TEXT NOT NULL,
+    polygon    TEXT NOT NULL DEFAULT '',
     tron       TEXT NOT NULL,
     btc        TEXT NOT NULL,
     created_at INTEGER
@@ -154,3 +155,14 @@ try {
 } catch {
   /* column already exists */
 }
+
+// Backfill migration: Polygon deposit address. Polygon shares the EVM
+// derivation path, so every existing user's Polygon address IS their ETH
+// address — no re-derivation, no new seed, and existing deposit addresses are
+// untouched.
+try {
+  sqlite.exec(`ALTER TABLE user_wallet_addresses ADD COLUMN polygon TEXT NOT NULL DEFAULT ''`);
+} catch {
+  /* column already exists */
+}
+sqlite.exec(`UPDATE user_wallet_addresses SET polygon = eth WHERE polygon IS NULL OR polygon = ''`);

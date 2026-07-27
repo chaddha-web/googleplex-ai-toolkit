@@ -28,6 +28,7 @@ const addrs = deriveUserAddresses({ userIndex, evmXpub, btcXpub, tronXpub });
 console.log(`\nDeposit addresses for user #${userIndex}\n`);
 console.log(`  ETH   ${addrs.eth}`);
 console.log(`  BSC   ${addrs.bsc}   (same as ETH)`);
+console.log(`  POLY  ${addrs.polygon}   (same as ETH)`);
 console.log(`  TRON  ${addrs.tron}`);
 console.log(`  BTC   ${addrs.btc}`);
 console.log("");

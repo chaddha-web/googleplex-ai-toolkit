@@ -8,6 +8,7 @@
 import "node:process";
 import { pingEth } from "../src/chain/eth.js";
 import { pingBsc } from "../src/chain/bsc.js";
+import { pingPolygon } from "../src/chain/polygon.js";
 import { pingTron } from "../src/chain/tron.js";
 import { pingBtc } from "../src/chain/btc.js";
 
@@ -16,6 +17,7 @@ type Check = { chain: string; run: () => Promise<unknown> };
 const checks: Check[] = [
   { chain: "ETH ", run: pingEth },
   { chain: "BSC ", run: pingBsc },
+  { chain: "POLY", run: pingPolygon },
   { chain: "TRON", run: pingTron },
   { chain: "BTC ", run: pingBtc }
 ];

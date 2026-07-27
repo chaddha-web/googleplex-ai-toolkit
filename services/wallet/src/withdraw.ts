@@ -10,7 +10,7 @@ import { sendTronNative, sendTronTrc20, isValidTronAddress } from "./sign/tron.j
 import { sendBtc, isValidBtcAddress } from "./sign/btc.js";
 
 export function isValidDestination(chain: string, addr: string): boolean {
-  if (chain === "eth" || chain === "bsc") return isValidEvmAddress(addr);
+  if (chain === "eth" || chain === "bsc" || chain === "polygon") return isValidEvmAddress(addr);
   if (chain === "tron") return isValidTronAddress(addr);
   if (chain === "btc") return isValidBtcAddress(addr);
   return false;
@@ -29,7 +29,7 @@ export async function sendWithdrawal(opts: {
     throw new Error("Invalid destination address for this chain");
   }
 
-  if (chain === "eth" || chain === "bsc") {
+  if (chain === "eth" || chain === "bsc" || chain === "polygon") {
     if (token.native) {
       return sendEvmNative({ chain, to: destAddress, amountRaw });
     }

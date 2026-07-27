@@ -17,8 +17,8 @@ import { priceUsd } from "./prices.js";
 import { auditToAuth } from "./audit.js";
 import { notify } from "./notify.js";
 
-type Chain = "eth" | "bsc" | "tron" | "btc";
-const CHAINS: Chain[] = ["eth", "bsc", "tron", "btc"];
+type Chain = "eth" | "bsc" | "polygon" | "tron" | "btc";
+const CHAINS: Chain[] = ["eth", "bsc", "polygon", "tron", "btc"];
 const INTERVAL_MS = Number(process.env.AUTO_FLUSH_INTERVAL_MS ?? 10 * 60_000);
 const MAX_PER_RUN = Number(process.env.AUTO_FLUSH_MAX_PER_RUN ?? 25);
 
@@ -48,7 +48,7 @@ async function runOnce(): Promise<void> {
       if (swept >= MAX_PER_RUN) break;
       let snap: ReconcileResult;
       try {
-        snap = await reconcile({ eth: u.eth, bsc: u.bsc, tron: u.tron, btc: u.btc });
+        snap = await reconcile({ eth: u.eth, bsc: u.bsc, polygon: u.polygon || u.eth, tron: u.tron, btc: u.btc });
       } catch {
         continue;
       }

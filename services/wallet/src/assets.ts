@@ -3,7 +3,7 @@
  *
  * A "logical asset" is the user-facing symbol (USDT, PARTY, etc.). One logical
  * asset can be backed by multiple on-chain token instances — e.g. USDT exists
- * as ERC20 on Ethereum, BEP20 on BSC, and TRC20 on Tron. We sum them and show
+ * as ERC20 on Ethereum, BEP20 on BSC, on Polygon, and TRC20 on Tron. We sum them and show
  * one number, but we remember which chain holds which slice so withdrawals can
  * pick the right chain.
  *
@@ -21,6 +21,7 @@ import { priceUsd } from "./prices.js";
 export type LogicalAsset =
   | "ETH"
   | "BNB"
+  | "POL"
   | "TRX"
   | "BTC"
   | "USDT"
@@ -59,10 +60,11 @@ export type AssetBreakdown = {
 
 /** Per-chain raw balance numbers (decimal strings as returned from RPCs). */
 export type PerChainRawBalances = {
-  eth: Record<string, string>;  // { ETH: "0.04", USDC: "120", USDT: "0" }
-  bsc: Record<string, string>;  // { BNB: "0.5",  USDT: "75", USDC: "0" }
-  tron: Record<string, string>; // { TRX: "100",  USDT: "20", PARTY: "0.5" }
-  btc: Record<string, string>;  // { BTC: "0.001" }
+  eth: Record<string, string>;     // { ETH: "0.04", USDC: "120", USDT: "0" }
+  bsc: Record<string, string>;     // { BNB: "0.5",  USDT: "75", USDC: "0" }
+  polygon: Record<string, string>; // { POL: "12",   USDC: "50", USDT: "0" }
+  tron: Record<string, string>;    // { TRX: "100",  USDT: "20", PARTY: "0.5" }
+  btc: Record<string, string>;     // { BTC: "0.001" }
 };
 
 /**

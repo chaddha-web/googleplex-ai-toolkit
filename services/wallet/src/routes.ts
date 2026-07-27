@@ -169,6 +169,7 @@ async function ensureUserWallet(userId: string): Promise<void> {
         user_index: userIndex,
         eth: addrs.eth,
         bsc: addrs.bsc,
+        polygon: addrs.polygon,
         tron: addrs.tron,
         btc: addrs.btc
       }).run();
@@ -208,7 +209,7 @@ export async function refreshUserDeposits(
   if (addrs.length === 0) return;
 
   const a = addrs[0]!;
-  const snap = await reconcile({ eth: a.eth, bsc: a.bsc, tron: a.tron, btc: a.btc });
+  const snap = await reconcile({ eth: a.eth, bsc: a.bsc, polygon: a.polygon || a.eth, tron: a.tron, btc: a.btc });
 
   // Diff against ledger and update BALANCES (authoritative on-chain via
   // balanceOf). Detects the $1 activation deposit.
@@ -239,8 +240,8 @@ export async function refreshUserDeposits(
           }).run();
         }
 
-        // Initial deposit logic: USD = 1 for USDT/USDC on eth/bsc/tron
-        if (["USDT", "USDC"].includes(t.symbol) && ["eth", "bsc", "tron"].includes(t.chain)) {
+        // Initial deposit logic: USD = 1 for USDT/USDC on eth/bsc/polygon/tron
+        if (["USDT", "USDC"].includes(t.symbol) && ["eth", "bsc", "polygon", "tron"].includes(t.chain)) {
           const usdValue = Number(delta) / (10 ** t.decimals); // fixed $1
           initialDepositCreditedUsd += usdValue;
         }
@@ -272,7 +273,7 @@ export async function refreshUserDeposits(
   // Index individual incoming transfers (real tx hash + sender) for the
   // transaction history. Best-effort + non-fatal. Dedupe by tx hash.
   try {
-    const transfers = await scanIncomingTransfers({ eth: a.eth, bsc: a.bsc, tron: a.tron, btc: a.btc });
+    const transfers = await scanIncomingTransfers({ eth: a.eth, bsc: a.bsc, polygon: a.polygon || a.eth, tron: a.tron, btc: a.btc });
     if (transfers.length > 0) {
       const existing = db.select({ h: deposits.tx_hash }).from(deposits).where(eq(deposits.user_id, userId)).all();
       const seen = new Set(existing.map((r) => r.h));
@@ -361,6 +362,7 @@ export async function walletRoutes(app: FastifyInstance) {
     return reply.send({
       eth: addrs[0]!.eth,
       bsc: addrs[0]!.bsc,
+      polygon: addrs[0]!.polygon || addrs[0]!.eth,
       tron: addrs[0]!.tron,
       btc: addrs[0]!.btc
     });
@@ -377,6 +379,7 @@ export async function walletRoutes(app: FastifyInstance) {
     const rawBalances = {
       eth: {} as Record<string, string>,
       bsc: {} as Record<string, string>,
+      polygon: {} as Record<string, string>,
       tron: {} as Record<string, string>,
       btc: {} as Record<string, string>
     };
@@ -411,7 +414,7 @@ export async function walletRoutes(app: FastifyInstance) {
       .select()
       .from(ledgerBalances)
       .where(eq(ledgerBalances.user_id, user.sub));
-    const rawLedger = { eth: {}, bsc: {}, tron: {}, btc: {} } as Record<
+    const rawLedger = { eth: {}, bsc: {}, polygon: {}, tron: {}, btc: {} } as Record<
       string,
       Record<string, string>
     >;
@@ -729,7 +732,7 @@ export async function walletRoutes(app: FastifyInstance) {
     // and non-fatal: the withdrawal itself already succeeded.
     try {
       const remaining = await db.select().from(ledgerBalances).where(eq(ledgerBalances.user_id, user.sub));
-      const rawRemaining = { eth: {} as Record<string, string>, bsc: {} as Record<string, string>, tron: {} as Record<string, string>, btc: {} as Record<string, string> };
+      const rawRemaining = { eth: {} as Record<string, string>, bsc: {} as Record<string, string>, polygon: {} as Record<string, string>, tron: {} as Record<string, string>, btc: {} as Record<string, string> };
       for (const b of remaining) {
         if (b.chain in rawRemaining) (rawRemaining as any)[b.chain][b.symbol] = b.raw;
       }
@@ -1212,7 +1215,7 @@ export async function walletRoutes(app: FastifyInstance) {
     for (const b of rows) {
       let m = byUser.get(b.user_id);
       if (!m) {
-        m = { eth: {}, bsc: {}, tron: {}, btc: {} };
+        m = { eth: {}, bsc: {}, polygon: {}, tron: {}, btc: {} };
         byUser.set(b.user_id, m);
       }
       if (b.chain in m) (m as any)[b.chain][b.symbol] = b.raw;
@@ -1236,7 +1239,7 @@ export async function walletRoutes(app: FastifyInstance) {
       .limit(1);
     if (addrs.length === 0) return reply.send({ actualUsd: 0, note: "no wallet" });
     const a = addrs[0]!;
-    const snap = await reconcile({ eth: a.eth, bsc: a.bsc, tron: a.tron, btc: a.btc });
+    const snap = await reconcile({ eth: a.eth, bsc: a.bsc, polygon: a.polygon || a.eth, tron: a.tron, btc: a.btc });
     const actualUsd = snap.byLogicalAsset.reduce((s, x) => s + (x.usd ?? 0), 0);
     return reply.send({ actualUsd });
   });
@@ -1259,7 +1262,7 @@ export async function walletRoutes(app: FastifyInstance) {
       .select()
       .from(ledgerBalances)
       .where(eq(ledgerBalances.user_id, id));
-    const rawLedger = { eth: {}, bsc: {}, tron: {}, btc: {} } as Record<
+    const rawLedger = { eth: {}, bsc: {}, polygon: {}, tron: {}, btc: {} } as Record<
       string,
       Record<string, string>
     >;
@@ -1270,7 +1273,7 @@ export async function walletRoutes(app: FastifyInstance) {
 
     return reply.send({
       addresses: a
-        ? { userIndex: a.user_index, eth: a.eth, bsc: a.bsc, tron: a.tron, btc: a.btc }
+        ? { userIndex: a.user_index, eth: a.eth, bsc: a.bsc, polygon: a.polygon || a.eth, tron: a.tron, btc: a.btc }
         : null,
       balances,
       usableUsd: totalUsd(balances)
@@ -1546,7 +1549,7 @@ export async function walletRoutes(app: FastifyInstance) {
   app.get("/wallet/admin/treasury-wallets", async (req: any, reply) => {
     if (!(await requireRole(req, reply, "admin"))) return;
     const addresses = await withdrawalAddresses();
-    const configured = !!(addresses.eth || addresses.bsc || addresses.tron || addresses.btc);
+    const configured = !!(addresses.eth || addresses.bsc || addresses.polygon || addresses.tron || addresses.btc);
     if (!configured) {
       return reply.send({ configured: false, addresses, balances: [], totalUsd: 0 });
     }

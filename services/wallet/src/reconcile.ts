@@ -14,6 +14,7 @@
 
 import { getEthBalance, getErc20Balance } from "./chain/eth.js";
 import { getBnbBalance, getBep20Balance } from "./chain/bsc.js";
+import { getPolBalance, getPolygonErc20Balance } from "./chain/polygon.js";
 import { getTrxBalance, getTrc20Balance } from "./chain/tron.js";
 import { getBtcBalance } from "./chain/btc.js";
 import { tokensByChain, type Chain, type Token } from "./tokens.js";
@@ -40,6 +41,7 @@ export type ReconcileResult = {
 export type UserAddressMap = {
   eth: string;
   bsc: string;
+  polygon: string;
   tron: string;
   btc: string;
 };
@@ -52,7 +54,7 @@ export type UserAddressMap = {
 const cache = new Map<string, ReconcileResult>();
 
 function cacheKey(addrs: UserAddressMap): string {
-  return [addrs.eth, addrs.bsc, addrs.tron, addrs.btc].join("|");
+  return [addrs.eth, addrs.bsc, addrs.polygon, addrs.tron, addrs.btc].join("|");
 }
 
 export function clearReconcileCache(addrs?: UserAddressMap) {
@@ -100,19 +102,21 @@ async function readOne(
 ): Promise<string> {
   if (token.native) {
     switch (chain) {
-      case "eth":  return getEthBalance(address);
-      case "bsc":  return getBnbBalance(address);
-      case "tron": return getTrxBalance(address);
-      case "btc":  return getBtcBalance(address);
+      case "eth":     return getEthBalance(address);
+      case "bsc":     return getBnbBalance(address);
+      case "polygon": return getPolBalance(address);
+      case "tron":    return getTrxBalance(address);
+      case "btc":     return getBtcBalance(address);
     }
   }
 
   const opts = { holder: address, token: token.address!, decimals: token.decimals };
   switch (chain) {
-    case "eth":  return getErc20Balance(opts);
-    case "bsc":  return getBep20Balance(opts);
-    case "tron": return getTrc20Balance(opts);
-    case "btc":  return "0"; // BTC has no token contracts in our registry
+    case "eth":     return getErc20Balance(opts);
+    case "bsc":     return getBep20Balance(opts);
+    case "polygon": return getPolygonErc20Balance(opts);
+    case "tron":    return getTrc20Balance(opts);
+    case "btc":     return "0"; // BTC has no token contracts in our registry
   }
 }
 
@@ -126,7 +130,7 @@ export type ReconcileOptions = {
 };
 
 /**
- * Read every supported balance for one user across all four chains in
+ * Read every supported balance for one user across all five chains in
  * parallel. Returns a cached snapshot if one exists and is fresher than
  * REFRESH_CACHE_TTL_SECONDS (default 30).
  */
@@ -142,15 +146,16 @@ export async function reconcile(
     if (hit && now - hit.fetchedAt < TTL_S * 1000) return hit;
   }
 
-  // Parallel fan-out across the 4 chains.
-  const [eth, bsc, tron, btc] = await Promise.all([
+  // Parallel fan-out across the 5 chains.
+  const [eth, bsc, polygon, tron, btc] = await Promise.all([
     readChain("eth", addrs.eth),
     readChain("bsc", addrs.bsc),
+    readChain("polygon", addrs.polygon),
     readChain("tron", addrs.tron),
     readChain("btc", addrs.btc)
   ]);
 
-  const perChain: PerChainRawBalances = { eth, bsc, tron, btc };
+  const perChain: PerChainRawBalances = { eth, bsc, polygon, tron, btc };
   const byLogicalAsset = aggregate(perChain);
   const usdTotal = totalUsd(byLogicalAsset);
 

@@ -2,7 +2,7 @@
  * Company treasury (hot-wallet) keys — the single set of keys that pay out all
  * user withdrawals. One key per chain family:
  *
- *   evm   → ETH + BSC (same secp256k1 key / same 0x address)
+ *   evm   → ETH + BSC + Polygon (same secp256k1 key / same 0x address)
  *   tron  → TRX + TRC20
  *   btc   → native segwit (bech32)
  *
@@ -98,7 +98,7 @@ export async function treasuryAddress(family: TreasuryFamily): Promise<string> {
 
 /** Map a chain to its treasury family. */
 export function familyForChain(chain: string): TreasuryFamily {
-  if (chain === "eth" || chain === "bsc") return "evm";
+  if (chain === "eth" || chain === "bsc" || chain === "polygon") return "evm";
   if (chain === "tron") return "tron";
   if (chain === "btc") return "btc";
   throw new Error(`Unknown chain: ${chain}`);
@@ -132,7 +132,7 @@ async function importedKeys(): Promise<ImportedKeys> {
  * KMS-generated treasury key for the chain's family.
  */
 export async function privKeyForChain(
-  chain: "eth" | "bsc" | "tron" | "btc"
+  chain: "eth" | "bsc" | "polygon" | "tron" | "btc"
 ): Promise<string> {
   const imp = await importedKeys();
   const k = imp[chain]?.privkey;
@@ -148,6 +148,7 @@ export async function privKeyForChain(
 export async function withdrawalAddresses(): Promise<{
   eth: string;
   bsc: string;
+  polygon: string;
   tron: string;
   btc: string;
 }> {
@@ -155,7 +156,41 @@ export async function withdrawalAddresses(): Promise<{
   return {
     eth: imp.eth?.address?.trim() || "",
     bsc: imp.bsc?.address?.trim() || "",
+    polygon: imp.polygon?.address?.trim() || "",
     tron: imp.tron?.address?.trim() || "",
     btc: imp.btc?.address?.trim() || ""
   };
+}
+
+/**
+ * Every address the company can send FROM, lowercased — the KMS-generated
+ * treasury address per family plus any admin-imported funded wallets.
+ *
+ * Used by the deposit indexer to ignore our own outbound transfers (gas-funding
+ * legs, withdrawals paid to a member's own deposit address) so they are never
+ * credited as deposits. Lowercased because EVM senders arrive checksummed from
+ * some providers and lowercase from others; Tron/BTC addresses are
+ * case-sensitive but consistently cased, so lowercasing both sides is safe.
+ */
+export async function treasurySenderAddresses(): Promise<Set<string>> {
+  const out = new Set<string>();
+  const add = (a?: string | null) => {
+    const v = a?.trim();
+    if (v) out.add(v.toLowerCase());
+  };
+
+  const imp = await importedKeys();
+  for (const k of Object.keys(imp)) add(imp[k]?.address);
+
+  // The generated treasury keys are the fallback signers, so they can be
+  // senders too. Missing seed files are not an error — a family may be
+  // configured purely through an imported wallet.
+  for (const family of ["evm", "tron", "btc"] as const) {
+    try {
+      add(await treasuryAddress(family));
+    } catch {
+      /* family not provisioned — nothing to exclude */
+    }
+  }
+  return out;
 }

@@ -1,5 +1,5 @@
 /**
- * EVM payout signer (ETH + BSC) — sends native or ERC20 from the company
+ * EVM payout signer (ETH + BSC + Polygon) — sends native or ERC20 from the company
  * treasury key. viem handles nonce + gas estimation.
  */
 
@@ -12,7 +12,7 @@ import {
   type Chain as ViemChain
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { mainnet, bsc } from "viem/chains";
+import { mainnet, bsc, polygon } from "viem/chains";
 import { privKeyForChain } from "../treasury.js";
 
 const ERC20_ABI = parseAbi([
@@ -20,13 +20,19 @@ const ERC20_ABI = parseAbi([
   "function balanceOf(address owner) view returns (uint256)"
 ]);
 
-type EvmChain = "eth" | "bsc";
+type EvmChain = "eth" | "bsc" | "polygon";
 
 function chainConfig(chain: EvmChain): { viemChain: ViemChain; rpc: string } {
   if (chain === "eth") {
     return {
       viemChain: mainnet,
       rpc: process.env.ETH_RPC_URL ?? "https://cloudflare-eth.com"
+    };
+  }
+  if (chain === "polygon") {
+    return {
+      viemChain: polygon,
+      rpc: process.env.POLYGON_RPC_URL ?? "https://polygon-rpc.com"
     };
   }
   return {
