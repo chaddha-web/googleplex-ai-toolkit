@@ -40,6 +40,7 @@ function explorer(chain: string, hash: string | null): string | null {
   switch (chain) {
     case "eth": return `https://etherscan.io/tx/${hash}`;
     case "bsc": return `https://bscscan.com/tx/${hash}`;
+    case "polygon": return `https://polygonscan.com/tx/${hash}`;
     case "tron": return `https://tronscan.org/#/transaction/${hash}`;
     case "btc": return `https://mempool.space/tx/${hash}`;
     default: return null;
@@ -79,7 +80,7 @@ export default function TreasuryPage() {
     adminTreasuryWallets()
       .then(setTw)
       .catch(() =>
-        setTw({ configured: false, addresses: { eth: "", bsc: "", tron: "", btc: "" }, balances: [], totalUsd: 0 })
+        setTw({ configured: false, addresses: { eth: "", bsc: "", polygon: "", tron: "", btc: "" }, balances: [], totalUsd: 0 })
       );
   }, []);
 
@@ -165,7 +166,7 @@ export default function TreasuryPage() {
             )}
           </div>
           <div className="mt-5 space-y-1.5">
-            {(["eth", "bsc", "tron", "btc"] as const).map((c) =>
+            {(["eth", "bsc", "polygon", "tron", "btc"] as const).map((c) =>
               tw.addresses[c] ? (
                 <div key={c} className="flex items-center gap-3 text-xs">
                   <span className="text-white/40 uppercase w-10 shrink-0">{c}</span>

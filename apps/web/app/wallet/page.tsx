@@ -9,7 +9,7 @@ import { QrScanner } from "@/components/qr-scanner";
 const WALLET_BASE =
   process.env.NEXT_PUBLIC_WALLET_BASE || "http://localhost:4201";
 
-type Chain = "eth" | "bsc" | "tron" | "btc";
+type Chain = "eth" | "bsc" | "polygon" | "tron" | "btc";
 type PerChain = {
   chain: Chain;
   amount: number;
@@ -22,12 +22,13 @@ type AssetBreakdown = {
   usd: number | null;
   perChain: PerChain[];
 };
-type ChainAddrs = { eth?: string; bsc?: string; tron?: string; btc?: string };
+type ChainAddrs = { eth?: string; bsc?: string; polygon?: string; tron?: string; btc?: string };
 
 // (chain, symbol) → on-chain decimals. Mirrors services/wallet/src/tokens.ts.
 const DECIMALS: Record<string, number> = {
   "eth:ETH": 18, "eth:USDC": 6, "eth:USDT": 6,
   "bsc:BNB": 18, "bsc:USDT": 18, "bsc:USDC": 18,
+  "polygon:POL": 18, "polygon:USDC": 6, "polygon:USDT": 6,
   "tron:TRX": 6, "tron:USDT": 6, "tron:PARTY": 6,
   "btc:BTC": 8
 };
@@ -70,6 +71,7 @@ function CoinIcon({ sym, size = 28 }: { sym: string; size?: number }) {
 const CHAIN_LABEL: Record<Chain, string> = {
   eth: "Ethereum (ERC20)",
   bsc: "BSC (BEP20)",
+  polygon: "Polygon",
   tron: "Tron (TRC20)",
   btc: "Bitcoin"
 };
@@ -330,10 +332,11 @@ export default function WalletPage() {
 // Every destination instance the platform can credit.
 const SWAP_TARGETS: { symbol: string; chains: Chain[] }[] = [
   { symbol: "PARTY", chains: ["tron"] },
-  { symbol: "USDT", chains: ["eth", "bsc", "tron"] },
-  { symbol: "USDC", chains: ["eth", "bsc"] },
+  { symbol: "USDT", chains: ["eth", "bsc", "polygon", "tron"] },
+  { symbol: "USDC", chains: ["eth", "bsc", "polygon"] },
   { symbol: "ETH", chains: ["eth"] },
   { symbol: "BNB", chains: ["bsc"] },
+  { symbol: "POL", chains: ["polygon"] },
   { symbol: "TRX", chains: ["tron"] },
   { symbol: "BTC", chains: ["btc"] }
 ];
@@ -568,6 +571,7 @@ type Tx = {
 const EXPLORER_TX: Record<string, (h: string) => string> = {
   eth: (h) => `https://etherscan.io/tx/${h}`,
   bsc: (h) => `https://bscscan.com/tx/${h}`,
+  polygon: (h) => `https://polygonscan.com/tx/${h}`,
   tron: (h) => `https://tronscan.org/#/transaction/${h}`,
   btc: (h) => `https://blockstream.info/tx/${h}`
 };
@@ -1254,19 +1258,23 @@ const DEPOSIT_ASSETS: DepositAsset[] = [
     chains: [
       { label: "Ethereum · ERC20", key: "eth" },
       { label: "BNB Chain · BEP20", key: "bsc" },
+      { label: "Polygon", key: "polygon" },
       { label: "Tron · TRC20", key: "tron" }
     ]
   },
   {
     sym: "USDC",
-    // Circle deprecated USDC on Tron — ERC20 + BEP20 only.
+    // Circle deprecated USDC on Tron — ERC20, BEP20 and Polygon only. On
+    // Polygon we accept the native Circle USDC, not the bridged USDC.e.
     chains: [
       { label: "Ethereum · ERC20", key: "eth" },
-      { label: "BNB Chain · BEP20", key: "bsc" }
+      { label: "BNB Chain · BEP20", key: "bsc" },
+      { label: "Polygon · native USDC", key: "polygon" }
     ]
   },
   { sym: "ETH", chains: [{ label: "Ethereum", key: "eth" }] },
   { sym: "BNB", chains: [{ label: "BNB Chain", key: "bsc" }] },
+  { sym: "POL", chains: [{ label: "Polygon", key: "polygon" }] },
   { sym: "TRX", chains: [{ label: "Tron", key: "tron" }] },
   { sym: "BTC", chains: [{ label: "Bitcoin", key: "btc" }] },
   { sym: "PARTY", chains: [{ label: "Tron · TRC20", key: "tron" }] }
@@ -1276,6 +1284,7 @@ const DEPOSIT_ASSETS: DepositAsset[] = [
 const CHAIN_COIN: Record<Chain, string> = {
   eth: "ETH",
   bsc: "BNB",
+  polygon: "POL",
   tron: "TRX",
   btc: "BTC"
 };
@@ -1289,7 +1298,7 @@ function DepositSection({ addrs }: { addrs: ChainAddrs | null }) {
   const [notchLeft, setNotchLeft] = useState<number | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const chipRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const ready = addrs && (addrs.eth || addrs.bsc || addrs.tron || addrs.btc);
+  const ready = addrs && (addrs.eth || addrs.bsc || addrs.polygon || addrs.tron || addrs.btc);
 
   // Panel content follows `render` so it stays mounted through the exit anim.
   const panelAsset = DEPOSIT_ASSETS.find((a) => a.sym === render) ?? null;

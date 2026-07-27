@@ -27,6 +27,7 @@ const NONSECRET_KEYS = new Set([
   "ai.model.gemini",
   "wallet.eth.address",
   "wallet.bsc.address",
+  "wallet.polygon.address",
   "wallet.tron.address",
   "wallet.btc.address",
   // Min PARTY tokens a member must hold to cast community votes.
@@ -40,8 +41,8 @@ const NONSECRET_KEYS = new Set([
   // Financial config — JSON blobs, validated in validateFinanceValue().
   "wd.minimums", // { "<chain>:<symbol>": minAmountInToken }
   "wd.fees", // { "<chain>:<symbol>": flatFeeInToken }  (founder-only)
-  "flush.thresholds", // { eth, bsc, tron, btc } USD auto-flush thresholds
-  "sale.wallets" // { eth, bsc, tron, btc } receive addresses  (founder-only)
+  "flush.thresholds", // { eth, bsc, polygon, tron, btc } USD auto-flush thresholds
+  "sale.wallets" // { eth, bsc, polygon, tron, btc } receive addresses  (founder-only)
 ]);
 const SECRET_KEYS = new Set([
   "ai.key.anthropic",
@@ -49,6 +50,7 @@ const SECRET_KEYS = new Set([
   "ai.key.gemini",
   "wallet.eth.privkey",
   "wallet.bsc.privkey",
+  "wallet.polygon.privkey",
   "wallet.tron.privkey",
   "wallet.btc.privkey"
 ]);
@@ -67,6 +69,7 @@ const FINANCE_KEYS = new Set(["wd.minimums", "wd.fees", "flush.thresholds", "sal
 const ADDR_RE: Record<string, RegExp> = {
   eth: /^0x[0-9a-fA-F]{40}$/,
   bsc: /^0x[0-9a-fA-F]{40}$/,
+  polygon: /^0x[0-9a-fA-F]{40}$/,
   tron: /^T[1-9A-HJ-NP-Za-km-z]{33}$/,
   btc: /^(bc1[a-z0-9]{20,80}|[13][a-km-zA-HJ-NP-Z1-9]{25,39})$/
 };
@@ -85,21 +88,21 @@ function validateFinanceValue(key: string, value: string): string | null {
   const obj = parsed as Record<string, unknown>;
   if (key === "wd.minimums" || key === "wd.fees") {
     for (const [k, v] of Object.entries(obj)) {
-      if (!/^(eth|bsc|tron|btc):[A-Z0-9]+$/.test(k)) return `Bad key "${k}" (want "<chain>:<symbol>").`;
+      if (!/^(eth|bsc|polygon|tron|btc):[A-Z0-9]+$/.test(k)) return `Bad key "${k}" (want "<chain>:<symbol>").`;
       if (typeof v !== "number" || !Number.isFinite(v) || v < 0) return `"${k}" must be a number ≥ 0.`;
     }
     return null;
   }
   if (key === "flush.thresholds") {
     for (const [k, v] of Object.entries(obj)) {
-      if (!["eth", "bsc", "tron", "btc"].includes(k)) return `Bad chain "${k}".`;
+      if (!["eth", "bsc", "polygon", "tron", "btc"].includes(k)) return `Bad chain "${k}".`;
       if (typeof v !== "number" || !Number.isFinite(v) || v < 0) return `"${k}" must be a number ≥ 0.`;
     }
     return null;
   }
   if (key === "sale.wallets") {
     for (const [k, v] of Object.entries(obj)) {
-      if (!["eth", "bsc", "tron", "btc"].includes(k)) return `Bad chain "${k}".`;
+      if (!["eth", "bsc", "polygon", "tron", "btc"].includes(k)) return `Bad chain "${k}".`;
       if (typeof v !== "string") return `"${k}" must be an address string.`;
       const addr = v.trim();
       if (addr !== "" && !ADDR_RE[k]!.test(addr)) return `"${k}" is not a valid ${k.toUpperCase()} address.`;
@@ -283,7 +286,7 @@ export async function settingsRoutes(app: FastifyInstance) {
   // ── Internal: per-chain imported wallet keys (decrypted) for wallet svc ─
   app.get("/internal/settings/wallet", async (req, reply) => {
     if (!requireInternal(req, reply)) return;
-    const chains = ["eth", "bsc", "tron", "btc"] as const;
+    const chains = ["eth", "bsc", "polygon", "tron", "btc"] as const;
     const out: Record<string, { address: string | null; privkey: string | null }> = {};
     for (const c of chains) {
       out[c] = {

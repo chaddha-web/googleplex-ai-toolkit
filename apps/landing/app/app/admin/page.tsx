@@ -709,7 +709,7 @@ function MemberModal({
           <p className="text-white/40 text-sm mt-2">No wallet provisioned for this member.</p>
         ) : (
           <div className="mt-2 space-y-2">
-            <AddrRow label="ETH / BSC" value={detail.addresses.eth} onCopy={() => copy("eth", detail.addresses!.eth)} copied={copied === "eth"} />
+            <AddrRow label="ETH / BSC / Polygon" value={detail.addresses.eth} onCopy={() => copy("eth", detail.addresses!.eth)} copied={copied === "eth"} />
             {detail.addresses.tron && (
               <AddrRow label="Tron" value={detail.addresses.tron} onCopy={() => copy("tron", detail.addresses!.tron!)} copied={copied === "tron"} />
             )}

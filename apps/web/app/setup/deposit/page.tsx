@@ -14,12 +14,12 @@ const WALLET_BASE = (
 const POLL_MS = 8_000;
 
 type AddressInfo = {
-  chain: "TRC20" | "ERC20" | "BEP20";
+  chain: "TRC20" | "ERC20" | "BEP20" | "Polygon";
   symbol: "USDT" | "USDC";
   address: string;
 };
 
-function expandAddresses(c: { eth?: string; bsc?: string; tron?: string }): AddressInfo[] {
+function expandAddresses(c: { eth?: string; bsc?: string; polygon?: string; tron?: string }): AddressInfo[] {
   const out: AddressInfo[] = [];
   if (c.tron) out.push({ chain: "TRC20", symbol: "USDT", address: c.tron });
   if (c.eth) {
@@ -29,6 +29,12 @@ function expandAddresses(c: { eth?: string; bsc?: string; tron?: string }): Addr
   if (c.bsc) {
     out.push({ chain: "BEP20", symbol: "USDT", address: c.bsc });
     out.push({ chain: "BEP20", symbol: "USDC", address: c.bsc });
+  }
+  if (c.polygon) {
+    // Native Circle USDC/USDT on Polygon — the bridged USDC.e is not a
+    // supported deposit path.
+    out.push({ chain: "Polygon", symbol: "USDT", address: c.polygon });
+    out.push({ chain: "Polygon", symbol: "USDC", address: c.polygon });
   }
   return out;
 }
@@ -50,7 +56,7 @@ export default function DepositPage() {
           if (!cancelled) setOffline(true);
           return;
         }
-        const data = (await res.json()) as { eth?: string; bsc?: string; tron?: string };
+        const data = (await res.json()) as { eth?: string; bsc?: string; polygon?: string; tron?: string };
         if (!cancelled) setAddresses(expandAddresses(data));
       } catch {
         if (!cancelled) setOffline(true);

@@ -584,7 +584,7 @@ export async function systemHealth(): Promise<{ auth: boolean; wallet: boolean }
 
 export type TreasuryWallets = {
   configured: boolean;
-  addresses: { eth: string; bsc: string; tron: string; btc: string };
+  addresses: { eth: string; bsc: string; polygon: string; tron: string; btc: string };
   balances: AssetBalance[];
   /** Per-chain breakdown — which chain/address actually holds each balance. */
   holdings?: { chain: string; symbol: string; amount: number; usd: number }[];
@@ -706,6 +706,7 @@ export type MemberWalletDetail = {
     userIndex: number;
     eth: string;
     bsc: string;
+    polygon: string;
     tron: string | null;
     btc: string | null;
   } | null;

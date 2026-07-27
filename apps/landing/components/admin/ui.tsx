@@ -17,6 +17,7 @@ const COIN_STYLE: Record<string, { bg: string; content: string; dark?: boolean }
   TRX: { bg: "#EB0029", content: "TRX" },
   ETH: { bg: "#627EEA", content: "Ξ" },
   BTC: { bg: "#F7931A", content: "₿" },
+  POL: { bg: "#6C00F6", content: "POL" },
   PARTY: { bg: "#8A68FF", content: "P" }
 };
 
@@ -58,9 +59,9 @@ export function TokenLogo({ symbol, size = 26 }: { symbol: string; size?: number
   );
 }
 
-const CHAIN_NATIVE: Record<string, string> = { eth: "ETH", bsc: "BNB", tron: "TRX", btc: "BTC" };
+const CHAIN_NATIVE: Record<string, string> = { eth: "ETH", bsc: "BNB", polygon: "POL", tron: "TRX", btc: "BTC" };
 
-/** A chain's badge = its native-coin logo (BSC→BNB, TRON→TRX, ETH→ETH, BTC→BTC). */
+/** A chain's badge = its native-coin logo (BSC→BNB, POLYGON→POL, TRON→TRX, ETH→ETH, BTC→BTC). */
 export function ChainBadge({ chain, size = 16 }: { chain: string; size?: number }) {
   return <TokenLogo symbol={CHAIN_NATIVE[chain.toLowerCase()] ?? chain} size={size} />;
 }

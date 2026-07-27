@@ -15,16 +15,18 @@ const WALLET_BASE = (
 const POLL_MS = 8_000;
 
 type AddressInfo = {
-  chain: "TRC20" | "ERC20" | "BEP20";
+  chain: "TRC20" | "ERC20" | "BEP20" | "Polygon";
   symbol: "USDT" | "USDC";
   address: string;
 };
 
 /** Build the deposit-address list we render from the wallet's per-chain
- *  address response. USDT lives on all three chains; USDC on ERC20/BEP20. */
+ *  address response. USDT lives on every chain; USDC on ERC20/BEP20/Polygon
+ *  (native Circle USDC only — the bridged USDC.e is not a deposit path). */
 function expandAddresses(chainAddrs: {
   eth?: string;
   bsc?: string;
+  polygon?: string;
   tron?: string;
 }): AddressInfo[] {
   const out: AddressInfo[] = [];
@@ -36,6 +38,10 @@ function expandAddresses(chainAddrs: {
   if (chainAddrs.bsc) {
     out.push({ chain: "BEP20", symbol: "USDT", address: chainAddrs.bsc });
     out.push({ chain: "BEP20", symbol: "USDC", address: chainAddrs.bsc });
+  }
+  if (chainAddrs.polygon) {
+    out.push({ chain: "Polygon", symbol: "USDT", address: chainAddrs.polygon });
+    out.push({ chain: "Polygon", symbol: "USDC", address: chainAddrs.polygon });
   }
   return out;
 }
@@ -87,6 +93,7 @@ export default function DepositPage() {
         const data = (await res.json()) as {
           eth?: string;
           bsc?: string;
+          polygon?: string;
           tron?: string;
           btc?: string;
         };

@@ -21,6 +21,7 @@ const AI_PROVIDERS = [
 const CHAINS = [
   { id: "eth", label: "Ethereum (ETH)" },
   { id: "bsc", label: "BNB Smart Chain (BNB)" },
+  { id: "polygon", label: "Polygon (POL)" },
   { id: "tron", label: "Tron (TRX)" },
   { id: "btc", label: "Bitcoin (BTC)" }
 ] as const;
@@ -33,6 +34,9 @@ const WD_ASSETS: { chain: string; symbol: string }[] = [
   { chain: "bsc", symbol: "BNB" },
   { chain: "bsc", symbol: "USDT" },
   { chain: "bsc", symbol: "USDC" },
+  { chain: "polygon", symbol: "POL" },
+  { chain: "polygon", symbol: "USDT" },
+  { chain: "polygon", symbol: "USDC" },
   { chain: "tron", symbol: "TRX" },
   { chain: "tron", symbol: "USDT" },
   { chain: "tron", symbol: "PARTY" },
@@ -42,6 +46,7 @@ const WD_ASSETS: { chain: string; symbol: string }[] = [
 const FIN_CHAINS = [
   { id: "eth", label: "Ethereum" },
   { id: "bsc", label: "BNB Chain" },
+  { id: "polygon", label: "Polygon" },
   { id: "tron", label: "Tron" },
   { id: "btc", label: "Bitcoin" }
 ] as const;
