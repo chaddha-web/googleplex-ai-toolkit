@@ -1297,6 +1297,7 @@ function DepositSection({ addrs }: { addrs: ChainAddrs | null }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [notchLeft, setNotchLeft] = useState<number | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
   const chipRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const ready = addrs && (addrs.eth || addrs.bsc || addrs.polygon || addrs.tron || addrs.btc);
 
@@ -1322,15 +1323,26 @@ function DepositSection({ addrs }: { addrs: ChainAddrs | null }) {
   }, [open]);
 
   // Position the connecting notch under the selected chip.
+  //
+  // The panel sits below the WHOLE chip grid, so the notch can only line up
+  // with a chip in the grid's last row. When the chips wrap (narrow screens, or
+  // more coins than columns) a chip in an earlier row would get a notch
+  // pointing at empty space beside the row below it — so hide it instead.
   useEffect(() => {
     function measure() {
       const chip = open ? chipRefs.current[open] : null;
       const wrap = wrapRef.current;
-      if (chip && wrap) {
-        const c = chip.getBoundingClientRect();
-        const w = wrap.getBoundingClientRect();
-        setNotchLeft(c.left - w.left + c.width / 2);
+      const grid = gridRef.current;
+      if (!chip || !wrap || !grid) return;
+      const c = chip.getBoundingClientRect();
+      const g = grid.getBoundingClientRect();
+      const inLastRow = g.bottom - c.bottom < c.height / 2;
+      if (!inLastRow) {
+        setNotchLeft(null);
+        return;
       }
+      const w = wrap.getBoundingClientRect();
+      setNotchLeft(c.left - w.left + c.width / 2);
     }
     measure();
     window.addEventListener("resize", measure);
@@ -1363,7 +1375,12 @@ function DepositSection({ addrs }: { addrs: ChainAddrs | null }) {
         </p>
       ) : (
         <div ref={wrapRef} className="relative">
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
+          {/* One column per coin at md+ so the row never wraps and orphans a
+              single chip; below that it wraps evenly (4 + 4 at sm). */}
+          <div
+            ref={gridRef}
+            className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-8 gap-2"
+          >
             {DEPOSIT_ASSETS.map((a) => {
               const active = open === a.sym;
               return (

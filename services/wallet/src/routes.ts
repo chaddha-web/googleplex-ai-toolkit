@@ -6,7 +6,8 @@ import {
   ledgerEntries, 
   deposits, 
   withdrawals, 
-  swaps 
+  swaps,
+  sales
 } from "./db/schema.js";
 import { requireAuth, requireInternal, requireRole, requireCapability } from "./lib/guard.js";
 import { auditToAuth } from "./audit.js";
@@ -26,7 +27,7 @@ import { deriveUserAddresses } from "./hd.js";
 import { TOKENS, findToken } from "./tokens.js";
 import { priceUsd, coinAmountForUsd, quoteSwap } from "./prices.js";
 import { previewUser, executeUser } from "./sweep.js";
-import { withdrawalAddresses } from "./treasury.js";
+import { withdrawalAddresses, payoutAddressForChain, privKeyForChain } from "./treasury.js";
 import { effectiveLimits, checkCooldown, financeConfig } from "./withdraw-limits.js";
 import { sendWithdrawal, isValidDestination } from "./withdraw.js";
 import { notify } from "./notify.js";
@@ -923,14 +924,30 @@ export async function walletRoutes(app: FastifyInstance) {
               )
             )
             .run();
+          const entryId = ulid();
           tx.insert(ledgerEntries).values({
-            id: ulid(),
+            id: entryId,
             user_id: user.sub,
             chain: t.chain,
             symbol: t.symbol,
             delta_raw: "-" + requiredRaw.toString(),
             kind: "studio_fee",
             ref_id: "studio-unlock"
+          }).run();
+          // Revenue, recorded in the SAME transaction as the debit so the sale
+          // and the ledger can never disagree. USD is the price charged, not a
+          // recomputation from today's rate.
+          tx.insert(sales).values({
+            id: ulid(),
+            user_id: user.sub,
+            item: "studio_unlock",
+            item_name: "Studio unlock",
+            chain: t.chain,
+            symbol: t.symbol,
+            amount_raw: requiredRaw.toString(),
+            usd: STUDIO_FEE_USD,
+            ledger_entry_id: entryId,
+            created_at: Date.now()
           }).run();
           charged = { chain: t.chain, symbol: t.symbol, raw: requiredRaw.toString() };
           break;
@@ -1545,13 +1562,113 @@ export async function walletRoutes(app: FastifyInstance) {
     return reply.send({ transactions: tx.slice(0, limit) });
   });
 
+  // ── Sales / revenue ───────────────────────────────────────────────────────
+  // Revenue only: what members paid US. Deliberately excludes deposits (a
+  // member funding their own custodial balance) and withdrawals (paying them
+  // back out) — neither is income.
+  app.get("/wallet/admin/sales", async (req: any, reply) => {
+    if (!(await requireRole(req, reply, "admin"))) return;
+    const limit = Math.min(Math.max(Number(req.query?.limit) || 100, 1), 500);
+    const item = req.query?.item ? String(req.query.item) : null;
+
+    const where = item ? "WHERE item = @item" : "";
+    const params: any = { limit, item };
+
+    const rows = rawDb
+      .prepare(
+        `SELECT id, user_id, item, item_name, chain, symbol, amount_raw, usd, created_at
+           FROM sales ${where}
+          ORDER BY created_at DESC
+          LIMIT @limit`
+      )
+      .all(params) as any[];
+
+    const totals = rawDb
+      .prepare(`SELECT COUNT(*) n, COALESCE(SUM(usd), 0) usd FROM sales`)
+      .get() as { n: number; usd: number };
+
+    // Revenue by product, so a new product shows up here with no code change.
+    const byItem = rawDb
+      .prepare(
+        `SELECT item, item_name, COUNT(*) n, COALESCE(SUM(usd), 0) usd
+           FROM sales GROUP BY item ORDER BY usd DESC`
+      )
+      .all() as any[];
+
+    const since = (ms: number) =>
+      (
+        rawDb
+          .prepare(`SELECT COUNT(*) n, COALESCE(SUM(usd), 0) usd FROM sales WHERE created_at >= ?`)
+          .get(Date.now() - ms) as { n: number; usd: number }
+      );
+
+    // Last 30 days as daily buckets for the trend line.
+    const daily = rawDb
+      .prepare(
+        `SELECT date(created_at / 1000, 'unixepoch') d, COUNT(*) n, COALESCE(SUM(usd), 0) usd
+           FROM sales WHERE created_at >= ?
+          GROUP BY d ORDER BY d ASC`
+      )
+      .all(Date.now() - 30 * 864e5) as any[];
+
+    return reply.send({
+      sales: rows.map((r) => ({
+        id: r.id,
+        userId: r.user_id,
+        item: r.item,
+        itemName: r.item_name,
+        chain: r.chain,
+        symbol: r.symbol,
+        amount: toAmount(r.chain, r.symbol, r.amount_raw),
+        usd: r.usd,
+        at: r.created_at
+      })),
+      totals: { count: totals.n, usd: totals.usd },
+      byItem: byItem.map((b) => ({ item: b.item, itemName: b.item_name, count: b.n, usd: b.usd })),
+      periods: {
+        today: since(864e5),
+        week: since(7 * 864e5),
+        month: since(30 * 864e5)
+      },
+      daily: daily.map((d) => ({ date: d.d, count: d.n, usd: d.usd }))
+    });
+  });
+
   // ── Withdrawal (treasury) wallet balances — live on-chain read ────────────
   app.get("/wallet/admin/treasury-wallets", async (req: any, reply) => {
     if (!(await requireRole(req, reply, "admin"))) return;
     const addresses = await withdrawalAddresses();
     const configured = !!(addresses.eth || addresses.bsc || addresses.polygon || addresses.tron || addresses.btc);
+
+    // Per-chain signing health. The address shown above is what the operator
+    // CONFIGURED; `signer` is the wallet that would actually be debited. When
+    // those differ the admin is reading a balance that isn't the one being
+    // spent, so surface it explicitly rather than letting a payout fail later.
+    const chains = ["eth", "bsc", "polygon", "tron", "btc"] as const;
+    const wallets = await Promise.all(
+      chains.map(async (chain) => {
+        const address = addresses[chain];
+        let signer: string | null = null;
+        let error: string | null = null;
+        try {
+          await privKeyForChain(chain); // throws on address-without-key / mismatch
+          signer = await payoutAddressForChain(chain);
+        } catch (e) {
+          error = (e as Error).message;
+        }
+        return {
+          chain,
+          address,
+          signer,
+          source: address ? "imported" : signer ? "generated" : null,
+          ok: !error,
+          error
+        };
+      })
+    );
+
     if (!configured) {
-      return reply.send({ configured: false, addresses, balances: [], totalUsd: 0 });
+      return reply.send({ configured: false, addresses, wallets, balances: [], totalUsd: 0 });
     }
     try {
       const snap = await reconcile(addresses, { force: !!req.query?.force });

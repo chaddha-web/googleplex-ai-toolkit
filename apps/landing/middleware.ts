@@ -8,7 +8,7 @@ const ADMIN_HOST = "admin.ggakingclub.com";
 // path so the browser URL stays clean (admin.ggakingclub.com/sessions, etc.).
 // The index page (/app/admin, the members table) is exposed as /members.
 const ADMIN_SEGMENTS = new Set([
-  "overview", "members", "sessions", "withdrawals", "treasury", "reclaims",
+  "overview", "members", "sessions", "sales", "withdrawals", "treasury", "reclaims",
   "campaigns", "inbox", "circle", "globe", "audit", "logs", "system",
   "settings", "permissions"
 ]);

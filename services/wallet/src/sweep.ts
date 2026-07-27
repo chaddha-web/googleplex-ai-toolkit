@@ -20,7 +20,7 @@ import { db } from "./db/index.js";
 import { userWalletAddresses, treasurySweeps } from "./db/schema.js";
 import { loadAndDecryptSeed } from "./kms.js";
 import { deriveUserPrivKey } from "./hd.js";
-import { treasuryAddress, privKeyForChain } from "./treasury.js";
+import { payoutAddressForChain, privKeyForChain } from "./treasury.js";
 import { TOKENS } from "./tokens.js";
 import * as evm from "./sign/evm.js";
 import * as tron from "./sign/tron.js";
@@ -233,12 +233,13 @@ export async function previewUser(userId: string): Promise<SweepPlan> {
     legs: [],
     skipped: []
   };
-  const evmTreasury = await treasuryAddress("evm");
-  await planEvm("eth", row.eth, evmTreasury, plan);
-  await planEvm("bsc", row.bsc, evmTreasury, plan);
-  await planEvm("polygon", row.polygon || row.eth, evmTreasury, plan);
-  if (row.tron) await planTron(row.tron, await treasuryAddress("tron"), plan);
-  if (row.btc) await planBtc(row.btc, await treasuryAddress("btc"), plan);
+  // Each chain consolidates into ITS OWN treasury wallet — the same wallet that
+  // pays that chain's withdrawals, so a chain stays self-funding.
+  await planEvm("eth", row.eth, await payoutAddressForChain("eth"), plan);
+  await planEvm("bsc", row.bsc, await payoutAddressForChain("bsc"), plan);
+  await planEvm("polygon", row.polygon || row.eth, await payoutAddressForChain("polygon"), plan);
+  if (row.tron) await planTron(row.tron, await payoutAddressForChain("tron"), plan);
+  if (row.btc) await planBtc(row.btc, await payoutAddressForChain("btc"), plan);
   return plan;
 }
 
@@ -285,8 +286,8 @@ export async function executeUser(userId: string, adminId: string): Promise<Swee
   // ── EVM (ETH + BSC + Polygon share the address/key) ────────────────────
   try {
     const priv = deriveUserPrivKey(await masterMnemonic("evm"), "eth", row.user_index);
-    const treasury = await treasuryAddress("evm");
     for (const chain of EVM_CHAINS) {
+      const treasury = await payoutAddressForChain(chain);
       const addr =
         chain === "eth" ? row.eth : chain === "polygon" ? row.polygon || row.eth : row.bsc;
       const gasPrice = await evm.evmGasPrice(chain);
@@ -339,7 +340,7 @@ export async function executeUser(userId: string, adminId: string): Promise<Swee
   if (row.tron) {
     try {
       const priv = deriveUserPrivKey(await masterMnemonic("tron"), "tron", row.user_index);
-      const treasury = await treasuryAddress("tron");
+      const treasury = await payoutAddressForChain("tron");
       for (const t of TOKENS.filter((t) => t.chain === "tron" && !t.native && t.symbol !== "PARTY")) {
         let bal: bigint;
         try {
@@ -387,7 +388,7 @@ export async function executeUser(userId: string, adminId: string): Promise<Swee
   if (row.btc) {
     try {
       const priv = deriveUserPrivKey(await masterMnemonic("btc"), "btc", row.user_index);
-      const treasury = await treasuryAddress("btc");
+      const treasury = await payoutAddressForChain("btc");
       const res = await btc.btcSweepAllFromPriv({ priv, to: treasury });
       if (res) {
         record(

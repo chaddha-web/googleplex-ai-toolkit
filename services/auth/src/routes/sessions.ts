@@ -3,14 +3,20 @@ import { db, stmts } from "../db.js";
 import { verifyAccessToken } from "../jwt.js";
 import { recordActivity, onlineMembers, onlineUserIds } from "../session-activity.js";
 import { actingAgainstFounder, isFounder } from "../permissions.js";
-import { lookupGeo } from "../geoip.js";
+import { resolveGeo } from "../geoip.js";
 import { notify } from "../notify.js";
 
 const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
 
-/** Human "City, Country" (or Region/Country) from an IP, or null. */
-function areaLabel(ip: string | null | undefined): string | null {
-  const geo = lookupGeo(ip);
+/**
+ * Human "City, Country" (or Region/Country) from an IP, or null.
+ *
+ * Uses the ip2location tier — this is the admin-facing Area column, where a
+ * missing or wrong city is visible. Falls back to the offline database
+ * automatically if the provider is unavailable.
+ */
+async function areaLabel(ip: string | null | undefined): Promise<string | null> {
+  const geo = await resolveGeo(ip);
   if (!geo) return null;
   let country: string | null = null;
   try {
@@ -184,7 +190,12 @@ export async function sessionsRoutes(app: FastifyInstance) {
         seen.add(key);
         return true;
       })
-      .map((r): SessionAdminPublic => {
+      .filter(() => true);
+
+    // Area resolution hits the network, so run the rows concurrently rather
+    // than serially — the lookups are independent and each is cached.
+    const sessions: SessionAdminPublic[] = await Promise.all(
+      filtered.map(async (r): Promise<SessionAdminPublic> => {
         // Hierarchy/privacy: the founder's IP + location are hidden from every
         // non-founder admin. The founder still sees their own.
         const hideGeo = isFounder(r.email) && !viewerIsFounder;
@@ -205,10 +216,11 @@ export async function sessionsRoutes(app: FastifyInstance) {
           role: r.role,
           online: online.has(r.user_id),
           isFounder: isFounder(r.email),
-          area: hideGeo ? null : areaLabel(r.ip)
+          area: hideGeo ? null : await areaLabel(r.ip)
         };
-      });
-    return reply.send({ sessions: filtered, scope, onlineCount: online.size });
+      })
+    );
+    return reply.send({ sessions, scope, onlineCount: online.size });
   });
 
   // ── GET /auth/admin/online — members actively using the platform NOW ────

@@ -491,6 +491,40 @@ export async function adminAccounting(): Promise<Accounting> {
   return data as Accounting;
 }
 
+export type Sale = {
+  id: string;
+  userId: string;
+  item: string;
+  itemName: string | null;
+  chain: string | null;
+  symbol: string;
+  amount: number;
+  usd: number;
+  at: number | null;
+};
+export type SalesReport = {
+  sales: Sale[];
+  totals: { count: number; usd: number };
+  byItem: { item: string; itemName: string | null; count: number; usd: number }[];
+  periods: {
+    today: { n: number; usd: number };
+    week: { n: number; usd: number };
+    month: { n: number; usd: number };
+  };
+  daily: { date: string; count: number; usd: number }[];
+};
+
+/** Admin: revenue report — what members paid us (never deposits/withdrawals). */
+export async function adminSales(opts: { limit?: number; item?: string } = {}): Promise<SalesReport> {
+  const q = new URLSearchParams();
+  if (opts.limit) q.set("limit", String(opts.limit));
+  if (opts.item) q.set("item", opts.item);
+  const res = await authedFetch(`${WALLET_BASE}/wallet/admin/sales?${q}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not load sales.");
+  return data as SalesReport;
+}
+
 export type LedgerEntry = {
   id: string;
   userId: string;

@@ -99,6 +99,33 @@ export const swaps = sqliteTable("swaps", {
   created_at: integer("created_at")
 });
 
+/**
+ * Sales — every unit of revenue the platform earns from a member.
+ *
+ * Deliberately separate from `deposits` (a member funding their own custodial
+ * balance is NOT revenue) and from `ledger_entries` (a movement, not an order).
+ * One row per completed purchase, written in the same transaction as the ledger
+ * debit so the two can never disagree.
+ *
+ * `item` is the product key ("studio_unlock", later a store slug) so new
+ * products report through the same page without a schema change.
+ */
+export const sales = sqliteTable("sales", {
+  id: text("id").primaryKey(),
+  user_id: text("user_id").notNull(),
+  item: text("item").notNull(),
+  item_name: text("item_name"),
+  /** What the member actually paid in, and how much of it (base units). */
+  chain: text("chain"),
+  symbol: text("symbol").notNull(),
+  amount_raw: text("amount_raw").notNull(),
+  /** USD captured AT THE TIME OF SALE — never recompute from today's price. */
+  usd: real("usd").notNull(),
+  /** The ledger entry this sale debited, for reconciliation. */
+  ledger_entry_id: text("ledger_entry_id"),
+  created_at: integer("created_at")
+});
+
 export const userWithdrawLimits = sqliteTable("user_withdraw_limits", {
   user_id: text("user_id").primaryKey(),
   max_per_tx_usd: real("max_per_tx_usd"),

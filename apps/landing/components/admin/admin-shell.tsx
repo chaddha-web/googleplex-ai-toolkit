@@ -69,6 +69,12 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M12 3l8 4.5H4z" />
     </>
   ),
+  tag: (
+    <>
+      <path d="M3.5 11.2V4.5a1 1 0 0 1 1-1h6.7a1 1 0 0 1 .7.3l8.3 8.3a1 1 0 0 1 0 1.4l-6.7 6.7a1 1 0 0 1-1.4 0L3.8 11.9a1 1 0 0 1-.3-.7Z" />
+      <path d="M7.8 8.3a.6.6 0 1 0 0-.01" />
+    </>
+  ),
   search: <path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM20 20l-3.5-3.5" />,
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   x: <path d="M6 6l12 12M18 6 6 18" />,
@@ -119,6 +125,7 @@ const NAV: NavGroup[] = [
   {
     label: "Money",
     items: [
+      { label: "Sales", href: "/sales", icon: "tag" },
       { label: "Withdrawals", href: "/withdrawals", icon: "download", cap: "withdrawals" },
       { label: "Treasury", href: "/treasury", icon: "bank" },
       { label: "Token reclaims", href: "/reclaims", icon: "rotate" }

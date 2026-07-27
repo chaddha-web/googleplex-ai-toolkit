@@ -12,7 +12,11 @@ export { lookupGeo }; // back-compat for any importer of geo.ts
  * Privacy by construction: the response carries ONLY country/state aggregates
  * with counts + a human label. No IPs, ids, or emails ever leave this handler,
  * and lat/lng is rounded to whole degrees (~100 km) so nothing is pinpointable.
- * All geoip is offline (geoip-lite), so IPs never leave the VPS.
+ * This route deliberately uses the OFFLINE tier (`lookupGeo`), so no IP leaves
+ * the VPS here: the globe is high-volume and only needs country/state
+ * granularity, which geoip-lite already gives. The ip2location tier
+ * (`resolveGeo`) is reserved for the surfaces where a precise city is visible —
+ * the admin session Area column and login-location alerts.
  *
  * Three layers, all as ready-to-plot cells `{lat, lng, count, label}`:
  *  - members  — every member, placed from their latest session IP when we have

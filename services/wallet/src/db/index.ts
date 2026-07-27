@@ -123,6 +123,25 @@ sqlite.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_treasury_sweeps_user ON treasury_sweeps (user_id, created_at);
 
+  -- Revenue. One row per completed purchase, written in the same transaction
+  -- as the ledger debit. NOT the same thing as a deposit (a member funding
+  -- their own custodial balance earns us nothing).
+  CREATE TABLE IF NOT EXISTS sales (
+    id              TEXT PRIMARY KEY,
+    user_id         TEXT NOT NULL,
+    item            TEXT NOT NULL,   -- 'studio_unlock' | future store slug
+    item_name       TEXT,
+    chain           TEXT,
+    symbol          TEXT NOT NULL,
+    amount_raw      TEXT NOT NULL,
+    usd             REAL NOT NULL,   -- captured at sale time, never recomputed
+    ledger_entry_id TEXT,
+    created_at      INTEGER
+  );
+  CREATE INDEX IF NOT EXISTS idx_sales_created ON sales (created_at);
+  CREATE INDEX IF NOT EXISTS idx_sales_item    ON sales (item, created_at);
+  CREATE INDEX IF NOT EXISTS idx_sales_user    ON sales (user_id, created_at);
+
   -- Per-user withdrawal-limit overrides. Any NULL field falls back to the
   -- global (admin-settings) limit.
   CREATE TABLE IF NOT EXISTS user_withdraw_limits (

@@ -15,7 +15,7 @@ import { sendSignupOtp, sendLoginOtp, sendWelcomeEmail, sendLoginAlertEmail } fr
 import { issueRefreshToken, signAccessToken, signSecureToken, TTL } from "../jwt.js";
 import { setRefreshCookie } from "../cookies.js";
 import { notify } from "../notify.js";
-import { lookupGeo } from "../geoip.js";
+import { resolveGeo } from "../geoip.js";
 
 const SITE_URL = process.env.PUBLIC_SITE_URL || "https://ggakingclub.com";
 const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
@@ -256,7 +256,8 @@ export async function otpRoutes(app: FastifyInstance) {
         const stale = !user.last_login_alert_at || Date.now() - user.last_login_alert_at >= WEEK;
         if (!seenIp || stale) {
           const when = Date.now();
-          const hit = lookupGeo(req.ip);
+          // Member-facing "was this you?" alert — worth the precise lookup.
+          const hit = await resolveGeo(req.ip);
           const location = hit
             ? [hit.city, hit.region, countryName(hit.country)].filter(Boolean).join(", ") || "Unknown"
             : "Unknown";

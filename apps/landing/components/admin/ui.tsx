@@ -17,7 +17,7 @@ const COIN_STYLE: Record<string, { bg: string; content: string; dark?: boolean }
   TRX: { bg: "#EB0029", content: "TRX" },
   ETH: { bg: "#627EEA", content: "Ξ" },
   BTC: { bg: "#F7931A", content: "₿" },
-  POL: { bg: "#6C00F6", content: "POL" },
+  POL: { bg: "#8247E5", content: "POL" },
   PARTY: { bg: "#8A68FF", content: "P" }
 };
 

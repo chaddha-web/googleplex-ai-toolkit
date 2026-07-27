@@ -126,18 +126,75 @@ async function importedKeys(): Promise<ImportedKeys> {
   }
 }
 
+export type PayoutChain = "eth" | "bsc" | "polygon" | "tron" | "btc";
+
 /**
- * Private key (hex, no 0x) to SIGN withdrawals for a chain. Prefers the
- * admin-imported funded-wallet key for that chain; falls back to the
- * KMS-generated treasury key for the chain's family.
+ * Private key (hex, no 0x) to SIGN withdrawals for a chain.
+ *
+ * Each chain has its OWN wallet: the admin-imported key for that chain wins,
+ * even when several chains share an address space (eth/bsc/polygon are all
+ * secp256k1 0x addresses but may be three different wallets). Only a chain the
+ * operator has left entirely unconfigured falls back to the KMS-generated
+ * per-family treasury key.
+ *
+ * Two hard guards, because the failure they prevent is silent and expensive:
+ *
+ *  1. **Address without key → refuse.** Admin → Settings holds the address and
+ *     the key in separate fields. Configuring only the address used to fall
+ *     through to the generated treasury key, so the admin panel displayed one
+ *     (funded) wallet while payouts were signed by a different (empty) one —
+ *     withdrawals fail on insufficient funds and the balance you are looking at
+ *     is not the balance being spent.
+ *  2. **Key must derive its address.** A key pasted against the wrong chain, or
+ *     a typo'd address, would otherwise pay out of an unexpected wallet.
  */
-export async function privKeyForChain(
-  chain: "eth" | "bsc" | "polygon" | "tron" | "btc"
-): Promise<string> {
+export async function privKeyForChain(chain: PayoutChain): Promise<string> {
   const imp = await importedKeys();
-  const k = imp[chain]?.privkey;
-  if (k && k.trim()) return k.trim().replace(/^0x/, "");
+  const key = imp[chain]?.privkey?.trim();
+  const addr = imp[chain]?.address?.trim();
+
+  if (key) {
+    const priv = key.replace(/^0x/, "");
+    if (addr) {
+      let derived: string;
+      try {
+        derived = addressForKey(familyForChain(chain), priv);
+      } catch {
+        throw new Error(
+          `The ${chain.toUpperCase()} treasury private key in Admin → Settings is not a valid key for this chain.`
+        );
+      }
+      if (derived.toLowerCase() !== addr.toLowerCase()) {
+        throw new Error(
+          `The ${chain.toUpperCase()} treasury key does not match the configured ${chain.toUpperCase()} address ` +
+            `(key derives ${derived}). Fix the pair in Admin → Settings before paying out.`
+        );
+      }
+    }
+    return priv;
+  }
+
+  if (addr) {
+    throw new Error(
+      `A ${chain.toUpperCase()} treasury address is configured in Admin → Settings but no private key. ` +
+        `Import the matching key — refusing to pay out from a different wallet than the one shown.`
+    );
+  }
+
   return loadTreasuryPriv(familyForChain(chain));
+}
+
+/**
+ * The address that actually pays out (and receives sweeps) for a chain — the
+ * per-chain imported wallet, else the generated per-family treasury address.
+ * Unlike `withdrawalAddresses()` (an admin display of what is configured) this
+ * always resolves to a real address, because a sweep needs somewhere to go.
+ */
+export async function payoutAddressForChain(chain: PayoutChain): Promise<string> {
+  const imp = await importedKeys();
+  const addr = imp[chain]?.address?.trim();
+  if (addr) return addr;
+  return treasuryAddress(familyForChain(chain));
 }
 
 /**
