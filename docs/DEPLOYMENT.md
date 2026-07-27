@@ -306,6 +306,7 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       ETH_RPC_URL: https://eth.llamarpc.com
       BSC_RPC_URL: https://bsc-dataseed.binance.org
+      POLYGON_RPC_URL: https://polygon-mainnet.g.alchemy.com/v2/YOUR_ALCHEMY_KEY
       POLYGON_RPC_URL: https://polygon-rpc.com
       TRON_GRID_URL: ${TRON_GRID_URL}
       TRON_API_KEY: ${TRON_API_KEY}

@@ -22,7 +22,7 @@ the live chains today.
    per-user     ┌───────────────────────────────────────────┐
    on signup    │  deriveUserAddresses(userIndex, xpubs)    │
                 │    • pure-local, no RPC, microseconds     │
-                │    • returns { eth, bsc, tron, btc }      │
+                │    • returns { eth, bsc, polygon, tron, btc } │
                 └───────────────────────────────────────────┘
 
    periodic     ┌───────────────────────────────────────────┐
@@ -45,6 +45,7 @@ services/wallet/
 │   └── chain/
 │       ├── eth.ts         # viem client, native + ERC20 reads
 │       ├── bsc.ts         # viem client, native + BEP20 reads
+│       ├── polygon.ts     # viem client, native POL + ERC20 reads
 │       ├── tron.ts        # TronGrid REST, native + TRC20 reads
 │       └── btc.ts         # mempool.space REST, native balance
 ├── bin/
@@ -65,14 +66,15 @@ services/wallet/
    ```
 2. **Fill in `.env`:** drop in your `ETH_RPC_URL`, `TRON_API_KEY`,
    `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
-   `KMS_KEY_ID`. The BSC and BTC URLs already have sensible public
-   defaults baked in.
+   `KMS_KEY_ID`. Polygon reuses the same Alchemy key as Ethereum
+   (`POLYGON_RPC_URL`) so the deposit indexer gets full transfer history.
+   The BSC and BTC URLs already have sensible public defaults baked in.
 3. **Verify RPCs reachable:**
    ```
    cd services/wallet
    npm run check-rpcs
    ```
-   You should see `✓ block <N>` for all four chains.
+   You should see `✓ block <N>` for all five chains.
 4. **Generate the master seeds (one-time):**
    ```
    npm run init-seeds
@@ -122,12 +124,15 @@ Current registry:
 |---|---|---|---|
 | ETH | Ethereum | 18 | native |
 | BNB | BSC | 18 | native |
+| POL | Polygon | 18 | native (renamed from MATIC, Sept 2024) |
 | TRX | Tron | 6 | native |
 | BTC | Bitcoin | 8 | native |
 | USDC | Ethereum (ERC20) | 6 | |
 | USDT | Ethereum (ERC20) | 6 | |
 | USDT | BSC (BEP20) | 18 | yes, 18 not 6 |
 | USDC | BSC (BEP20) | 18 | |
+| USDC | Polygon | 6 | native Circle USDC — **not** the bridged USDC.e |
+| USDT | Polygon | 6 | |
 | USDT | Tron (TRC20) | 6 | |
 | PARTY | Tron (TRC20) | **6 (assumed)** | ⚠ confirm on tronscan |
 
