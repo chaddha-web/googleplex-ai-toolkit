@@ -732,9 +732,12 @@ function TxDetail({ tx, onClose }: { tx: Tx; onClose: () => void }) {
       className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start sm:items-center justify-center p-0 sm:p-6"
       onClick={onClose}
     >
+      {/* `liquid-glass`, like every other modal on this page. It previously set
+          `background: var(--surface-card)` — a near-white panel — while all its
+          children kept text-white/*, so the labels and values were white on
+          white and effectively invisible. */}
       <div
-        className="w-full sm:max-w-md sm:rounded-3xl min-h-screen sm:min-h-0 ring-1 ring-black/10 p-6 shadow-2xl"
-        style={{ background: "var(--surface-card)" }}
+        className="w-full sm:max-w-md sm:rounded-3xl min-h-screen sm:min-h-0 liquid-glass p-6 shadow-2xl max-h-screen sm:max-h-[85vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-end">
