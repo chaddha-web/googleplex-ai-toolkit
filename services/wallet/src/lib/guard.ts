@@ -51,6 +51,37 @@ export async function requireCapability(
   return true;
 }
 
+/**
+ * The founder's email — same resolution the auth service uses: explicit
+ * FOUNDER_EMAIL, else the first entry in ADMIN_EMAILS.
+ */
+const FOUNDER_EMAIL = (
+  process.env.FOUNDER_EMAIL ||
+  (process.env.ADMIN_EMAILS ?? "").split(",")[0] ||
+  ""
+)
+  .trim()
+  .toLowerCase();
+
+export function isFounder(email: string | null | undefined): boolean {
+  if (!FOUNDER_EMAIL) return false;
+  return (email ?? "").trim().toLowerCase() === FOUNDER_EMAIL;
+}
+
+/**
+ * Require the founder specifically — stricter than any capability, because
+ * capabilities are delegated to sub-admins. For actions where the blast radius
+ * is the treasury itself.
+ */
+export async function requireFounder(req: FastifyRequest, reply: FastifyReply) {
+  if (!(await requireRole(req, reply, "admin"))) return false;
+  if (!isFounder(req.user!.email)) {
+    reply.code(403).send({ error: "Founder only." });
+    return false;
+  }
+  return true;
+}
+
 export function requireInternal(req: FastifyRequest, reply: FastifyReply) {
   const header = req.headers.authorization;
   if (!header || !header.startsWith("Bearer ")) {

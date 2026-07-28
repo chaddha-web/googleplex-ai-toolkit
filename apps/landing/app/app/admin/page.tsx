@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-context";
-// ⚠ TEMPORARY — DEMO ACCOUNTS (Can gate + demo client calls).
+// Founder-only demo-account controls (see services/wallet/src/demo.ts).
 import { Can } from "@/components/admin/access";
 import {
   listAllUsers,
@@ -735,8 +735,8 @@ function MemberModal({
           </div>
         )}
 
-        {/* ⚠ TEMPORARY — DEMO ACCOUNTS. Delete with the rest of the feature. */}
-        <Can capability="settings">
+        {/* Demo-account controls — founder-only; the server re-checks. */}
+        <Can founder>
           <DemoPanel userId={user.id} onCredited={() => reloadDetail()} />
         </Can>
 
@@ -1106,15 +1106,12 @@ function formatDate(ms: number): string {
 
 
 /**
- * ⚠ TEMPORARY — DEMO ACCOUNTS.
+ * Demo-account controls for one member.
  *
- * Marks a member as a demo account (their withdrawals complete in the UI but
- * never broadcast) and credits fabricated balances for walkthroughs. Gated on
- * the `settings` capability, and the server re-checks — this UI is convenience,
- * not the control.
- *
- * Delete this component together with the rest of the demo feature; see
- * services/wallet/src/demo.ts for the teardown checklist.
+ * Marks the member as a demo account (their withdrawals complete in the UI but
+ * never broadcast) and credits fabricated balance for walkthroughs.
+ * Founder-only, and the server re-checks — this UI is convenience, not the
+ * control. The full picture across all demo accounts lives at /demo.
  */
 const DEMO_CREDIT_ASSETS = [
   { chain: "bsc", symbol: "USDT" },
@@ -1152,6 +1149,13 @@ function DemoPanel({ userId, onCredited }: { userId: string; onCredited: () => v
   async function toggle() {
     const next = !isDemo;
     if (
+      !next &&
+      !confirm(
+        "Turn OFF demo mode?\n\nAny fabricated balance still in the ledger is clawed back first, so it can never be withdrawn for real."
+      )
+    )
+      return;
+    if (
       next &&
       !confirm(
         "Make this a DEMO account?\n\nTheir withdrawals will complete in the UI without ever going on-chain. Only do this for an account you control."
@@ -1162,9 +1166,19 @@ function DemoPanel({ userId, onCredited }: { userId: string; onCredited: () => v
     setErr(null);
     setOk(null);
     try {
-      await adminSetDemoAccount(userId, next, "set from admin panel");
+      const res = await adminSetDemoAccount(userId, next, "set from admin panel");
       setIsDemo(next);
-      setOk(next ? "Demo mode on — withdrawals will not broadcast." : "Demo mode off — withdrawals are real again.");
+      if (next) {
+        setOk("Demo mode on — withdrawals will not broadcast.");
+      } else {
+        const rev = res?.reversed ?? [];
+        setOk(
+          rev.length
+            ? `Demo mode off. Clawed back ${rev.map((x) => `${x.amount} ${x.symbol}`).join(", ")}.`
+            : "Demo mode off — withdrawals are real again."
+        );
+      }
+      onCredited();
     } catch (e) {
       setErr((e as Error).message);
     } finally {

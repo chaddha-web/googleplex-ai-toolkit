@@ -491,20 +491,36 @@ export async function adminAccounting(): Promise<Accounting> {
   return data as Accounting;
 }
 
-/* ⚠ TEMPORARY — DEMO ACCOUNTS. Delete with the rest of the demo feature. */
+/* Demo accounts — founder-only. See services/wallet/src/demo.ts. */
 
-export type DemoAccount = { userId: string; note: string | null; createdBy: string | null; at: number | null };
+export type DemoCreditRow = { chain: string; symbol: string; amount: number; usd: number };
+export type DemoAccount = {
+  userId: string;
+  note: string | null;
+  createdBy: string | null;
+  at: number | null;
+  fabricatedUsd: number;
+  credits: DemoCreditRow[];
+};
 
-/** Admin: which members are demo accounts (withdrawals never broadcast). */
-export async function adminDemoAccounts(): Promise<{ enabled: boolean; accounts: DemoAccount[] }> {
+/** Founder: which members are demo accounts (withdrawals never broadcast). */
+export async function adminDemoAccounts(): Promise<{
+  enabled: boolean;
+  maxCreditUsd: number;
+  accounts: DemoAccount[];
+}> {
   const res = await authedFetch(`${WALLET_BASE}/wallet/admin/demo-accounts`);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Could not load demo accounts.");
-  return data as { enabled: boolean; accounts: DemoAccount[] };
+  return data as { enabled: boolean; maxCreditUsd: number; accounts: DemoAccount[] };
 }
 
-/** Admin: turn demo mode on/off for one member. */
-export async function adminSetDemoAccount(userId: string, demo: boolean, note?: string): Promise<void> {
+/** Founder: turn demo mode on/off. Disabling claws back fabricated balance. */
+export async function adminSetDemoAccount(
+  userId: string,
+  demo: boolean,
+  note?: string
+): Promise<{ reversed?: { chain: string; symbol: string; amount: number }[] }> {
   const res = await authedFetch(`${WALLET_BASE}/wallet/admin/demo-accounts/${userId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -512,9 +528,10 @@ export async function adminSetDemoAccount(userId: string, demo: boolean, note?: 
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Could not update demo status.");
+  return data as { reversed?: { chain: string; symbol: string; amount: number }[] };
 }
 
-/** Admin: credit a demo account's balance (audited ledger adjustment). */
+/** Founder: credit a demo account (audited, capped, reversible). */
 export async function adminCreditDemoAccount(
   userId: string,
   body: { chain: string; symbol: string; amount: number }

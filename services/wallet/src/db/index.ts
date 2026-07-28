@@ -127,19 +127,32 @@ sqlite.exec(`
   -- BROADCASTING and without touching the treasury — for exercising the full
   -- member flow on a live box without spending real crypto.
   --
-  -- This deliberately re-introduces a bypass that f76ec1f removed ("every
-  -- withdrawal now broadcasts on-chain, no exceptions"). The guardrails that
-  -- make it safe to run beside real members:
-  --   • opt-in per user id, stored here, never an env email list;
-  --   • it lives in the WALLET db, so the no-broadcast decision is made by the
-  --     service that moves money — no cross-service call to get it wrong;
-  --   • demo withdrawals are flagged (withdrawals.is_demo) and excluded from
-  --     platform accounting, so the real books stay honest.
+  -- Founder-only, opt-in per user id, and never applied to an account with
+  -- real deposit history. Lives in the WALLET db so the no-broadcast decision
+  -- is made by the service that moves money. Demo withdrawals are flagged
+  -- (withdrawals.is_demo) and excluded from platform accounting, so the real
+  -- books stay honest. See src/demo.ts for the full threat model.
   CREATE TABLE IF NOT EXISTS demo_accounts (
     user_id    TEXT PRIMARY KEY,
     note       TEXT,
     created_by TEXT,
     created_at INTEGER
+  );
+
+  -- Fabricated credit handed to a demo account, per (chain, symbol).
+  --
+  -- This is what makes demo mode reversible. Without it, crediting fake
+  -- balance and then turning demo mode OFF would leave real, withdrawable
+  -- money against the treasury — the one way this feature could actually lose
+  -- funds. Disabling demo mode reverses whatever is still here first.
+  CREATE TABLE IF NOT EXISTS demo_credits (
+    user_id    TEXT NOT NULL,
+    chain      TEXT NOT NULL,
+    symbol     TEXT NOT NULL,
+    raw        TEXT NOT NULL DEFAULT '0',
+    usd        REAL NOT NULL DEFAULT 0,
+    created_at INTEGER,
+    PRIMARY KEY (user_id, chain, symbol)
   );
 
   -- Revenue. One row per completed purchase, written in the same transaction
@@ -205,9 +218,8 @@ try {
 }
 sqlite.exec(`UPDATE user_wallet_addresses SET polygon = eth WHERE polygon IS NULL OR polygon = ''`);
 
-// Demo withdrawals are marked so they can be told apart from real ones (and
-// excluded from accounting). Part of the temporary demo feature — see
-// `demo.ts` for the teardown checklist.
+// Demo withdrawals are marked so they can be told apart from real ones and
+// excluded from accounting. See `demo.ts`.
 try {
   sqlite.exec(`ALTER TABLE withdrawals ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0`);
 } catch {

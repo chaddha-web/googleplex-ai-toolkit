@@ -69,6 +69,12 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M12 3l8 4.5H4z" />
     </>
   ),
+  flask: (
+    <>
+      <path d="M10 3h4M10.5 3v6.2L5.2 18a1.6 1.6 0 0 0 1.4 2.4h10.8A1.6 1.6 0 0 0 18.8 18l-5.3-8.8V3" />
+      <path d="M8 15h8" />
+    </>
+  ),
   tag: (
     <>
       <path d="M3.5 11.2V4.5a1 1 0 0 1 1-1h6.7a1 1 0 0 1 .7.3l8.3 8.3a1 1 0 0 1 0 1.4l-6.7 6.7a1 1 0 0 1-1.4 0L3.8 11.9a1 1 0 0 1-.3-.7Z" />
@@ -151,6 +157,7 @@ const NAV: NavGroup[] = [
       { label: "Audit log", href: "/audit", icon: "file", cap: "settings" },
       { label: "Logs", href: "/logs", icon: "activity" },
       { label: "System health", href: "/system", icon: "activity" },
+      { label: "Demo accounts", href: "/demo", icon: "flask", founder: true },
       { label: "Settings", href: "/settings", icon: "settings", cap: "settings" },
       { label: "Admin access", href: "/permissions", icon: "shield", founder: true }
     ]
