@@ -30,6 +30,8 @@ import { previewUser, executeUser } from "./sweep.js";
 import { withdrawalAddresses, payoutAddressForChain, privKeyForChain } from "./treasury.js";
 import { effectiveLimits, checkCooldown, financeConfig } from "./withdraw-limits.js";
 import { sendWithdrawal, isValidDestination } from "./withdraw.js";
+// ⚠ TEMPORARY — DEMO ACCOUNTS (see demo.ts for the teardown checklist).
+import { isDemoAccount, demoUserIds, demoTxHash } from "./demo.js";
 import { notify } from "./notify.js";
 
 // Withdrawal safety caps (USD). Fully-automatic model still bounds blast radius.
@@ -636,7 +638,9 @@ export async function walletRoutes(app: FastifyInstance) {
     // Funds are already debited (reserved). If this is at/above the review
     // threshold, park it as awaiting_approval and DO NOT broadcast — an admin
     // approves (broadcast) or rejects (refund) from the review queue.
-    {
+    // (A demo account skips the hold — there is nothing to review when nothing
+    // can leave. ⚠ TEMPORARY — DEMO ACCOUNTS.)
+    if (!isDemoAccount(user.sub)) {
       const wTok = findToken(w.chain as any, w.symbol);
       const wUsd = wTok ? (Number(BigInt(w.amount_raw)) / 10 ** wTok.decimals) * (priceUsd(w.symbol as any) ?? 0) : 0;
       const limits = await effectiveLimits(user.sub);
@@ -648,6 +652,36 @@ export async function walletRoutes(app: FastifyInstance) {
         );
         return reply.send({ ok: true, awaitingApproval: true, withdrawalId: w.id });
       }
+    }
+
+    // ⚠ TEMPORARY — DEMO ACCOUNTS. Short-circuit BEFORE anything touches the
+    // treasury: no key is loaded, no transaction is built, nothing is sent.
+    // The ledger is still debited above, so the member sees their balance drop
+    // and the withdrawal complete exactly like a real one.
+    if (isDemoAccount(user.sub)) {
+      const demoNet = await netWithdrawRaw(w.chain, w.symbol, w.amount_raw);
+      const demoHash = demoTxHash(w.chain);
+      await db
+        .update(withdrawals)
+        .set({
+          status: "confirmed",
+          signed_at: Date.now(),
+          broadcast_at: Date.now(),
+          confirmed_at: Date.now(),
+          tx_hash: demoHash,
+          fee_raw: demoNet.feeRaw,
+          is_demo: 1
+        })
+        .where(eq(withdrawals.id, w.id));
+      app.log.warn(
+        { withdrawalId: w.id, userId: user.sub },
+        "[demo] withdrawal completed WITHOUT broadcasting (demo account)"
+      );
+      notify(
+        `🧪 <b>DEMO withdrawal</b> (nothing sent on-chain)\n${w.symbol} on ${w.chain}\n` +
+          `to <code>${w.dest_address}</code>`
+      );
+      return reply.send({ ok: true, status: "broadcast", txHash: demoHash });
     }
 
     // Balance is debited and the row is in "signing". Pay out from the company
@@ -1430,7 +1464,15 @@ export async function walletRoutes(app: FastifyInstance) {
   app.get("/wallet/admin/accounting", async (req: any, reply) => {
     if (!(await requireRole(req, reply, "admin"))) return;
 
-    const balRows = rawDb.prepare(`SELECT chain, symbol, raw FROM ledger_balances`).all() as any[];
+    // ⚠ TEMPORARY — DEMO ACCOUNTS: demo balances are fabricated, so they must
+    // never inflate platform accounting. Excluded here rather than filtered in
+    // the UI, so every consumer of this endpoint sees honest numbers.
+    const demoIds = new Set(demoUserIds());
+    const notDemo = (userId: string) => !demoIds.has(userId);
+
+    const balRows = (
+      rawDb.prepare(`SELECT user_id, chain, symbol, raw FROM ledger_balances`).all() as any[]
+    ).filter((b) => notDemo(b.user_id));
     let holdingsUsd = 0;
     const byChain: Record<string, number> = {};
     for (const b of balRows) {
@@ -1442,12 +1484,16 @@ export async function walletRoutes(app: FastifyInstance) {
     const sumUsd = (rows: any[], chainKey = "chain", symKey = "symbol", rawKey = "amount_raw") =>
       rows.reduce((n, r) => n + toUsd(r[chainKey], r[symKey], r[rawKey]), 0);
 
-    const dep = rawDb.prepare(`SELECT chain, symbol, amount_raw FROM deposits`).all() as any[];
+    const dep = (
+      rawDb.prepare(`SELECT user_id, chain, symbol, amount_raw FROM deposits`).all() as any[]
+    ).filter((d) => notDemo(d.user_id));
+    // `is_demo = 0` keeps fabricated payouts out of "withdrawn out" — they never
+    // left the treasury, so counting them would understate real funds.
     const wOut = rawDb
-      .prepare(`SELECT chain, symbol, amount_raw FROM withdrawals WHERE status IN ('broadcast','confirmed')`)
+      .prepare(`SELECT chain, symbol, amount_raw FROM withdrawals WHERE status IN ('broadcast','confirmed') AND is_demo = 0`)
       .all() as any[];
     const wPend = rawDb
-      .prepare(`SELECT chain, symbol, amount_raw FROM withdrawals WHERE status='awaiting_approval'`)
+      .prepare(`SELECT chain, symbol, amount_raw FROM withdrawals WHERE status='awaiting_approval' AND is_demo = 0`)
       .all() as any[];
 
     const one = (sql: string) => (rawDb.prepare(sql).get() as any)?.n ?? 0;
@@ -1560,6 +1606,134 @@ export async function walletRoutes(app: FastifyInstance) {
 
     tx.sort((a, b) => (b.at ?? 0) - (a.at ?? 0));
     return reply.send({ transactions: tx.slice(0, limit) });
+  });
+
+  // ⚠ TEMPORARY — DEMO ACCOUNTS. Delete this whole block at teardown.
+  // Gated on `settings` (founder always holds it) because it decides whether a
+  // user's withdrawals are real.
+  app.get("/wallet/admin/demo-accounts", async (req: any, reply) => {
+    if (!(await requireCapability(req, reply, "settings"))) return;
+    const rows = rawDb
+      .prepare(`SELECT user_id, note, created_by, created_at FROM demo_accounts ORDER BY created_at DESC`)
+      .all() as any[];
+    return reply.send({
+      enabled: (process.env.DEMO_ACCOUNTS_ENABLED ?? "1") !== "0",
+      accounts: rows.map((r) => ({
+        userId: r.user_id,
+        note: r.note,
+        createdBy: r.created_by,
+        at: r.created_at
+      }))
+    });
+  });
+
+  app.post("/wallet/admin/demo-accounts/:id", async (req: any, reply) => {
+    if (!(await requireCapability(req, reply, "settings"))) return;
+    const userId = String(req.params.id);
+    const on = req.body?.demo !== false;
+    if (on) {
+      rawDb
+        .prepare(
+          `INSERT INTO demo_accounts (user_id, note, created_by, created_at) VALUES (?,?,?,?)
+             ON CONFLICT(user_id) DO UPDATE SET note = excluded.note`
+        )
+        .run(userId, String(req.body?.note ?? "").slice(0, 200), req.user!.sub, Date.now());
+    } else {
+      rawDb.prepare(`DELETE FROM demo_accounts WHERE user_id = ?`).run(userId);
+    }
+    auditToAuth({
+      actorId: req.user!.sub,
+      action: on ? "demo.enable" : "demo.disable",
+      targetId: userId,
+      targetLabel: userId,
+      detail: { note: req.body?.note ?? null }
+    });
+    return reply.send({ ok: true, demo: on });
+  });
+
+  /**
+   * Credit a balance directly — a manual, audited ledger adjustment.
+   *
+   * Recorded as `admin_adjust`, NOT as a deposit: no money arrived on-chain, so
+   * writing a `deposits` row would corrupt the real deposit history and the
+   * "deposits in" total. Restricted to demo accounts, so this cannot be used to
+   * hand a real member spendable balance.
+   * ⚠ TEMPORARY — DEMO ACCOUNTS.
+   */
+  app.post("/wallet/admin/demo-accounts/:id/credit", async (req: any, reply) => {
+    if (!(await requireCapability(req, reply, "settings"))) return;
+    const userId = String(req.params.id);
+    if (!isDemoAccount(userId)) {
+      return reply.code(400).send({ error: "Not a demo account. Mark it as one first." });
+    }
+    const { chain, symbol, amount } = (req.body ?? {}) as {
+      chain?: string;
+      symbol?: string;
+      amount?: number;
+    };
+    const tok = chain && symbol ? findToken(chain as any, symbol) : null;
+    if (!tok) return reply.code(400).send({ error: "Unknown (chain, symbol)." });
+    const amt = Number(amount);
+    if (!Number.isFinite(amt) || amt <= 0) return reply.code(400).send({ error: "Bad amount." });
+
+    const raw = BigInt(Math.round(amt * 10 ** tok.decimals));
+    db.transaction((tx) => {
+      const cur = tx
+        .select()
+        .from(ledgerBalances)
+        .where(
+          and(
+            eq(ledgerBalances.user_id, userId),
+            eq(ledgerBalances.chain, tok.chain),
+            eq(ledgerBalances.symbol, tok.symbol)
+          )
+        )
+        .limit(1)
+        .all();
+      if (cur.length) {
+        tx.update(ledgerBalances)
+          .set({ raw: (BigInt(cur[0]!.raw) + raw).toString(), updated_at: Date.now() })
+          .where(
+            and(
+              eq(ledgerBalances.user_id, userId),
+              eq(ledgerBalances.chain, tok.chain),
+              eq(ledgerBalances.symbol, tok.symbol)
+            )
+          )
+          .run();
+      } else {
+        tx.insert(ledgerBalances)
+          .values({
+            user_id: userId,
+            chain: tok.chain,
+            symbol: tok.symbol,
+            raw: raw.toString(),
+            decimals: tok.decimals,
+            updated_at: Date.now()
+          })
+          .run();
+      }
+      tx.insert(ledgerEntries)
+        .values({
+          id: ulid(),
+          user_id: userId,
+          chain: tok.chain,
+          symbol: tok.symbol,
+          delta_raw: "+" + raw.toString(),
+          kind: "admin_adjust",
+          ref_id: "demo-credit",
+          created_at: Date.now()
+        })
+        .run();
+    });
+    auditToAuth({
+      actorId: req.user!.sub,
+      action: "demo.credit",
+      targetId: userId,
+      targetLabel: userId,
+      detail: { chain: tok.chain, symbol: tok.symbol, amount: amt }
+    });
+    return reply.send({ ok: true, chain: tok.chain, symbol: tok.symbol, amount: amt });
   });
 
   // ── Sales / revenue ───────────────────────────────────────────────────────

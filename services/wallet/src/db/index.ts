@@ -123,6 +123,25 @@ sqlite.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_treasury_sweeps_user ON treasury_sweeps (user_id, created_at);
 
+  -- Demo accounts. A listed user's withdrawals COMPLETE IN THE UI WITHOUT EVER
+  -- BROADCASTING and without touching the treasury — for exercising the full
+  -- member flow on a live box without spending real crypto.
+  --
+  -- This deliberately re-introduces a bypass that f76ec1f removed ("every
+  -- withdrawal now broadcasts on-chain, no exceptions"). The guardrails that
+  -- make it safe to run beside real members:
+  --   • opt-in per user id, stored here, never an env email list;
+  --   • it lives in the WALLET db, so the no-broadcast decision is made by the
+  --     service that moves money — no cross-service call to get it wrong;
+  --   • demo withdrawals are flagged (withdrawals.is_demo) and excluded from
+  --     platform accounting, so the real books stay honest.
+  CREATE TABLE IF NOT EXISTS demo_accounts (
+    user_id    TEXT PRIMARY KEY,
+    note       TEXT,
+    created_by TEXT,
+    created_at INTEGER
+  );
+
   -- Revenue. One row per completed purchase, written in the same transaction
   -- as the ledger debit. NOT the same thing as a deposit (a member funding
   -- their own custodial balance earns us nothing).
@@ -185,3 +204,12 @@ try {
   /* column already exists */
 }
 sqlite.exec(`UPDATE user_wallet_addresses SET polygon = eth WHERE polygon IS NULL OR polygon = ''`);
+
+// Demo withdrawals are marked so they can be told apart from real ones (and
+// excluded from accounting). Part of the temporary demo feature — see
+// `demo.ts` for the teardown checklist.
+try {
+  sqlite.exec(`ALTER TABLE withdrawals ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0`);
+} catch {
+  /* column already exists */
+}

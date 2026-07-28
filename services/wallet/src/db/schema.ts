@@ -83,7 +83,9 @@ export const withdrawals = sqliteTable("withdrawals", {
   signed_at: integer("signed_at"),
   broadcast_at: integer("broadcast_at"),
   confirmed_at: integer("confirmed_at"),
-  failure_reason: text("failure_reason")
+  failure_reason: text("failure_reason"),
+  /** ⚠ TEMPORARY — DEMO ACCOUNTS: 1 = completed in the UI, never broadcast. */
+  is_demo: integer("is_demo").notNull().default(0)
 });
 
 export const swaps = sqliteTable("swaps", {
