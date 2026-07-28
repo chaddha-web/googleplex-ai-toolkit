@@ -68,6 +68,27 @@ function CoinIcon({ sym, size = 28 }: { sym: string; size?: number }) {
   );
 }
 
+/**
+ * Small inline activity ring. Deliberately quiet — it sits next to text in a
+ * button or beside a heading to say "something is happening" without taking
+ * over the layout or shifting anything around it.
+ */
+function Spinner({ size = 14, className = "" }: { size?: number; className?: string }) {
+  return (
+    <span
+      role="status"
+      aria-label="Loading"
+      className={`inline-block shrink-0 rounded-full border-2 border-current border-r-transparent animate-spin align-[-2px] ${className}`}
+      style={{ width: size, height: size, opacity: 0.65 }}
+    />
+  );
+}
+
+/** Placeholder bar for content that hasn't arrived yet. */
+function Skeleton({ className = "" }: { className?: string }) {
+  return <span className={`block rounded-md bg-white/10 animate-pulse ${className}`} />;
+}
+
 const CHAIN_LABEL: Record<Chain, string> = {
   eth: "Ethereum (ERC20)",
   bsc: "BSC (BEP20)",
@@ -213,9 +234,9 @@ export default function WalletPage() {
             <p className="text-white/40 text-xs tracking-[0.3em] uppercase mb-2">
               Total balance
             </p>
-            <p className="text-5xl font-medium tracking-tight">
-              {assets === null ? "…" : usdFmt(totalUsd)}
-            </p>
+            <div className="text-5xl font-medium tracking-tight">
+              {assets === null ? <Skeleton className="h-12 w-48" /> : usdFmt(totalUsd)}
+            </div>
             <p className="text-white/40 text-sm mt-2">
               Across {fundedAssets.length} funded asset
               {fundedAssets.length === 1 ? "" : "s"} · fixed-price valuation
@@ -239,7 +260,7 @@ export default function WalletPage() {
               Holdings
             </p>
             {assets === null ? (
-              <p className="text-white/40 text-sm">Loading…</p>
+              <p className="text-white/40 text-sm inline-flex items-center gap-2"><Spinner /> Loading…</p>
             ) : fundedAssets.length === 0 ? (
               <p className="text-white/40 text-sm">
                 No balances yet. Deposit USDT or USDC to your addresses below,
@@ -449,7 +470,7 @@ function ConvertModal({
                     setChain(fc[0]?.chain ?? "");
                     setAmount("");
                   }}
-                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-3 text-white focus:ring-2 focus:ring-[#8A68FF]/60 appearance-none [color-scheme:dark]"
+                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-3 text-white focus:ring-2 focus:ring-[#8A68FF]/60 appearance-none [color-scheme:dark] [&>option]:bg-[#1A1A1A] [&>option]:text-white"
                 >
                   {assets.map((a) => (
                     <option key={a.asset} value={a.asset} className="bg-[#14122e] text-white">{a.asset}</option>
@@ -460,7 +481,7 @@ function ConvertModal({
                 <select
                   value={chain}
                   onChange={(e) => setChain(e.target.value as Chain)}
-                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-3 text-white focus:ring-2 focus:ring-[#8A68FF]/60 appearance-none [color-scheme:dark]"
+                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-3 text-white focus:ring-2 focus:ring-[#8A68FF]/60 appearance-none [color-scheme:dark] [&>option]:bg-[#1A1A1A] [&>option]:text-white"
                 >
                   {fundedChains.map((c) => (
                     <option key={c.chain} value={c.chain} className="bg-[#14122e] text-white">{CHAIN_LABEL[c.chain]}</option>
@@ -478,7 +499,7 @@ function ConvertModal({
                     const t = SWAP_TARGETS.find((t) => t.symbol === e.target.value)!;
                     setToChain(t.chains[0]!);
                   }}
-                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-3 text-white focus:ring-2 focus:ring-[#8A68FF]/60 appearance-none [color-scheme:dark]"
+                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-3 text-white focus:ring-2 focus:ring-[#8A68FF]/60 appearance-none [color-scheme:dark] [&>option]:bg-[#1A1A1A] [&>option]:text-white"
                 >
                   {SWAP_TARGETS.map((t) => (
                     <option key={t.symbol} value={t.symbol} className="bg-[#14122e] text-white">{t.symbol}</option>
@@ -489,7 +510,7 @@ function ConvertModal({
                 <select
                   value={toChain}
                   onChange={(e) => setToChain(e.target.value as Chain)}
-                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-3 text-white focus:ring-2 focus:ring-[#8A68FF]/60 appearance-none [color-scheme:dark]"
+                  className="bg-[#1A1A1A] rounded-xl w-full h-11 px-3 text-white focus:ring-2 focus:ring-[#8A68FF]/60 appearance-none [color-scheme:dark] [&>option]:bg-[#1A1A1A] [&>option]:text-white"
                 >
                   {toTarget.chains.map((c) => (
                     <option key={c} value={c} className="bg-[#14122e] text-white">{CHAIN_LABEL[c]}</option>
@@ -543,7 +564,7 @@ function ConvertModal({
               disabled={busy || !valid}
               className="mt-5 w-full rounded-full bg-white text-black text-sm font-medium py-3 hover:bg-white/90 disabled:opacity-40"
             >
-              {busy ? "Converting…" : `Convert to ${toSym}`}
+              {busy ? (<span className="inline-flex items-center gap-2"><Spinner /> Converting…</span>) : `Convert to ${toSym}`}
             </button>
           </>
         )}
@@ -643,7 +664,7 @@ function TransactionHistory() {
         Transaction history
       </p>
       {txs === null ? (
-        <div className="liquid-glass rounded-2xl p-6 text-white/60 text-sm">Loading…</div>
+        <div className="liquid-glass rounded-2xl p-6 text-white/60 text-sm inline-flex items-center gap-2"><Spinner /> Loading…</div>
       ) : txs.length === 0 ? (
         <div className="liquid-glass rounded-2xl p-6 text-white/60 text-sm">
           No transactions yet. Deposits and withdrawals will appear here.
@@ -927,7 +948,7 @@ function ProtectedLiquidity({
         disabled={busy}
         className="mt-4 rounded-full bg-white/10 text-white text-sm font-medium px-5 py-2.5 hover:bg-white/15 disabled:opacity-40"
       >
-        {busy ? "Processing…" : "Exit now & surrender tokens"}
+        {busy ? (<span className="inline-flex items-center gap-2"><Spinner /> Processing…</span>) : "Exit now & surrender tokens"}
       </button>
     </section>
   );
@@ -1046,7 +1067,7 @@ function WithdrawModal({
                   const fc = (next?.perChain ?? []).filter((c) => c.amount > 0);
                   setChain(fc[0]?.chain ?? "");
                 }}
-                className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 text-white focus:ring-2 focus:ring-[#8A68FF]/60 appearance-none"
+                className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 text-white focus:ring-2 focus:ring-[#8A68FF]/60 appearance-none [color-scheme:dark] [&>option]:bg-[#1A1A1A] [&>option]:text-white"
               >
                 {assets.map((a) => (
                   <option key={a.asset} value={a.asset}>
@@ -1060,7 +1081,7 @@ function WithdrawModal({
               <select
                 value={chain}
                 onChange={(e) => setChain(e.target.value as Chain)}
-                className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 text-white focus:ring-2 focus:ring-[#8A68FF]/60 appearance-none"
+                className="bg-[#1A1A1A] rounded-xl w-full h-11 px-4 text-white focus:ring-2 focus:ring-[#8A68FF]/60 appearance-none [color-scheme:dark] [&>option]:bg-[#1A1A1A] [&>option]:text-white"
               >
                 {fundedChains.map((c) => (
                   <option key={c.chain} value={c.chain}>
@@ -1135,7 +1156,7 @@ function WithdrawModal({
               disabled={!canInitiate}
               className="w-full h-12 rounded-full bg-white text-black font-medium hover:bg-white/90 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >
-              {busy ? "Starting…" : "Continue"}
+              {busy ? (<span className="inline-flex items-center gap-2"><Spinner /> Starting…</span>) : "Continue"}
             </button>
           </div>
         )}
@@ -1173,7 +1194,7 @@ function WithdrawModal({
               disabled={!pwd.trim() || code.length !== 6 || busy}
               className="w-full h-12 rounded-full bg-white text-black font-medium hover:bg-white/90 transition-colors disabled:opacity-30"
             >
-              {busy ? "Confirming…" : "Confirm withdrawal"}
+              {busy ? (<span className="inline-flex items-center gap-2"><Spinner /> Confirming…</span>) : "Confirm withdrawal"}
             </button>
             <button
               onClick={() => { setStep("form"); setError(null); }}
@@ -1368,7 +1389,7 @@ function DepositSection({ addrs }: { addrs: ChainAddrs | null }) {
       </p>
 
       {addrs === null ? (
-        <p className="text-white/40 text-sm">Loading…</p>
+        <p className="text-white/40 text-sm inline-flex items-center gap-2"><Spinner /> Loading…</p>
       ) : !ready ? (
         <p className="text-white/40 text-sm">
           Addresses not yet allocated — finish wallet setup to provision them.
