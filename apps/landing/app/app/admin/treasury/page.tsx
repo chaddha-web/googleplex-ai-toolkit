@@ -175,6 +175,39 @@ export default function TreasuryPage() {
               ) : null
             )}
           </div>
+
+          {/* Signing health. The address above is what is CONFIGURED; `signer`
+              is the wallet that would actually be debited. When they differ you
+              are reading a balance that is not the one being spent. */}
+          {tw.wallets && tw.wallets.length > 0 && (
+            <div className="mt-5 border-t border-white/10 pt-4 space-y-2">
+              <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase">Signing</p>
+              {tw.wallets.map((w) => {
+                const mismatch =
+                  w.ok && w.address && w.signer && w.address.toLowerCase() !== w.signer.toLowerCase();
+                return (
+                  <div key={w.chain} className="text-xs">
+                    <div className="flex items-center gap-3">
+                      <span className="text-white/40 uppercase w-10 shrink-0">{w.chain}</span>
+                      {!w.ok ? (
+                        <span className="text-rose-300">{w.error}</span>
+                      ) : !w.address && !w.signer ? (
+                        <span className="text-white/30">not configured</span>
+                      ) : mismatch ? (
+                        <span className="text-amber-300">
+                          pays from <span className="font-mono">{w.signer}</span> — not the address above
+                        </span>
+                      ) : (
+                        <span className="text-emerald-300/80">
+                          ok{w.source === "generated" ? " · generated treasury key" : ""}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -209,12 +242,28 @@ export default function TreasuryPage() {
                       <span className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] ${DIR_TONE[t.direction]}`}>
                         {t.type}
                       </span>
+                      {t.demo && (
+                        <span
+                          className="ml-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] bg-amber-400/15 text-amber-300"
+                          title="Demo account — completed in the UI, never broadcast. Nothing left the treasury."
+                        >
+                          demo
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 font-mono text-xs text-white/60">{t.userId.slice(0, 10)}…</td>
                     <td className="px-4 py-3 text-white/90">{amt(t.amount)} {t.symbol}</td>
                     <td className="px-4 py-3 text-white/60">{usd(t.usd)}</td>
                     <td className="px-4 py-3 text-white/50 text-xs uppercase">{t.chain}</td>
-                    <td className="px-4 py-3"><TxHash chain={t.chain} hash={t.txHash} /></td>
+                    <td className="px-4 py-3">
+                      {t.demo ? (
+                        <span className="font-mono text-xs text-white/25" title="Synthetic hash — this transaction was never broadcast">
+                          {t.txHash ? `${t.txHash.slice(0, 8)}…` : "—"}
+                        </span>
+                      ) : (
+                        <TxHash chain={t.chain} hash={t.txHash} />
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-white/50 text-xs">{t.status}</td>
                     <td className="px-4 py-3 text-white/40 text-xs whitespace-nowrap">{ago(t.at)}</td>
                   </tr>

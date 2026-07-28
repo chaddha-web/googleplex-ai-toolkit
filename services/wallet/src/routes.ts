@@ -1602,6 +1602,8 @@ export async function walletRoutes(app: FastifyInstance) {
       txHash: string | null;
       dest?: string | null;
       status: string;
+      /** Demo withdrawal — completed in the UI, never broadcast. */
+      demo?: boolean;
       at: number | null;
     };
     const tx: Tx[] = [];
@@ -1616,12 +1618,15 @@ export async function walletRoutes(app: FastifyInstance) {
       });
     }
     for (const w of rawDb
-      .prepare(`SELECT id, user_id, chain, symbol, amount_raw, tx_hash, dest_address, status, broadcast_at, requested_at FROM withdrawals WHERE tx_hash IS NOT NULL ORDER BY broadcast_at DESC LIMIT @limit`)
+      .prepare(`SELECT id, user_id, chain, symbol, amount_raw, tx_hash, dest_address, status, broadcast_at, requested_at, is_demo FROM withdrawals WHERE tx_hash IS NOT NULL ORDER BY broadcast_at DESC LIMIT @limit`)
       .all({ limit }) as any[]) {
       tx.push({
         id: w.id, type: "withdrawal", direction: "out", userId: w.user_id, chain: w.chain, symbol: w.symbol,
         amount: toAmount(w.chain, w.symbol, w.amount_raw), usd: toUsd(w.chain, w.symbol, w.amount_raw),
-        txHash: w.tx_hash, dest: w.dest_address, status: w.status, at: w.broadcast_at ?? w.requested_at
+        // `demo` so the feed can never present a fabricated payout as a real
+        // one: nothing was broadcast and the hash resolves nowhere.
+        txHash: w.tx_hash, dest: w.dest_address, status: w.status, demo: !!w.is_demo,
+        at: w.broadcast_at ?? w.requested_at
       });
     }
     for (const s of rawDb

@@ -618,6 +618,8 @@ export type SystemTx = {
   txHash: string | null;
   dest?: string | null;
   status: string;
+  /** Demo withdrawal — completed in the UI, never broadcast. Hash resolves nowhere. */
+  demo?: boolean;
   at: number | null;
 };
 
@@ -670,8 +672,19 @@ export async function systemHealth(): Promise<{ auth: boolean; wallet: boolean }
   return { auth, wallet };
 }
 
+/** Per-chain signing health: the configured address vs the wallet that pays. */
+export type TreasuryWallet = {
+  chain: string;
+  address: string;
+  signer: string | null;
+  source: "imported" | "generated" | null;
+  ok: boolean;
+  error: string | null;
+};
+
 export type TreasuryWallets = {
   configured: boolean;
+  wallets?: TreasuryWallet[];
   addresses: { eth: string; bsc: string; polygon: string; tron: string; btc: string };
   balances: AssetBalance[];
   /** Per-chain breakdown — which chain/address actually holds each balance. */
