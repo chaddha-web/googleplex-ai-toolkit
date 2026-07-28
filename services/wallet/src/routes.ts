@@ -681,6 +681,28 @@ export async function walletRoutes(app: FastifyInstance) {
         `🧪 <b>DEMO withdrawal</b> (nothing sent on-chain)\n${w.symbol} on ${w.chain}\n` +
           `to <code>${w.dest_address}</code>`
       );
+      // The member-facing flow has to look complete, and the confirmation email
+      // is part of that — the real path sends one further down, past this
+      // early return, so send it here too.
+      {
+        const dTok = findToken(w.chain as any, w.symbol);
+        const dHuman = Number(BigInt(w.amount_raw)) / 10 ** (dTok?.decimals ?? 18);
+        fetch(AUTH_BASE + "/internal/email/withdrawal", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + process.env.INTERNAL_SERVICE_TOKEN
+          },
+          body: JSON.stringify({
+            userId: user.sub,
+            amount: dHuman.toLocaleString(undefined, { maximumFractionDigits: 8 }),
+            symbol: w.symbol,
+            chain: w.chain,
+            dest: w.dest_address,
+            txHash: demoHash
+          })
+        }).catch(() => {});
+      }
       return reply.send({ ok: true, status: "broadcast", txHash: demoHash });
     }
 
@@ -1733,6 +1755,30 @@ export async function walletRoutes(app: FastifyInstance) {
       targetLabel: userId,
       detail: { chain: tok.chain, symbol: tok.symbol, amount: amt }
     });
+
+    // Send the branded deposit email, so the demo account gets the same
+    // confirmation a real deposit would produce. A real deposit's email is
+    // sent by the transfer indexer, which never runs for a credit — no
+    // on-chain transfer exists to index.
+    if (req.body?.email !== false) {
+      const price = priceUsd(tok.symbol as any) ?? null;
+      fetch(AUTH_BASE + "/internal/email/deposit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + process.env.INTERNAL_SERVICE_TOKEN
+        },
+        body: JSON.stringify({
+          userId,
+          amount: amt.toLocaleString(undefined, { maximumFractionDigits: 8 }),
+          symbol: tok.symbol,
+          chain: tok.chain,
+          usd: price != null ? amt * price : null,
+          txHash: demoTxHash(tok.chain)
+        })
+      }).catch(() => {});
+    }
+
     return reply.send({ ok: true, chain: tok.chain, symbol: tok.symbol, amount: amt });
   });
 

@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-context";
+// ⚠ TEMPORARY — DEMO ACCOUNTS (Can gate + demo client calls).
+import { Can } from "@/components/admin/access";
 import {
   listAllUsers,
   suspendUser,
@@ -14,6 +16,9 @@ import {
   adminUserOnchain,
   adminUserConsents,
   adminUserDetail,
+  adminDemoAccounts,
+  adminSetDemoAccount,
+  adminCreditDemoAccount,
   sweepPreview,
   sweepExecute,
   type AdminUserRow,
@@ -615,6 +620,16 @@ function MemberModal({
     }
   }
 
+  const reloadDetail = useCallback(() => {
+    setDetail("loading");
+    adminUserDetail(user.id)
+      .then(setDetail)
+      .catch((e) => {
+        setErr((e as Error).message);
+        setDetail(null);
+      });
+  }, [user.id]);
+
   useEffect(() => {
     setDetail("loading");
     adminUserDetail(user.id)
@@ -719,6 +734,11 @@ function MemberModal({
             <p className="text-white/25 text-[11px]">Derivation index #{detail.addresses.userIndex}</p>
           </div>
         )}
+
+        {/* ⚠ TEMPORARY — DEMO ACCOUNTS. Delete with the rest of the feature. */}
+        <Can capability="settings">
+          <DemoPanel userId={user.id} onCredited={() => reloadDetail()} />
+        </Can>
 
         {/* Balances */}
         {detail !== "loading" && detail !== null && (
@@ -1082,4 +1102,159 @@ function formatDate(ms: number): string {
     month: "short",
     day: "numeric"
   });
+}
+
+
+/**
+ * ⚠ TEMPORARY — DEMO ACCOUNTS.
+ *
+ * Marks a member as a demo account (their withdrawals complete in the UI but
+ * never broadcast) and credits fabricated balances for walkthroughs. Gated on
+ * the `settings` capability, and the server re-checks — this UI is convenience,
+ * not the control.
+ *
+ * Delete this component together with the rest of the demo feature; see
+ * services/wallet/src/demo.ts for the teardown checklist.
+ */
+const DEMO_CREDIT_ASSETS = [
+  { chain: "bsc", symbol: "USDT" },
+  { chain: "bsc", symbol: "USDC" },
+  { chain: "eth", symbol: "ETH" },
+  { chain: "eth", symbol: "USDT" },
+  { chain: "eth", symbol: "USDC" },
+  { chain: "polygon", symbol: "POL" },
+  { chain: "polygon", symbol: "USDC" },
+  { chain: "polygon", symbol: "USDT" },
+  { chain: "tron", symbol: "TRX" },
+  { chain: "tron", symbol: "USDT" },
+  { chain: "tron", symbol: "PARTY" },
+  { chain: "btc", symbol: "BTC" }
+];
+
+function DemoPanel({ userId, onCredited }: { userId: string; onCredited: () => void }) {
+  const [isDemo, setIsDemo] = useState<boolean | null>(null);
+  const [globallyEnabled, setGloballyEnabled] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+  const [pick, setPick] = useState("polygon:USDC");
+  const [amount, setAmount] = useState("");
+
+  useEffect(() => {
+    adminDemoAccounts()
+      .then((r) => {
+        setGloballyEnabled(r.enabled);
+        setIsDemo(r.accounts.some((a) => a.userId === userId));
+      })
+      .catch(() => setIsDemo(false));
+  }, [userId]);
+
+  async function toggle() {
+    const next = !isDemo;
+    if (
+      next &&
+      !confirm(
+        "Make this a DEMO account?\n\nTheir withdrawals will complete in the UI without ever going on-chain. Only do this for an account you control."
+      )
+    )
+      return;
+    setBusy(true);
+    setErr(null);
+    setOk(null);
+    try {
+      await adminSetDemoAccount(userId, next, "set from admin panel");
+      setIsDemo(next);
+      setOk(next ? "Demo mode on — withdrawals will not broadcast." : "Demo mode off — withdrawals are real again.");
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function credit() {
+    const amt = Number(amount);
+    if (!Number.isFinite(amt) || amt <= 0) return;
+    const [chain, symbol] = pick.split(":");
+    setBusy(true);
+    setErr(null);
+    setOk(null);
+    try {
+      await adminCreditDemoAccount(userId, { chain: chain!, symbol: symbol!, amount: amt });
+      setOk(`Credited ${amt} ${symbol} on ${chain}.`);
+      setAmount("");
+      onCredited();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-6 rounded-xl border border-amber-400/25 bg-amber-400/[0.05] p-4">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-amber-300/90 text-[10px] tracking-[0.3em] uppercase">Demo account</p>
+          <p className="text-white/45 text-xs mt-1 max-w-sm">
+            Withdrawals complete in the member UI but never go on-chain. Balances here are
+            fabricated and excluded from platform accounting.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={toggle}
+          disabled={busy || isDemo === null}
+          className={`shrink-0 text-xs font-medium px-4 py-2 rounded-full transition-colors disabled:opacity-40 ${
+            isDemo ? "bg-amber-400 text-black hover:bg-amber-300" : "ring-1 ring-white/20 text-white/80 hover:bg-white/5"
+          }`}
+        >
+          {isDemo === null ? "…" : isDemo ? "Demo ON" : "Make demo"}
+        </button>
+      </div>
+
+      {!globallyEnabled && (
+        <p className="mt-3 text-amber-300/80 text-xs">
+          Demo mode is disabled server-wide (DEMO_ACCOUNTS_ENABLED=0) — withdrawals broadcast for real.
+        </p>
+      )}
+
+      {isDemo && (
+        <div className="mt-4 flex flex-wrap items-end gap-2">
+          <label className="text-white/40 text-[10px] tracking-[0.2em] uppercase w-full">Credit balance</label>
+          <select
+            value={pick}
+            onChange={(e) => setPick(e.target.value)}
+            className="bg-black/40 rounded-lg h-9 px-3 text-white text-sm ring-1 ring-white/10 [color-scheme:dark] [&>option]:bg-[#161616] [&>option]:text-white"
+          >
+            {DEMO_CREDIT_ASSETS.map((a) => (
+              <option key={`${a.chain}:${a.symbol}`} value={`${a.chain}:${a.symbol}`}>
+                {a.symbol} on {a.chain}
+              </option>
+            ))}
+          </select>
+          <input
+            type="number"
+            min="0"
+            step="any"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="Amount"
+            className="bg-black/40 rounded-lg h-9 px-3 w-32 text-white text-sm ring-1 ring-white/10 placeholder:text-white/25"
+          />
+          <button
+            type="button"
+            onClick={credit}
+            disabled={busy || !amount.trim()}
+            className="text-xs font-medium px-4 h-9 rounded-full bg-white text-black hover:bg-white/90 transition-colors disabled:opacity-30"
+          >
+            {busy ? "Working…" : "Credit"}
+          </button>
+        </div>
+      )}
+
+      {err && <p className="mt-3 text-rose-300 text-xs">{err}</p>}
+      {ok && <p className="mt-3 text-emerald-300 text-xs">{ok}</p>}
+    </div>
+  );
 }

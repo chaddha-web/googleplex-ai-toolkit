@@ -491,6 +491,43 @@ export async function adminAccounting(): Promise<Accounting> {
   return data as Accounting;
 }
 
+/* ⚠ TEMPORARY — DEMO ACCOUNTS. Delete with the rest of the demo feature. */
+
+export type DemoAccount = { userId: string; note: string | null; createdBy: string | null; at: number | null };
+
+/** Admin: which members are demo accounts (withdrawals never broadcast). */
+export async function adminDemoAccounts(): Promise<{ enabled: boolean; accounts: DemoAccount[] }> {
+  const res = await authedFetch(`${WALLET_BASE}/wallet/admin/demo-accounts`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not load demo accounts.");
+  return data as { enabled: boolean; accounts: DemoAccount[] };
+}
+
+/** Admin: turn demo mode on/off for one member. */
+export async function adminSetDemoAccount(userId: string, demo: boolean, note?: string): Promise<void> {
+  const res = await authedFetch(`${WALLET_BASE}/wallet/admin/demo-accounts/${userId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ demo, note })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not update demo status.");
+}
+
+/** Admin: credit a demo account's balance (audited ledger adjustment). */
+export async function adminCreditDemoAccount(
+  userId: string,
+  body: { chain: string; symbol: string; amount: number }
+): Promise<void> {
+  const res = await authedFetch(`${WALLET_BASE}/wallet/admin/demo-accounts/${userId}/credit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not credit balance.");
+}
+
 export type Sale = {
   id: string;
   userId: string;
