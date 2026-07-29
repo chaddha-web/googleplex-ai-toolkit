@@ -65,7 +65,9 @@ export default function DemoAccountsPage() {
       const rev = r.reversed ?? [];
       setNote(
         rev.length
-          ? `Demo mode off. Clawed back ${rev.map((x) => `${x.amount} ${x.symbol}`).join(", ")}.`
+          ? `Demo mode off. Clawed back ${rev
+              .map((x) => `${x.amount} ${x.symbol}${x.reason === "residual" ? " (converted)" : ""}`)
+              .join(", ")}.`
           : "Demo mode off. No fabricated balance was left to claw back."
       );
       load();

@@ -14,10 +14,16 @@
  *       → turn demo mode OFF
  *       → withdraw for real, from the treasury
  *
- * Fabricated credit is therefore tracked per (user, chain, symbol) in
- * `demo_credits`, and turning demo mode off **reverses whatever fabricated
- * balance is still sitting there** before the account can transact for real.
- * A demo account can never hand back more than it was legitimately given.
+ * Fabricated credit is tracked per (user, chain, symbol) in `demo_credits`, and
+ * turning demo mode off **claws back every unit of value the account holds
+ * beyond its real deposit inflow** before it can transact for real.
+ *
+ * Matching the claw-back to the credited (chain, symbol) alone is NOT enough:
+ * a convert moves fabricated value into a pair that was never credited, and it
+ * walks straight out of a per-pair reversal. (This happened on the live box —
+ * 0.01 fabricated ETH became 18.77 bsc USDC and survived.) So the plan is
+ * computed on VALUE, not on pairs: drain `holdings − real deposits`, taking
+ * from credited pairs first. Real deposits are the floor and are never touched.
  *
  * ── Controls ───────────────────────────────────────────────────────────────
  *  1. Founder-only. Not `settings` — a capability several admins hold.
@@ -34,6 +40,8 @@
  */
 
 import { rawDb } from "./db/index.js";
+import { findToken } from "./tokens.js";
+import { priceUsd } from "./prices.js";
 import { randomBytes } from "node:crypto";
 
 /** Master switch — set DEMO_ACCOUNTS_ENABLED=0 to kill every demo account. */
@@ -113,26 +121,135 @@ export function clearFabricated(userId: string): void {
   rawDb.prepare(`DELETE FROM demo_credits WHERE user_id = ?`).run(userId);
 }
 
-/**
- * How much of each fabricated credit is still sitting in the ledger, i.e. what
- * must be clawed back before this account is allowed to transact for real.
- *
- * Capped at the CURRENT balance: if the demo account already "withdrew" the
- * fabricated funds, that balance is gone and there is nothing to reverse —
- * and nothing real left either, because the withdrawal never sent anything.
- */
-export function reversalPlan(userId: string): Array<DemoCredit & { reverseRaw: string }> {
-  const out: Array<DemoCredit & { reverseRaw: string }> = [];
-  for (const c of fabricatedCredits(userId)) {
-    const bal = rawDb
-      .prepare(`SELECT raw FROM ledger_balances WHERE user_id=? AND chain=? AND symbol=?`)
-      .get(userId, c.chain, c.symbol) as { raw: string } | undefined;
-    const have = bal ? BigInt(bal.raw) : 0n;
-    const owed = BigInt(c.raw);
-    const reverse = have < owed ? have : owed;
-    if (reverse > 0n) out.push({ ...c, reverseRaw: reverse.toString() });
+/** Below this the residue is rounding noise, not money. */
+const DUST_USD = 0.01;
+
+type BalanceRow = { chain: string; symbol: string; raw: string };
+
+/** Every non-zero ledger balance for an account. */
+function heldBalances(userId: string): BalanceRow[] {
+  try {
+    return rawDb
+      .prepare(`SELECT chain, symbol, raw FROM ledger_balances WHERE user_id = ? AND raw != '0'`)
+      .all(userId) as BalanceRow[];
+  } catch {
+    return [];
   }
-  return out;
+}
+
+/** Best-effort USD value of a raw amount at the CURRENT price (0 if unpriced). */
+function usdOf(chain: string, symbol: string, raw: bigint): number {
+  const dec = findToken(chain as any, symbol)?.decimals ?? 18;
+  const price = priceUsd(symbol as any) ?? 0;
+  return (Number(raw) / 10 ** dec) * price;
+}
+
+/**
+ * USD the account genuinely received on-chain. A demo account cannot be created
+ * with deposit history, but it can be deposited INTO while demo mode is on —
+ * that money is the member's, and the claw-back must never reach it.
+ */
+function realDepositUsd(userId: string): number {
+  try {
+    const rows = rawDb
+      .prepare(`SELECT chain, symbol, amount_raw FROM deposits WHERE user_id = ?`)
+      .all(userId) as Array<{ chain: string; symbol: string; amount_raw: string }>;
+    return rows.reduce((s, d) => s + usdOf(d.chain, d.symbol, BigInt(d.amount_raw)), 0);
+  } catch {
+    return 0;
+  }
+}
+
+export type ReversalLeg = {
+  chain: string;
+  symbol: string;
+  reverseRaw: string;
+  usd: number;
+  /** `credited` — this exact pair was fabricated. `residual` — value that was
+   *  converted into a pair we never credited, and would otherwise escape. */
+  reason: "credited" | "residual";
+};
+
+/**
+ * What must come out of the ledger before this account may transact for real.
+ *
+ * Computed on value, not on pairs: everything the account holds above its real
+ * deposit inflow is fabricated, however it got shuffled between assets. Value
+ * the demo account already destroyed (a demo withdrawal, the studio fee) is
+ * simply absent from holdings, so it is never double-clawed — nothing was sent,
+ * so there is nothing to recover.
+ */
+export function reversalPlan(userId: string): ReversalLeg[] {
+  const held = heldBalances(userId);
+  if (held.length === 0) return [];
+
+  // Ceiling: we never take back more value than we handed out, revalued at
+  // today's price so appreciation on fabricated coin can't be kept either.
+  // With no fabricated credit on file this is 0 — a legitimately credited
+  // balance (referral, manual adjustment) is not ours to confiscate.
+  const credits = fabricatedCredits(userId);
+  const capUsd = credits.reduce(
+    (s, c) => s + Math.max(c.usd ?? 0, usdOf(c.chain, c.symbol, BigInt(c.raw))),
+    0
+  );
+  if (capUsd <= DUST_USD) return [];
+
+  const holdingsUsd = held.reduce((s, b) => s + usdOf(b.chain, b.symbol, BigInt(b.raw)), 0);
+  let drainUsd = Math.min(holdingsUsd - realDepositUsd(userId), capUsd);
+
+  // Fabricated pairs come out first so the claw-back mirrors the credit; the
+  // shortfall is then taken from wherever the value was moved to, largest first.
+  const owedByPair = new Map<string, bigint>();
+  for (const c of credits) {
+    const k = `${c.chain}:${c.symbol}`;
+    owedByPair.set(k, (owedByPair.get(k) ?? 0n) + BigInt(c.raw));
+  }
+  const order = [...held].sort((a, b) => {
+    const ra = owedByPair.has(`${a.chain}:${a.symbol}`) ? 0 : 1;
+    const rb = owedByPair.has(`${b.chain}:${b.symbol}`) ? 0 : 1;
+    if (ra !== rb) return ra - rb;
+    return usdOf(b.chain, b.symbol, BigInt(b.raw)) - usdOf(a.chain, a.symbol, BigInt(a.raw));
+  });
+
+  const legs: ReversalLeg[] = [];
+  for (const b of order) {
+    const have = BigInt(b.raw);
+    if (have <= 0n) continue;
+    const key = `${b.chain}:${b.symbol}`;
+    const owed = owedByPair.get(key);
+    const haveUsd = usdOf(b.chain, b.symbol, have);
+
+    // Unpriced token: value math is meaningless, so fall back to the per-pair
+    // rule. Never leave fabricated units behind just because we lack a price.
+    if (haveUsd <= 0) {
+      if (owed === undefined) continue;
+      const take = have < owed ? have : owed;
+      if (take > 0n) {
+        legs.push({ chain: b.chain, symbol: b.symbol, reverseRaw: take.toString(), usd: 0, reason: "credited" });
+      }
+      continue;
+    }
+
+    if (drainUsd <= DUST_USD) continue;
+    let take: bigint;
+    if (haveUsd <= drainUsd) {
+      take = have;
+    } else {
+      const num = BigInt(Math.round((drainUsd / haveUsd) * 1_000_000));
+      take = (have * num) / 1_000_000n;
+    }
+    if (take <= 0n) continue;
+    const takeUsd = usdOf(b.chain, b.symbol, take);
+    legs.push({
+      chain: b.chain,
+      symbol: b.symbol,
+      reverseRaw: take.toString(),
+      usd: takeUsd,
+      reason: owed === undefined ? "residual" : "credited"
+    });
+    drainUsd -= takeUsd;
+  }
+  return legs;
 }
 
 /**

@@ -515,12 +515,21 @@ export async function adminDemoAccounts(): Promise<{
   return data as { enabled: boolean; maxCreditUsd: number; accounts: DemoAccount[] };
 }
 
+/** One leg of a demo claw-back. `residual` means the fabricated value had been
+ *  converted into a different asset and was recovered by value, not by pair. */
+export type ReversedLeg = {
+  chain: string;
+  symbol: string;
+  amount: number;
+  reason?: "credited" | "residual";
+};
+
 /** Founder: turn demo mode on/off. Disabling claws back fabricated balance. */
 export async function adminSetDemoAccount(
   userId: string,
   demo: boolean,
   note?: string
-): Promise<{ reversed?: { chain: string; symbol: string; amount: number }[] }> {
+): Promise<{ reversed?: ReversedLeg[] }> {
   const res = await authedFetch(`${WALLET_BASE}/wallet/admin/demo-accounts/${userId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -528,7 +537,7 @@ export async function adminSetDemoAccount(
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Could not update demo status.");
-  return data as { reversed?: { chain: string; symbol: string; amount: number }[] };
+  return data as { reversed?: ReversedLeg[] };
 }
 
 /** Founder: credit a demo account (audited, capped, reversible). */

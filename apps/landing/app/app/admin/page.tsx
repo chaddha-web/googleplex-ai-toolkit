@@ -1174,7 +1174,9 @@ function DemoPanel({ userId, onCredited }: { userId: string; onCredited: () => v
         const rev = res?.reversed ?? [];
         setOk(
           rev.length
-            ? `Demo mode off. Clawed back ${rev.map((x) => `${x.amount} ${x.symbol}`).join(", ")}.`
+            ? `Demo mode off. Clawed back ${rev
+                .map((x) => `${x.amount} ${x.symbol}${x.reason === "residual" ? " (converted)" : ""}`)
+                .join(", ")}.`
             : "Demo mode off — withdrawals are real again."
         );
       }

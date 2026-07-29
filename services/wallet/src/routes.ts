@@ -1537,7 +1537,9 @@ export async function walletRoutes(app: FastifyInstance) {
       counts: {
         members: one(`SELECT COUNT(DISTINCT user_id) n FROM ledger_balances WHERE raw != '0'`),
         deposits: dep.length,
-        withdrawals: one(`SELECT COUNT(*) n FROM withdrawals`),
+        // Must match `withdrawnUsd` above, or the card reads "$0.00 · 2 total"
+        // and an operator goes looking for two payouts that never happened.
+        withdrawals: wOut.length,
         pendingWithdrawals: wPend.length,
         sweeps: one(`SELECT COUNT(*) n FROM treasury_sweeps`),
         ledgerEntries: one(`SELECT COUNT(*) n FROM ledger_entries`)
@@ -1710,7 +1712,12 @@ export async function walletRoutes(app: FastifyInstance) {
     // fake credit becomes real, withdrawable money against the treasury the
     // moment this flag flips — the one way this feature could lose funds.
     const plan = reversalPlan(userId);
-    const reversed: Array<{ chain: string; symbol: string; amount: number }> = [];
+    const reversed: Array<{
+      chain: string;
+      symbol: string;
+      amount: number;
+      reason: "credited" | "residual";
+    }> = [];
     db.transaction((tx) => {
       for (const r of plan) {
         const cur = tx
@@ -1752,7 +1759,8 @@ export async function walletRoutes(app: FastifyInstance) {
         reversed.push({
           chain: r.chain,
           symbol: r.symbol,
-          amount: toAmount(r.chain, r.symbol, r.reverseRaw)
+          amount: toAmount(r.chain, r.symbol, r.reverseRaw),
+          reason: r.reason
         });
       }
     });
@@ -1769,7 +1777,9 @@ export async function walletRoutes(app: FastifyInstance) {
     notify(
       `🧪 <b>Demo mode DISABLED</b>\nuser <code>${userId}</code>\n` +
         (reversed.length
-          ? `clawed back: ${reversed.map((r) => `${r.amount} ${r.symbol}`).join(", ")}`
+          ? `clawed back: ${reversed
+              .map((r) => `${r.amount} ${r.symbol}${r.reason === "residual" ? " (converted)" : ""}`)
+              .join(", ")}`
           : "no fabricated balance left to claw back")
     );
     return reply.send({ ok: true, demo: false, reversed });

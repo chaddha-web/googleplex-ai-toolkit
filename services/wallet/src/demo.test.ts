@@ -37,6 +37,16 @@ function setBalance(userId: string, chain: string, symbol: string, raw: string, 
     .run(userId, chain, symbol, raw, decimals, Date.now());
 }
 
+let depositSeq = 0;
+function addDeposit(userId: string, chain: string, symbol: string, raw: string) {
+  rawDb
+    .prepare(
+      `INSERT INTO deposits (id, user_id, chain, symbol, amount_raw, tx_hash, credited_at)
+       VALUES (?,?,?,?,?,?,?)`
+    )
+    .run(`dep-${++depositSeq}`, userId, chain, symbol, raw, `0xtest${depositSeq}`, Date.now());
+}
+
 // ── Demo status ────────────────────────────────────────────────────────────
 assert.equal(demo.isDemoAccount(USER), false, "unknown user is not a demo account");
 
@@ -92,12 +102,36 @@ setBalance(USER, "polygon", "USDC", "0", 6);
   );
 }
 
-// Balance ABOVE the fabricated amount → only the fabricated part is clawed
-// back. Anything extra is not ours to take.
+// Balance ABOVE the fabricated amount, with no real deposits behind it. The
+// account was funded from nothing, so the surplus is fabricated too (it can
+// only be credit or appreciation on credit) and all of it comes back.
 setBalance(USER, "bsc", "USDT", "25000000000000000000");
 {
   const p = demo.reversalPlan(USER).find((x) => x.symbol === "USDT")!;
-  assert.equal(p.reverseRaw, "10000000000000000000", "never claws back more than was fabricated");
+  assert.equal(p.reverseRaw, "25000000000000000000", "surplus over real inflow is clawed back");
+}
+
+// …but a REAL deposit is the member's money and is the floor. With 15 USDT
+// genuinely deposited, only the 10 fabricated USDT may be taken.
+addDeposit(USER, "bsc", "USDT", "15000000000000000000");
+{
+  const p = demo.reversalPlan(USER).find((x) => x.symbol === "USDT")!;
+  assert.equal(p.reverseRaw, "10000000000000000000", "real deposits are never clawed back");
+}
+rawDb.prepare(`DELETE FROM deposits WHERE user_id = ?`).run(USER);
+
+// The escape that per-pair matching missed on the live box: fabricated value
+// CONVERTED into a pair that was never credited. Reversal must follow the
+// value, not the (chain, symbol) it was handed out in.
+setBalance(USER, "bsc", "USDT", "0");
+setBalance(USER, "polygon", "USDC", "0", 6);
+setBalance(USER, "bsc", "USDC", "18768100000000000000");
+{
+  const plan = demo.reversalPlan(USER);
+  const p = plan.find((x) => x.chain === "bsc" && x.symbol === "USDC")!;
+  assert.ok(p, "converted fabricated value is still reversed");
+  assert.equal(p.reverseRaw, "18768100000000000000", "the whole converted residue comes back");
+  assert.equal(p.reason, "residual", "flagged as value that moved between assets");
 }
 
 // ── Clearing ───────────────────────────────────────────────────────────────
