@@ -5,6 +5,7 @@ import * as Sentry from "@sentry/nextjs";
 import type { Metadata } from "next";
 import { AuthProvider } from "@/components/auth-context";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { DashboardBackground } from "@/components/dashboard-background";
 
 /**
  * Root layout for apps/web — the product dashboard.
@@ -28,10 +29,13 @@ export function generateMetadata(): Metadata {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <body className="bg-black text-white min-h-screen antialiased font-sans selection:bg-white/20 selection:text-white">
+      {/* `app-surface` lets an admin-set dashboard theme show through this
+          otherwise-opaque black (see components/dashboard-background.tsx). */}
+      <body className="app-surface bg-black text-white min-h-screen antialiased font-sans selection:bg-white/20 selection:text-white">
         <PostHogProvider>
           <Toaster />
           <AuthProvider>
+            <DashboardBackground />
             <DashboardShell>{children}</DashboardShell>
           </AuthProvider>
         </PostHogProvider>
