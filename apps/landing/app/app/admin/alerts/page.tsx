@@ -155,6 +155,17 @@ export default function AlertsPage() {
 
             {!linked ? (
               <>
+                {data.coveredByOps && (
+                  <div className="mt-4 rounded-xl bg-emerald-400/[0.07] ring-1 ring-emerald-300/20 p-4">
+                    <p className="text-emerald-200 text-sm">
+                      You already receive every alert through the ops channel.
+                    </p>
+                    <p className="text-white/50 text-xs mt-1 leading-relaxed">
+                      Linking a personal chat here is optional — do it only if you want to choose
+                      which alerts you get rather than all of them.
+                    </p>
+                  </div>
+                )}
                 <div className="mt-5">
                   <LinkSteps botUsername={data.botUsername} />
                 </div>

@@ -548,7 +548,35 @@ function QuestionsPanel({
 
       <div className="mt-6 space-y-3">
         {questions.length === 0 && (
-          <p className="text-white/40 text-sm">No questions yet. Members will only see the video.</p>
+          <div className="rounded-xl bg-white/[0.02] ring-1 ring-white/10 p-5">
+            <p className="text-white/60 text-sm">
+              No questions yet — members will only see the video, and gating has nothing to check.
+            </p>
+            <button
+              type="button"
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  const { adminSeedQuestions } = await import("@/lib/auth-client");
+                  await adminSeedQuestions();
+                  await reload();
+                } catch (e) {
+                  onError((e as Error).message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              disabled={busy}
+              className="mt-4 rounded-full bg-white text-black px-5 py-2 text-sm font-medium disabled:opacity-40"
+            >
+              <BusyLabel busy={busy} busyText="Adding…">
+                Add 10 starter questions
+              </BusyLabel>
+            </button>
+            <p className="text-white/30 text-[11px] mt-2">
+              Covers the $1 deposit, tokens, wallet safety, chains and the Circle. Edit or delete any of them after.
+            </p>
+          </div>
         )}
         {questions.map((q, i) => (
           <QuestionRow

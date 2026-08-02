@@ -25,32 +25,46 @@ function Gate({ children }: { children: React.ReactNode }) {
     }
     if (status !== "authenticated" || !user) return;
 
-    const required = nextOnboardingPath(user);
-    // If they need to be at a setup step and aren't, bounce them there.
-    if (required && pathname !== required) {
-      router.replace(required);
+    // Admins run the platform — they are never held behind the member
+    // onboarding, and the admin panel lives under /app too. Gating them would
+    // lock the operator out of the box.
+    if (user.role === "admin") return;
+
+    // Profile first — everything else assumes we know who they are.
+    if (!user.profileCompletedAt) {
+      if (pathname !== "/app/setup/profile") router.replace("/app/setup/profile");
       return;
     }
+
     // The orientation page manages its own exit, so never bounce off it.
     if (pathname === ORIENTATION_PATH) return;
 
-    // If they're fully active but visiting /app/setup/*, bounce to /app.
-    if (!required && pathname.startsWith("/app/setup")) {
-      router.replace("/app");
-      return;
-    }
+    // Orientation comes BEFORE the $1: we want members to understand what the
+    // deposit is for before they're asked to send it. Async and non-blocking —
+    // the page renders and we only redirect if it's genuinely due.
+    let cancelled = false;
+    void checkOrientation().then((due) => {
+      if (cancelled) return;
+      if (due) {
+        router.replace(ORIENTATION_PATH);
+        return;
+      }
 
-    // Activated members owe the orientation before the rest of /app. Async and
-    // non-blocking: the page renders, and we redirect only if it's actually due.
-    if (!required && user.walletStatus === "active") {
-      let cancelled = false;
-      void checkOrientation().then((due) => {
-        if (!cancelled && due) router.replace(ORIENTATION_PATH);
-      });
-      return () => {
-        cancelled = true;
-      };
-    }
+      // Then the $1, which is mandatory. `nextOnboardingPath` returns the
+      // wallet-password or deposit step until the wallet is active.
+      const required = nextOnboardingPath(user);
+      if (required && pathname !== required) {
+        router.replace(required);
+        return;
+      }
+      // Fully set up but sitting on a setup page — send them home.
+      if (!required && pathname.startsWith("/app/setup")) {
+        router.replace("/app");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [status, user, pathname, router]);
 
   if (status === "loading") {

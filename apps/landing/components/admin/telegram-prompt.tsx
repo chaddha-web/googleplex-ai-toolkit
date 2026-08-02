@@ -39,7 +39,9 @@ export function TelegramPrompt() {
     };
   }, []);
 
-  if (!status || status.verifiedAt || dismissed) return null;
+  // Nothing to nag about if they're already covered: either they've linked a
+  // personal chat, or they ARE the ops channel and receive everything already.
+  if (!status || status.verifiedAt || status.coveredByOps || dismissed) return null;
 
   const handle = status.botUsername ? status.botUsername.replace(/^@/, "") : null;
 

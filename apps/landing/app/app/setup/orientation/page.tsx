@@ -11,6 +11,7 @@ import {
   type OrientationResult
 } from "@/lib/auth-client";
 import { clearOrientationGate, resetOrientationGate } from "@/lib/orientation-gate";
+import { LockedVideo } from "@/components/locked-video";
 
 /**
  * Orientation — the instructional video and quiz, shown once after the $1
@@ -50,10 +51,19 @@ export default function OrientationPage() {
   const [leaving, setLeaving] = useState(false);
   const quizRef = useRef<HTMLDivElement>(null);
 
-  const goToDashboard = useCallback(() => {
+  /**
+   * Where the member goes when the orientation is done. The $1 comes AFTER
+   * this now, so anyone whose wallet isn't active yet lands on the deposit
+   * step rather than the dashboard.
+   */
+  const needsPayment = !!user && user.walletStatus !== "active";
+  const goNext = useCallback(() => {
     setLeaving(true);
+    if (!user) return router.replace("/app");
+    if (user.walletStatus === "pending_password") return router.replace("/app/setup/password");
+    if (user.walletStatus !== "active") return router.replace("/app/setup/deposit");
     router.replace("/app");
-  }, [router]);
+  }, [router, user]);
 
   const load = useCallback(async () => {
     const o = await fetchOrientation();
@@ -145,12 +155,19 @@ export default function OrientationPage() {
             firstName={user?.firstName}
             hasQuestions={questions.length > 0}
             onContinue={() => {
-              setPhase("quiz");
+              // The questions roll straight out — no "continue" step in between.
+              setPhase(questions.length > 0 ? "quiz" : "result");
+              if (questions.length === 0) {
+                // Nothing to ask: the video WAS the orientation, so finish it.
+                void submitOrientation({}).catch(() => {});
+                clearOrientationGate();
+                setResult({ passed: true, completed: true, score: null });
+              }
               requestAnimationFrame(() =>
                 quizRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
               );
             }}
-            onFinish={goToDashboard}
+            onFinish={goNext}
             leaving={leaving}
           />
         )}
@@ -230,7 +247,8 @@ export default function OrientationPage() {
             result={result}
             gating={data?.gating ?? "answer"}
             leaving={leaving}
-            onContinue={goToDashboard}
+            needsPayment={needsPayment}
+            onContinue={goNext}
             onRetry={() => {
               resetOrientationGate();
               setPhase("loading");
@@ -261,9 +279,10 @@ function VideoStep({
   leaving: boolean;
 }) {
   const embed = embedFor(url);
-  // A self-hosted video can take a moment to reach its first frame; show a
-  // placeholder rather than an empty black box.
-  const [ready, setReady] = useState(embed.type === "iframe");
+  // A third-party embed can't be locked — we don't control its player. Those
+  // keep the old manual flow; an uploaded file gets the enforced one.
+  const [iframeWatched, setIframeWatched] = useState(false);
+
   return (
     <>
       <motion.h1
@@ -276,69 +295,55 @@ function VideoStep({
         <em className="font-serif-i text-white/60">.</em>
       </motion.h1>
       <p className="text-white/60 text-sm md:text-base leading-relaxed mt-5">
-        {title || "Watch this short walkthrough before you start — it covers how your tokens, wallet and the Circle fit together."}
+        Watch this through, answer a few questions, then activate your wallet with the $1 deposit.
       </p>
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.7, delay: 0.15 }}
-        className="mt-8 rounded-3xl overflow-hidden ring-1 ring-white/10 bg-white/[0.02]"
+        className="mt-8"
       >
-        <div className="relative w-full aspect-video">
-          {embed.type === "iframe" ? (
-            <iframe
-              src={embed.src}
-              title={title || "Orientation"}
-              className="absolute inset-0 w-full h-full"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-          ) : (
-            <video
-              src={embed.src}
-              controls
-              playsInline
-              onLoadedData={() => setReady(true)}
-              onCanPlay={() => setReady(true)}
-              className="absolute inset-0 w-full h-full bg-black"
-            >
-              Your browser can&apos;t play this video.
-            </video>
-          )}
-          {!ready && (
-            <div className="absolute inset-0 flex items-center justify-center bg-white/[0.03] pointer-events-none">
-              <span className="flex items-center gap-2 text-white/40 text-xs">
-                <span className="w-3.5 h-3.5 rounded-full border-2 border-white/20 border-t-white/70 animate-spin" />
-                Loading the video…
-              </span>
+        {embed.type === "video" ? (
+          <LockedVideo
+            src={embed.src}
+            title={title}
+            onComplete={hasQuestions ? onContinue : onFinish}
+          />
+        ) : (
+          <div className="rounded-3xl overflow-hidden ring-1 ring-white/10 bg-white/[0.02]">
+            <div className="relative w-full aspect-video">
+              <iframe
+                src={embed.src}
+                title={title || "Orientation"}
+                className="absolute inset-0 w-full h-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                onLoad={() => setIframeWatched(true)}
+              />
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </motion.div>
 
-      <div className="mt-8 flex flex-wrap items-center gap-4">
-        <button
-          type="button"
-          onClick={hasQuestions ? onContinue : onFinish}
-          disabled={leaving}
-          className="inline-flex items-center gap-2 rounded-full bg-white text-black px-7 py-3 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-60"
-        >
-          {leaving && (
-            <span className="w-3.5 h-3.5 rounded-full border-2 border-black/20 border-t-black animate-spin" />
-          )}
-          {leaving
-            ? "Opening your dashboard…"
-            : hasQuestions
-              ? "Continue to the questions →"
-              : "Go to my dashboard →"}
-        </button>
-        <span className="text-white/40 text-xs">You can come back to this from your dashboard.</span>
-      </div>
+      {embed.type === "iframe" && (
+        <div className="mt-8 flex flex-wrap items-center gap-4">
+          <button
+            type="button"
+            onClick={hasQuestions ? onContinue : onFinish}
+            disabled={leaving || !iframeWatched}
+            className="inline-flex items-center gap-2 rounded-full bg-white text-black px-7 py-3 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {leaving && (
+              <span className="w-3.5 h-3.5 rounded-full border-2 border-black/20 border-t-black animate-spin" />
+            )}
+            {leaving ? "One moment…" : hasQuestions ? "Continue to the questions →" : "Continue →"}
+          </button>
+        </div>
+      )}
     </>
   );
 }
-
 function QuestionCard({
   index,
   question,
@@ -413,12 +418,14 @@ function ResultStep({
   result,
   gating,
   leaving,
+  needsPayment,
   onContinue,
   onRetry
 }: {
   result: OrientationResult;
   gating: string;
   leaving: boolean;
+  needsPayment: boolean;
   onContinue: () => void;
   onRetry: () => void;
 }) {
@@ -453,7 +460,9 @@ function ResultStep({
 
       <p className="text-white/60 text-sm md:text-base leading-relaxed mt-6">
         {passed
-          ? "That's everything. Your dashboard is ready."
+          ? needsPayment
+            ? "Last step: activate your wallet with the one-time $1 deposit. It stays in your balance — it isn't a fee."
+            : "That's everything. Your dashboard is ready."
           : result.canRetry
             ? "Have another look at the video and try again — your answers so far have been saved."
             : "You've used all your attempts. Contact support and we'll reset your orientation."}
@@ -470,7 +479,11 @@ function ResultStep({
             {leaving && (
               <span className="w-3.5 h-3.5 rounded-full border-2 border-black/20 border-t-black animate-spin" />
             )}
-            {leaving ? "Opening your dashboard…" : "Go to my dashboard →"}
+            {leaving
+              ? "One moment…"
+              : needsPayment
+                ? "Continue to activation →"
+                : "Go to my dashboard →"}
           </button>
         ) : result.canRetry ? (
           <button

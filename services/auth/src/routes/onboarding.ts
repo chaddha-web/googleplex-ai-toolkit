@@ -95,6 +95,115 @@ function validateQuestion(body: any): string | null {
   return null;
 }
 
+/**
+ * Starter question bank. Deliberately NOT auto-seeded on boot — the Circle had
+ * that and demo questions kept reappearing after every empty-table restart.
+ * An admin asks for these explicitly, once.
+ */
+const STARTER_QUESTIONS: Array<{
+  prompt: string;
+  options: string[];
+  correctIndex: number | null;
+  required: boolean;
+}> = [
+  {
+    prompt: "What does the one-time $1 activation deposit do?",
+    options: [
+      "It activates your wallet and stays in your balance",
+      "It is a monthly subscription fee",
+      "It is a donation to the platform",
+      "It buys a fixed number of tokens"
+    ],
+    correctIndex: 0,
+    required: true
+  },
+  {
+    prompt: "How many personalized tokens are issued to you when you join?",
+    options: ["1,000", "1,000,000", "10,000,000,000", "They are bought separately"],
+    correctIndex: 2,
+    required: true
+  },
+  {
+    prompt: "Who controls the wallet password you set during signup?",
+    options: [
+      "Only you — it is never shown to staff",
+      "Support can read it if you ask",
+      "It is the same as your login password",
+      "It is emailed to you in plain text"
+    ],
+    correctIndex: 0,
+    required: true
+  },
+  {
+    prompt: "Which of these networks can you deposit on?",
+    options: ["Ethereum only", "Bitcoin only", "Ethereum, BSC, Polygon, Tron and Bitcoin", "Solana only"],
+    correctIndex: 2,
+    required: true
+  },
+  {
+    prompt: "Where do your deposits arrive?",
+    options: [
+      "A deposit address generated just for you",
+      "A shared company address",
+      "Directly into another member's wallet",
+      "An exchange account you create"
+    ],
+    correctIndex: 0,
+    required: true
+  },
+  {
+    prompt: "What is the Circle used for?",
+    options: [
+      "Proposing and voting on community decisions",
+      "Buying and selling tokens",
+      "Private messaging between members",
+      "Nothing — it is decorative"
+    ],
+    correctIndex: 0,
+    required: true
+  },
+  {
+    prompt: "If someone messages you asking for your wallet password, what should you do?",
+    options: [
+      "Never share it — no one from GoogolPlex will ever ask",
+      "Share it if they say they are support",
+      "Share it only over email",
+      "Change it to something simpler and share that"
+    ],
+    correctIndex: 0,
+    required: true
+  },
+  {
+    prompt: "What happens when you withdraw the $1 that backs your tokens?",
+    options: [
+      "Your personalized tokens are surrendered",
+      "Nothing changes",
+      "You receive twice the tokens",
+      "Your account is deleted"
+    ],
+    correctIndex: 0,
+    required: true
+  },
+  {
+    prompt: "You get an email about a login you don't recognise. What is the right first step?",
+    options: [
+      "Secure the account straight away and change your password",
+      "Ignore it",
+      "Reply to the email with your password",
+      "Wait a week to see if it happens again"
+    ],
+    correctIndex: 0,
+    required: true
+  },
+  {
+    prompt: "How did you hear about GoogolPlex?",
+    options: ["A friend or family member", "Social media", "A web search", "An event", "Somewhere else"],
+    // No right answer — this one is a survey, and skippable.
+    correctIndex: null,
+    required: false
+  }
+];
+
 export async function onboardingRoutes(app: FastifyInstance) {
   // ── Member: what to show me ──────────────────────────────────────────────
   app.get("/auth/onboarding", async (req: any, reply) => {
@@ -386,6 +495,48 @@ export async function onboardingRoutes(app: FastifyInstance) {
     stmts.onboarding.deleteQuestion.run(id);
     recordAudit({ actorId: me.id, actorEmail: me.email, action: "onboarding.question.delete", targetId: id });
     return reply.send({ ok: true });
+  });
+
+  // ── Admin: seed the starter bank ─────────────────────────────────────────
+  app.post("/auth/admin/onboarding/seed", async (req: any, reply) => {
+    const me = await requireCapability(req, reply, "settings");
+    if (!me) return;
+
+    // Refuse if questions already exist — this is a "get started" button, not
+    // a way to duplicate the bank by double-clicking.
+    const existing = stmts.onboarding.allQuestions.all();
+    if (existing.length > 0) {
+      return reply
+        .code(409)
+        .send({ error: `There are already ${existing.length} questions. Delete them first if you want to start over.` });
+    }
+
+    const now = Date.now();
+    let order = 0;
+    db.transaction(() => {
+      for (const q of STARTER_QUESTIONS) {
+        order += 1;
+        stmts.onboarding.insertQuestion.run({
+          id: randomUUID(),
+          prompt: q.prompt,
+          options_json: JSON.stringify(q.options),
+          correct_index: q.correctIndex,
+          required: q.required ? 1 : 0,
+          sort_order: order,
+          active: 1,
+          created_at: now,
+          updated_at: now
+        });
+      }
+    })();
+
+    recordAudit({
+      actorId: me.id,
+      actorEmail: me.email,
+      action: "onboarding.seed",
+      detail: { count: STARTER_QUESTIONS.length }
+    });
+    return reply.send({ ok: true, added: STARTER_QUESTIONS.length });
   });
 
   // ── Admin: reorder ───────────────────────────────────────────────────────

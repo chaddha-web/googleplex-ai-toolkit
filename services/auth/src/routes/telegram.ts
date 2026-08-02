@@ -19,7 +19,7 @@ import { stmts } from "../db.js";
 import { requireAdmin, requireInternal } from "../guard.js";
 import { isFounder } from "../permissions.js";
 import { recordAudit } from "../audit.js";
-import { notify, sendTelegram } from "../notify.js";
+import { notify, opsChatConfigured, sendTelegram } from "../notify.js";
 import {
   TOPIC_LABELS,
   allowedTopics,
@@ -35,6 +35,11 @@ const CHAT_ID_RE = /^-?\d{5,20}$/;
 function statusFor(user: any) {
   const founder = isFounder(user.email);
   const allowed = allowedTopics(founder);
+  // The founder IS the ops channel, which already receives every topic. Saying
+  // "you're not receiving alerts" to the one person who receives all of them
+  // would be a lie, so surface that as coverage in its own right — they only
+  // need a personal link if they want per-topic control.
+  const coveredByOps = founder && opsChatConfigured();
   return {
     chatId: user.telegram_chat_id ?? null,
     verifiedAt: user.telegram_verified_at ?? null,
@@ -42,6 +47,8 @@ function statusFor(user: any) {
     allowedTopics: allowed,
     labels: Object.fromEntries(allowed.map((t) => [t, TOPIC_LABELS[t]])),
     isFounder: founder,
+    /** Already receiving everything via TELEGRAM_CHAT_ID, link or no link. */
+    coveredByOps,
     botUsername: process.env.TELEGRAM_BOT_USERNAME || null
   };
 }

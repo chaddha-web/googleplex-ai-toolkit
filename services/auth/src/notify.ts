@@ -21,6 +21,11 @@ import { clampTopics, parseTopics, type Topic } from "./notify-topics.js";
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const OPS_CHAT = process.env.TELEGRAM_CHAT_ID;
 
+/** Is the shared ops channel configured? It receives every topic, always. */
+export function opsChatConfigured(): boolean {
+  return !!TOKEN && !!OPS_CHAT;
+}
+
 /** Low-level send. Resolves to true only if Telegram accepted the message. */
 export async function sendTelegram(chatId: string, text: string): Promise<{ ok: boolean; error?: string }> {
   if (!TOKEN) return { ok: false, error: "The Telegram bot token is not configured on the server." };
