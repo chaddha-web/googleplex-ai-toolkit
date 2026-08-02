@@ -466,8 +466,26 @@ export default function ThemeAdminPage() {
 
         {/* Preview */}
         <div className="lg:sticky lg:top-6">
-          <p className="text-white/40 text-[11px] tracking-[0.2em] uppercase mb-2">Preview</p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-white/40 text-[11px] tracking-[0.2em] uppercase">Preview</p>
+            {dirty ? (
+              <span className="rounded-full bg-amber-400/[0.14] text-amber-300 text-[10px] px-2 py-0.5">
+                Unsaved draft
+              </span>
+            ) : (
+              <span className="rounded-full bg-emerald-400/[0.12] text-emerald-300 text-[10px] px-2 py-0.5">
+                Live now
+              </span>
+            )}
+          </div>
           <Preview theme={theme} media={media} />
+          <p className="text-white/35 text-[11px] mt-2 leading-relaxed">
+            {dirty
+              ? "This is what members will see once you save."
+              : theme.kind === "default"
+                ? "Members currently see the stock black dashboard — no background is set."
+                : `Members currently see the ${theme.kind} background above.`}
+          </p>
         </div>
       </div>
     </section>
@@ -556,22 +574,46 @@ function Preview({ theme, media }: { theme: DashboardTheme; media: MediaFile[] }
         <div className="absolute inset-0" style={{ backgroundColor: `rgba(0,0,0,${theme.dim / 100})` }} />
       )}
 
-      {/* A stand-in for the dashboard's own content, to judge legibility. */}
-      <div className="relative h-full p-5 flex flex-col justify-between">
+      {/* A stand-in for the dashboard's own content, so legibility can actually
+          be judged. Deliberately dense — an empty frame reads as broken rather
+          than as "nothing is set". */}
+      <div className="relative h-full p-5 flex flex-col gap-3 overflow-hidden">
         <div>
           <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase">Dashboard</p>
-          <p className="font-serif text-3xl tracking-tight mt-2 text-white">
+          <p className="font-serif text-3xl tracking-tight mt-1.5 text-white">
             Good evening<em className="font-serif-i text-white/60">.</em>
           </p>
         </div>
-        <div className="space-y-2">
-          <div className="liquid-glass rounded-xl px-4 py-3">
-            <p className="text-white/40 text-[10px] tracking-[0.2em] uppercase">Balance</p>
-            <p className="text-white text-2xl font-light mt-1">$1,240.00</p>
+
+        <div className="liquid-glass rounded-xl px-4 py-3">
+          <p className="text-white/40 text-[10px] tracking-[0.2em] uppercase">Balance</p>
+          <p className="text-white text-2xl font-light mt-1">$1,240.00</p>
+          <p className="text-emerald-300/80 text-[11px] mt-0.5">+$18.40 this week</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div className="liquid-glass rounded-xl px-3 py-2.5">
+            <p className="text-white/40 text-[9px] tracking-[0.2em] uppercase">Tokens</p>
+            <p className="text-white text-sm mt-1">10,000,000,000</p>
           </div>
-          <div className="liquid-glass rounded-xl px-4 py-3">
-            <p className="text-white/50 text-xs">Body copy sits at this contrast.</p>
+          <div className="liquid-glass rounded-xl px-3 py-2.5">
+            <p className="text-white/40 text-[9px] tracking-[0.2em] uppercase">Circle</p>
+            <p className="text-white text-sm mt-1">3 open votes</p>
           </div>
+        </div>
+
+        <div className="liquid-glass rounded-xl px-4 py-3 space-y-2">
+          <p className="text-white/50 text-xs">Body copy sits at this contrast.</p>
+          <p className="text-white/35 text-[11px]">
+            Secondary text is fainter — check this stays readable.
+          </p>
+        </div>
+
+        <div className="mt-auto flex gap-2">
+          <span className="rounded-full bg-white text-black text-[11px] px-3 py-1.5">Deposit</span>
+          <span className="rounded-full ring-1 ring-white/25 text-white/80 text-[11px] px-3 py-1.5">
+            Withdraw
+          </span>
         </div>
       </div>
     </div>
