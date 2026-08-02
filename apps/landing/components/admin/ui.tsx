@@ -215,3 +215,107 @@ export function ConfirmDialog({
     </div>
   );
 }
+
+// ── Loading feedback ────────────────────────────────────────────────────────
+// Every async action should show that something is happening. A silent UI that
+// is quietly working reads as a broken one.
+
+/** Inline spinner. Inherits `currentColor`, so it works on any button. */
+export function Spinner({ size = 14, className }: { size?: number; className?: string }) {
+  return (
+    <span
+      role="status"
+      aria-label="Loading"
+      className={cn("inline-block rounded-full animate-spin align-[-2px]", className)}
+      style={{
+        width: size,
+        height: size,
+        borderWidth: Math.max(2, Math.round(size / 7)),
+        borderStyle: "solid",
+        borderColor: "currentColor",
+        borderTopColor: "transparent",
+        opacity: 0.85
+      }}
+    />
+  );
+}
+
+/** Shimmering placeholder block, sized by className. */
+export function Skeleton({ className }: { className?: string }) {
+  return <div className={cn("rounded-lg bg-white/[0.06] animate-pulse", className)} />;
+}
+
+/** A page's worth of skeletons — the standard "this admin page is loading" state. */
+export function LoadingBlock({ rows = 3, stats = 0 }: { rows?: number; stats?: number }) {
+  return (
+    <div>
+      {stats > 0 && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          {Array.from({ length: stats }).map((_, i) => (
+            <Skeleton key={i} className="h-[92px] rounded-2xl" />
+          ))}
+        </div>
+      )}
+      <div className="space-y-3">
+        {Array.from({ length: rows }).map((_, i) => (
+          <Skeleton key={i} className="h-24 rounded-2xl" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Determinate progress bar. `value` is 0-100; pass null for an indeterminate
+ * state (we know it started, not how far along it is).
+ */
+export function ProgressBar({
+  value,
+  label,
+  hint
+}: {
+  value: number | null;
+  label?: string;
+  hint?: string;
+}) {
+  const pct = value === null ? null : Math.min(100, Math.max(0, value));
+  return (
+    <div className="w-full">
+      {(label || pct !== null) && (
+        <div className="flex items-center justify-between text-xs mb-1.5">
+          <span className="text-white/60">{label}</span>
+          {pct !== null && <span className="text-white/70 tabular-nums">{Math.round(pct)}%</span>}
+        </div>
+      )}
+      <div className="h-1.5 w-full rounded-full bg-white/[0.08] overflow-hidden">
+        {pct === null ? (
+          <div className="h-full w-1/3 rounded-full bg-white/50 animate-[indeterminate_1.2s_ease-in-out_infinite]" />
+        ) : (
+          <div
+            className="h-full rounded-full bg-white/70 transition-[width] duration-200 ease-out"
+            style={{ width: `${pct}%` }}
+          />
+        )}
+      </div>
+      {hint && <p className="text-white/35 text-[11px] mt-1.5 tabular-nums">{hint}</p>}
+    </div>
+  );
+}
+
+/** Button label that swaps in a spinner while busy, keeping the width stable. */
+export function BusyLabel({
+  busy,
+  children,
+  busyText
+}: {
+  busy: boolean;
+  children: ReactNode;
+  busyText?: string;
+}) {
+  return (
+    <span className="inline-flex items-center gap-2">
+      {busy && <Spinner size={13} />}
+      {busy && busyText ? busyText : children}
+    </span>
+  );
+}

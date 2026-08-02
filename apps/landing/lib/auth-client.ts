@@ -1301,6 +1301,17 @@ export function adminMediaList(): Promise<{ files: MediaFile[]; baseUrl: string;
   return authJson("/auth/admin/media", undefined, "Could not load the media library.");
 }
 
+export type UploadProgress = {
+  /** 0-100, or null before the first progress event / if length is unknown. */
+  percent: number | null;
+  loaded: number;
+  total: number;
+  /** Bytes per second, averaged over the transfer so far. */
+  bps: number;
+  /** Seconds remaining, or null when we can't estimate yet. */
+  etaSeconds: number | null;
+};
+
 /** Upload one file. Content-Type is left unset so the browser writes the boundary. */
 export async function adminUploadMedia(file: File): Promise<{ name: string; url: string; size: number }> {
   const form = new FormData();
@@ -1309,6 +1320,70 @@ export async function adminUploadMedia(file: File): Promise<{ name: string; url:
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as any).error || "Upload failed.");
   return data as { name: string; url: string; size: number };
+}
+
+/**
+ * Upload with real progress. `fetch` cannot report how much of a REQUEST body
+ * has gone out, so a multi-hundred-megabyte video has to go via XHR to show a
+ * percentage — otherwise the admin stares at a static "Uploading…" for minutes.
+ *
+ * Returns an object with the promise and an `abort()`, so the caller can offer
+ * a cancel button. No transparent 401-refresh here (the body is a one-shot
+ * stream and can't be replayed) — we take a fresh token first instead.
+ */
+export function adminUploadMediaWithProgress(
+  file: File,
+  onProgress: (p: UploadProgress) => void
+): { promise: Promise<{ name: string; url: string; size: number }>; abort: () => void } {
+  const xhr = new XMLHttpRequest();
+
+  const promise = (async () => {
+    const token = await ensureAccess();
+    const form = new FormData();
+    form.append("file", file);
+    const started = Date.now();
+
+    return new Promise<{ name: string; url: string; size: number }>((resolve, reject) => {
+      xhr.open("POST", `${AUTH_BASE}/auth/admin/media`);
+      if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+
+      xhr.upload.onprogress = (e) => {
+        const elapsed = (Date.now() - started) / 1000;
+        const bps = elapsed > 0 ? e.loaded / elapsed : 0;
+        const total = e.lengthComputable ? e.total : file.size;
+        const remaining = Math.max(0, total - e.loaded);
+        onProgress({
+          percent: total > 0 ? (e.loaded / total) * 100 : null,
+          loaded: e.loaded,
+          total,
+          bps,
+          etaSeconds: bps > 0 ? remaining / bps : null
+        });
+      };
+
+      // The bytes are out; the server is still writing the file to disk.
+      xhr.upload.onload = () =>
+        onProgress({ percent: 100, loaded: file.size, total: file.size, bps: 0, etaSeconds: 0 });
+
+      xhr.onload = () => {
+        let body: any = {};
+        try {
+          body = JSON.parse(xhr.responseText);
+        } catch {
+          /* non-JSON error page */
+        }
+        if (xhr.status >= 200 && xhr.status < 300) resolve(body);
+        else reject(new Error(body.error || `Upload failed (${xhr.status}).`));
+      };
+      xhr.onerror = () => reject(new Error("Upload failed — the connection dropped."));
+      xhr.onabort = () => reject(new Error("Upload cancelled."));
+      xhr.ontimeout = () => reject(new Error("Upload timed out."));
+
+      xhr.send(form);
+    });
+  })();
+
+  return { promise, abort: () => xhr.abort() };
 }
 
 export function adminDeleteMedia(name: string): Promise<{ ok: boolean }> {

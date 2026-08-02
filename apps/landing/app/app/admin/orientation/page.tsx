@@ -9,7 +9,14 @@
  */
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
-import { StatCard, ConfirmDialog } from "@/components/admin/ui";
+import {
+  StatCard,
+  ConfirmDialog,
+  Spinner,
+  LoadingBlock,
+  ProgressBar,
+  BusyLabel
+} from "@/components/admin/ui";
 import {
   adminCreateQuestion,
   adminDeleteQuestion,
@@ -19,11 +26,12 @@ import {
   adminResetOnboarding,
   adminSetOnboardingConfig,
   adminUpdateQuestion,
-  adminUploadMedia,
+  adminUploadMediaWithProgress,
   type AdminOnboarding,
   type AdminQuestion,
   type Gating,
-  type MemberResponse
+  type MemberResponse,
+  type UploadProgress
 } from "@/lib/auth-client";
 
 const GATING_COPY: Record<Gating, { label: string; hint: string }> = {
@@ -40,6 +48,19 @@ const GATING_COPY: Record<Gating, { label: string; hint: string }> = {
     hint: "Must also score at or above the pass mark. Below it, they retry."
   }
 };
+
+const mb = (n: number) => `${(n / (1024 * 1024)).toFixed(1)} MB`;
+
+/** "12.4 MB of 300 MB · 2.1 MB/s · about 2m 18s left" */
+function progressHint(p: UploadProgress): string {
+  const rate = p.bps > 0 ? ` · ${mb(p.bps)}/s` : "";
+  let eta = "";
+  if (p.etaSeconds !== null && p.etaSeconds > 1) {
+    const s = Math.round(p.etaSeconds);
+    eta = s >= 60 ? ` · about ${Math.floor(s / 60)}m ${s % 60}s left` : ` · about ${s}s left`;
+  }
+  return `${mb(p.loaded)} of ${mb(p.total)}${rate}${eta}`;
+}
 
 function when(ms: number | null): string {
   if (!ms) return "—";
@@ -88,6 +109,13 @@ export default function OrientationAdminPage() {
       {error && <p className="mt-6 text-rose-300/90 text-sm">{error}</p>}
       {note && <p className="mt-6 text-emerald-300/90 text-sm">{note}</p>}
 
+      {!data && !error && (
+        <div className="mt-8">
+          <LoadingBlock stats={4} rows={3} />
+        </div>
+      )}
+
+      {data && (
       <div className="mt-8 grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
           label="Gating"
@@ -108,6 +136,7 @@ export default function OrientationAdminPage() {
           hint={`${completions.length} attempted`}
         />
       </div>
+      )}
 
       {data && (
         <>
@@ -165,7 +194,10 @@ function VideoPanel({
   const [link, setLink] = useState(config.video?.kind === "url" ? config.video.src : "");
   const [title, setTitle] = useState(config.video?.title ?? "");
   const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState<string | null>(null);
+  const [progress, setProgress] = useState<UploadProgress | null>(null);
+  /** Set once the bytes are out and the server is still finishing the write. */
+  const [finishing, setFinishing] = useState(false);
+  const abortRef = useRef<(() => void) | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function saveLink() {
@@ -182,16 +214,24 @@ function VideoPanel({
 
   async function upload(file: File) {
     setBusy(true);
-    setProgress(`Uploading ${(file.size / (1024 * 1024)).toFixed(1)} MB…`);
+    setFinishing(false);
+    setProgress({ percent: 0, loaded: 0, total: file.size, bps: 0, etaSeconds: null });
+    const job = adminUploadMediaWithProgress(file, (p) => {
+      setProgress(p);
+      if (p.percent !== null && p.percent >= 100) setFinishing(true);
+    });
+    abortRef.current = job.abort;
     try {
-      const up = await adminUploadMedia(file);
+      const up = await job.promise;
       await adminSetOnboardingConfig({ video: { kind: "upload", src: up.name, title } });
-      onSaved("Video uploaded and set.");
+      onSaved(`Video uploaded (${mb(up.size)}) and set as the orientation video.`);
     } catch (e) {
       onError((e as Error).message);
     } finally {
       setBusy(false);
       setProgress(null);
+      setFinishing(false);
+      abortRef.current = null;
       if (fileRef.current) fileRef.current.value = "";
     }
   }
@@ -280,9 +320,27 @@ function VideoPanel({
               }}
               className="block w-full text-sm text-white/60 file:mr-4 file:rounded-full file:border-0 file:bg-white file:px-5 file:py-2 file:text-sm file:text-black hover:file:opacity-90 disabled:opacity-50"
             />
-            <p className="text-white/30 text-[11px] mt-2">
-              {progress ?? "Large files take a while — keep this tab open until it finishes."}
-            </p>
+
+            {progress ? (
+              <div className="mt-4">
+                <ProgressBar
+                  value={finishing ? null : progress.percent}
+                  label={finishing ? "Saving on the server…" : "Uploading"}
+                  hint={finishing ? "Bytes are up — writing the file." : progressHint(progress)}
+                />
+                <button
+                  type="button"
+                  onClick={() => abortRef.current?.()}
+                  className="mt-2 text-white/40 hover:text-rose-300 text-xs underline transition-colors"
+                >
+                  Cancel upload
+                </button>
+              </div>
+            ) : (
+              <p className="text-white/30 text-[11px] mt-2">
+                Large files take a while — keep this tab open until it finishes.
+              </p>
+            )}
           </div>
         ) : (
           <div className="flex gap-2">
@@ -298,7 +356,9 @@ function VideoPanel({
               disabled={busy || !link.trim()}
               className="rounded-full bg-white text-black px-5 py-2 text-sm font-medium disabled:opacity-40"
             >
-              Save
+              <BusyLabel busy={busy} busyText="Saving…">
+                Save
+              </BusyLabel>
             </button>
           </div>
         )}
@@ -398,7 +458,9 @@ function GatingPanel({
         disabled={busy || !dirty}
         className="mt-6 rounded-full bg-white text-black px-6 py-2 text-sm font-medium disabled:opacity-40"
       >
-        {busy ? "Saving…" : "Save rules"}
+        <BusyLabel busy={busy} busyText="Saving…">
+          Save rules
+        </BusyLabel>
       </button>
     </div>
   );
@@ -636,7 +698,9 @@ function QuestionEditor({
         disabled={busy || !valid}
         className="mt-5 rounded-full bg-white text-black px-6 py-2 text-sm font-medium disabled:opacity-40"
       >
-        {busy ? "Saving…" : submitLabel}
+        <BusyLabel busy={busy} busyText="Saving…">
+          {submitLabel}
+        </BusyLabel>
       </button>
     </div>
   );
@@ -758,6 +822,7 @@ function CompletionsPanel({
   const [openId, setOpenId] = useState<string | null>(null);
   const [responses, setResponses] = useState<MemberResponse[]>([]);
   const [loading, setLoading] = useState(false);
+  const [resettingId, setResettingId] = useState<string | null>(null);
 
   async function open(userId: string) {
     if (openId === userId) {
@@ -820,14 +885,20 @@ function CompletionsPanel({
                       </button>
                       <button
                         type="button"
+                        disabled={resettingId === c.id}
                         onClick={async () => {
-                          await adminResetOnboarding(c.id);
-                          await reload();
+                          setResettingId(c.id);
+                          try {
+                            await adminResetOnboarding(c.id);
+                            await reload();
+                          } finally {
+                            setResettingId(null);
+                          }
                         }}
-                        className="text-white/40 hover:text-white text-xs underline px-2"
+                        className="text-white/40 hover:text-white text-xs underline px-2 disabled:opacity-40"
                         title="Clear their attempts so they sit it again"
                       >
-                        Reset
+                        {resettingId === c.id ? <Spinner size={11} /> : "Reset"}
                       </button>
                     </td>
                   </tr>
@@ -835,7 +906,9 @@ function CompletionsPanel({
                     <tr>
                       <td colSpan={5} className="pb-4">
                         {loading ? (
-                          <p className="text-white/40 text-xs">Loading answers…</p>
+                          <p className="text-white/40 text-xs flex items-center gap-2">
+                            <Spinner size={12} /> Loading answers…
+                          </p>
                         ) : responses.length === 0 ? (
                           <p className="text-white/40 text-xs">No answers recorded.</p>
                         ) : (

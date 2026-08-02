@@ -153,3 +153,10 @@ video {
 html[data-themed="1"] .app-surface {
   background-color: transparent;
 }
+
+/* Indeterminate progress bar (components/admin/ui.tsx → ProgressBar). Used when
+   we know work started but not how far along it is. */
+@keyframes indeterminate {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}

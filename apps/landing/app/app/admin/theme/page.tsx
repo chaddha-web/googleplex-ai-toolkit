@@ -10,15 +10,17 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Spinner, ProgressBar, BusyLabel, Skeleton } from "@/components/admin/ui";
 import {
   DEFAULT_DASHBOARD_THEME,
   adminDeleteMedia,
   adminMediaList,
   adminSetTheme,
-  adminUploadMedia,
+  adminUploadMediaWithProgress,
   fetchDashboardTheme,
   type DashboardTheme,
-  type MediaFile
+  type MediaFile,
+  type UploadProgress
 } from "@/lib/auth-client";
 
 const PRESETS: Array<{ name: string; colors: string[]; angle: number }> = [
@@ -39,6 +41,17 @@ const KINDS: Array<{ id: DashboardTheme["kind"]; label: string; hint: string }> 
 
 const mb = (n: number) => `${(n / (1024 * 1024)).toFixed(1)} MB`;
 
+/** "12.4 MB of 300 MB · 2.1 MB/s · about 2m 18s left" */
+function progressHint(p: UploadProgress): string {
+  const rate = p.bps > 0 ? ` · ${mb(p.bps)}/s` : "";
+  let eta = "";
+  if (p.etaSeconds !== null && p.etaSeconds > 1) {
+    const s = Math.round(p.etaSeconds);
+    eta = s >= 60 ? ` · about ${Math.floor(s / 60)}m ${s % 60}s left` : ` · about ${s}s left`;
+  }
+  return `${mb(p.loaded)} of ${mb(p.total)}${rate}${eta}`;
+}
+
 export default function ThemeAdminPage() {
   const [theme, setTheme] = useState<DashboardTheme | null>(null);
   const [saved, setSaved] = useState<DashboardTheme | null>(null);
@@ -46,14 +59,22 @@ export default function ThemeAdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<UploadProgress | null>(null);
+  const [finishing, setFinishing] = useState(false);
+  const [deletingName, setDeletingName] = useState<string | null>(null);
+  const [mediaLoading, setMediaLoading] = useState(true);
+  const abortRef = useRef<(() => void) | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const loadMedia = useCallback(async () => {
+    setMediaLoading(true);
     try {
       const r = await adminMediaList();
       setMedia(r.files);
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setMediaLoading(false);
     }
   }, []);
 
@@ -66,7 +87,21 @@ export default function ThemeAdminPage() {
   }, [loadMedia]);
 
   if (!theme) {
-    return <p className="text-white/40 text-sm">Loading the theme…</p>;
+    return (
+      <section className="max-w-6xl mx-auto">
+        <p className="text-white/40 text-xs tracking-[0.3em] uppercase">Appearance</p>
+        <h1 className="font-serif text-4xl md:text-5xl tracking-tight mt-2">
+          Dashboard <em className="font-serif-i text-white/60">theme</em>.
+        </h1>
+        <div className="mt-8 grid lg:grid-cols-[1fr_420px] gap-4 items-start">
+          <div className="space-y-4">
+            <Skeleton className="h-56 rounded-2xl" />
+            <Skeleton className="h-40 rounded-2xl" />
+          </div>
+          <Skeleton className="aspect-[9/16] max-h-[520px] rounded-2xl" />
+        </div>
+      </section>
+    );
   }
 
   const set = (patch: Partial<DashboardTheme>) => {
@@ -95,15 +130,25 @@ export default function ThemeAdminPage() {
   async function upload(file: File) {
     setBusy(true);
     setError(null);
+    setFinishing(false);
+    setProgress({ percent: 0, loaded: 0, total: file.size, bps: 0, etaSeconds: null });
+    const job = adminUploadMediaWithProgress(file, (p) => {
+      setProgress(p);
+      if (p.percent !== null && p.percent >= 100) setFinishing(true);
+    });
+    abortRef.current = job.abort;
     try {
-      const up = await adminUploadMedia(file);
+      const up = await job.promise;
       await loadMedia();
       set({ src: up.name, srcKind: "upload" });
-      setNote(`Uploaded ${up.name} (${mb(up.size)}). Save to apply it.`);
+      setNote(`Uploaded ${mb(up.size)}. Hit save to apply it.`);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
+      setProgress(null);
+      setFinishing(false);
+      abortRef.current = null;
       if (fileRef.current) fileRef.current.value = "";
     }
   }
@@ -279,7 +324,38 @@ export default function ThemeAdminPage() {
                     className="mt-4 block w-full text-sm text-white/60 file:mr-4 file:rounded-full file:border-0 file:bg-white file:px-5 file:py-2 file:text-sm file:text-black hover:file:opacity-90 disabled:opacity-50"
                   />
 
-                  {relevantMedia.length > 0 && (
+                  {progress && (
+                    <div className="mt-4">
+                      <ProgressBar
+                        value={finishing ? null : progress.percent}
+                        label={finishing ? "Saving on the server…" : "Uploading"}
+                        hint={finishing ? "Bytes are up — writing the file." : progressHint(progress)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => abortRef.current?.()}
+                        className="mt-2 text-white/40 hover:text-rose-300 text-xs underline transition-colors"
+                      >
+                        Cancel upload
+                      </button>
+                    </div>
+                  )}
+
+                  {mediaLoading && (
+                    <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <Skeleton key={i} className="aspect-video rounded-xl" />
+                      ))}
+                    </div>
+                  )}
+
+                  {!mediaLoading && relevantMedia.length === 0 && (
+                    <p className="mt-4 text-white/35 text-xs">
+                      Nothing in the library yet — upload {theme.kind === "video" ? "a video" : "an image"} above.
+                    </p>
+                  )}
+
+                  {!mediaLoading && relevantMedia.length > 0 && (
                     <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {relevantMedia.map((m) => (
                         <div
@@ -307,18 +383,24 @@ export default function ThemeAdminPage() {
                           </button>
                           <button
                             type="button"
+                            disabled={deletingName === m.name}
                             onClick={async () => {
+                              setDeletingName(m.name);
                               try {
                                 await adminDeleteMedia(m.name);
                                 await loadMedia();
                               } catch (e) {
                                 setError((e as Error).message);
+                              } finally {
+                                setDeletingName(null);
                               }
                             }}
-                            className="absolute top-1.5 right-1.5 rounded-full bg-black/70 text-white/60 hover:text-rose-300 w-6 h-6 text-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                            className={`absolute top-1.5 right-1.5 rounded-full bg-black/70 text-white/60 hover:text-rose-300 w-6 h-6 text-sm transition-opacity ${
+                              deletingName === m.name ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                            }`}
                             title="Delete this file"
                           >
-                            ×
+                            {deletingName === m.name ? <Spinner size={11} /> : "×"}
                           </button>
                         </div>
                       ))}
@@ -349,7 +431,9 @@ export default function ThemeAdminPage() {
               disabled={busy || !dirty || needsSrc}
               className="rounded-full bg-white text-black px-6 py-2.5 text-sm font-medium disabled:opacity-40"
             >
-              {busy ? "Saving…" : dirty ? "Save theme" : "Saved"}
+              <BusyLabel busy={busy} busyText="Saving…">
+                {dirty ? "Save theme" : "Saved"}
+              </BusyLabel>
             </button>
             {dirty && (
               <button

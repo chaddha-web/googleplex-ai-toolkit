@@ -46,7 +46,14 @@ export default function OrientationPage() {
   const [result, setResult] = useState<OrientationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Set while we hand off to the dashboard, so the button doesn't look dead. */
+  const [leaving, setLeaving] = useState(false);
   const quizRef = useRef<HTMLDivElement>(null);
+
+  const goToDashboard = useCallback(() => {
+    setLeaving(true);
+    router.replace("/app");
+  }, [router]);
 
   const load = useCallback(async () => {
     const o = await fetchOrientation();
@@ -98,12 +105,21 @@ export default function OrientationPage() {
   }
 
   if (phase === "loading") {
+    // Skeleton rather than a bare spinner: it shows the shape of what's coming,
+    // so the page doesn't visibly jump when it arrives.
     return (
-      <main className="w-full min-h-screen bg-black text-white flex items-center justify-center font-sans">
-        <div className="flex items-center gap-3 text-white/50 text-sm">
-          <span className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white/70 animate-spin" />
-          Loading your orientation…
-        </div>
+      <main className="relative w-full min-h-screen overflow-x-hidden flex flex-col items-center font-sans bg-black text-white">
+        <div className="fixed inset-0 z-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_rgba(180,140,255,0.06)_0%,_transparent_60%)]" />
+        <section className="relative z-10 w-full max-w-3xl px-6 pt-16 md:pt-24 pb-24">
+          <div className="flex items-center gap-3 text-white/40 text-xs tracking-[0.3em] uppercase mb-6">
+            <span className="w-3 h-3 rounded-full border-2 border-white/20 border-t-white/70 animate-spin" />
+            Orientation
+          </div>
+          <div className="h-12 w-2/3 rounded-lg bg-white/[0.06] animate-pulse" />
+          <div className="mt-5 h-4 w-full rounded bg-white/[0.04] animate-pulse" />
+          <div className="mt-2 h-4 w-4/5 rounded bg-white/[0.04] animate-pulse" />
+          <div className="mt-8 aspect-video w-full rounded-3xl bg-white/[0.05] animate-pulse" />
+        </section>
       </main>
     );
   }
@@ -134,7 +150,8 @@ export default function OrientationPage() {
                 quizRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
               );
             }}
-            onFinish={() => router.replace("/app")}
+            onFinish={goToDashboard}
+            leaving={leaving}
           />
         )}
 
@@ -212,7 +229,8 @@ export default function OrientationPage() {
           <ResultStep
             result={result}
             gating={data?.gating ?? "answer"}
-            onContinue={() => router.replace("/app")}
+            leaving={leaving}
+            onContinue={goToDashboard}
             onRetry={() => {
               resetOrientationGate();
               setPhase("loading");
@@ -231,7 +249,8 @@ function VideoStep({
   firstName,
   hasQuestions,
   onContinue,
-  onFinish
+  onFinish,
+  leaving
 }: {
   title: string;
   url: string;
@@ -239,8 +258,12 @@ function VideoStep({
   hasQuestions: boolean;
   onContinue: () => void;
   onFinish: () => void;
+  leaving: boolean;
 }) {
   const embed = embedFor(url);
+  // A self-hosted video can take a moment to reach its first frame; show a
+  // placeholder rather than an empty black box.
+  const [ready, setReady] = useState(embed.type === "iframe");
   return (
     <>
       <motion.h1
@@ -272,9 +295,24 @@ function VideoStep({
               allowFullScreen
             />
           ) : (
-            <video src={embed.src} controls playsInline className="absolute inset-0 w-full h-full bg-black">
+            <video
+              src={embed.src}
+              controls
+              playsInline
+              onLoadedData={() => setReady(true)}
+              onCanPlay={() => setReady(true)}
+              className="absolute inset-0 w-full h-full bg-black"
+            >
               Your browser can&apos;t play this video.
             </video>
+          )}
+          {!ready && (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/[0.03] pointer-events-none">
+              <span className="flex items-center gap-2 text-white/40 text-xs">
+                <span className="w-3.5 h-3.5 rounded-full border-2 border-white/20 border-t-white/70 animate-spin" />
+                Loading the video…
+              </span>
+            </div>
           )}
         </div>
       </motion.div>
@@ -283,9 +321,17 @@ function VideoStep({
         <button
           type="button"
           onClick={hasQuestions ? onContinue : onFinish}
-          className="rounded-full bg-white text-black px-7 py-3 text-sm font-medium transition-opacity hover:opacity-90"
+          disabled={leaving}
+          className="inline-flex items-center gap-2 rounded-full bg-white text-black px-7 py-3 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-60"
         >
-          {hasQuestions ? "Continue to the questions →" : "Go to my dashboard →"}
+          {leaving && (
+            <span className="w-3.5 h-3.5 rounded-full border-2 border-black/20 border-t-black animate-spin" />
+          )}
+          {leaving
+            ? "Opening your dashboard…"
+            : hasQuestions
+              ? "Continue to the questions →"
+              : "Go to my dashboard →"}
         </button>
         <span className="text-white/40 text-xs">You can come back to this from your dashboard.</span>
       </div>
@@ -366,11 +412,13 @@ function QuestionCard({
 function ResultStep({
   result,
   gating,
+  leaving,
   onContinue,
   onRetry
 }: {
   result: OrientationResult;
   gating: string;
+  leaving: boolean;
   onContinue: () => void;
   onRetry: () => void;
 }) {
@@ -416,9 +464,13 @@ function ResultStep({
           <button
             type="button"
             onClick={onContinue}
-            className="rounded-full bg-white text-black px-7 py-3 text-sm font-medium transition-opacity hover:opacity-90"
+            disabled={leaving}
+            className="inline-flex items-center gap-2 rounded-full bg-white text-black px-7 py-3 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-60"
           >
-            Go to my dashboard →
+            {leaving && (
+              <span className="w-3.5 h-3.5 rounded-full border-2 border-black/20 border-t-black animate-spin" />
+            )}
+            {leaving ? "Opening your dashboard…" : "Go to my dashboard →"}
           </button>
         ) : result.canRetry ? (
           <button
