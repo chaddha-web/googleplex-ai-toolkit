@@ -61,23 +61,29 @@ export type User = {
   createdAt?: number;
 };
 
-const WALLET_SKIP_KEY = "gplex.skip_wallet_setup_seen";
-
-/** Returns the URL the user should be on given their onboarding state, or null when fully onboarded. */
+/**
+ * Where this member must be, or null when they're fully set up.
+ *
+ * Mirrors apps/landing/lib/auth-client.ts — the setup pages themselves live on
+ * the landing app, so these are paths there, not here.
+ *
+ * The $1 activation deposit is MANDATORY. The old "I'll do it later" skip and
+ * the read-only browsing it allowed are gone. Admins are exempt.
+ */
 export function nextOnboardingPath(user: User | null): string | null {
   if (!user) return null;
+  if (user.role === "admin") return null;
+
   // 1. Profile data first — needed before anything else.
   if (!user.profileCompletedAt) return "/app/setup/profile";
-  // 2. Wallet choice — only force the user through it once. If they tap
-  //    "I'll do it later" we set the skip flag, and from then on they can
-  //    use the dashboard freely; the wallet-not-active banner nudges them.
-  const skipped =
-    typeof window !== "undefined" && localStorage.getItem(WALLET_SKIP_KEY) === "1";
-  if (user.walletStatus === "pending_password" && !skipped) {
-    return "/app/setup/wallet";
-  }
-  // 3. Once the password is set, the user can browse normally. The
-  //    deposit page is opt-in (banner click), not forced.
+
+  // 2. A wallet password, so there's somewhere for the deposit to land.
+  if (user.walletStatus === "pending_password") return "/app/setup/password";
+
+  // 3. The $1 itself. `active` is set by the wallet service once a deposit
+  //    clears the threshold; until then the dashboard stays out of reach.
+  if (user.walletStatus !== "active") return "/app/setup/deposit";
+
   return null;
 }
 

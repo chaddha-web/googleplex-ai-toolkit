@@ -6,6 +6,7 @@ import type { Metadata } from "next";
 import { AuthProvider } from "@/components/auth-context";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { DashboardBackground } from "@/components/dashboard-background";
+import { OnboardingGate } from "@/components/onboarding-gate";
 
 /**
  * Root layout for apps/web — the product dashboard.
@@ -34,7 +35,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Toaster />
           <AuthProvider>
             <DashboardBackground />
-            <DashboardShell>{children}</DashboardShell>
+            {/* Nothing in the product renders until onboarding is finished. */}
+            <OnboardingGate>
+              <DashboardShell>{children}</DashboardShell>
+            </OnboardingGate>
           </AuthProvider>
         </PostHogProvider>
       </body>
