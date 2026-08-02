@@ -34,6 +34,14 @@ services:
       - --providers.docker.network=gplex-frontend
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
+      # Admin media uploads send a multi-hundred-megabyte request body. Traefik
+      # v3 caps time spent READING a request at 60s by default, which killed
+      # those uploads at exactly 60000ms with a 502 — and because the 502
+      # carries no CORS headers, the browser reported it as a dropped
+      # connection rather than an error. 30 min is ample for a 512MB file on a
+      # slow line, and still bounded so a stalled client can't hold a slot open
+      # forever. Only affects reading requests; responses are unchanged.
+      - --entrypoints.websecure.transport.respondingTimeouts.readTimeout=1800s
       # Auto-redirect HTTP → HTTPS
       - --entrypoints.web.http.redirections.entrypoint.to=websecure
       - --entrypoints.web.http.redirections.entrypoint.scheme=https

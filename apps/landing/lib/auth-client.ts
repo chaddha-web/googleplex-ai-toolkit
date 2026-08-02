@@ -1375,7 +1375,15 @@ export function adminUploadMediaWithProgress(
         if (xhr.status >= 200 && xhr.status < 300) resolve(body);
         else reject(new Error(body.error || `Upload failed (${xhr.status}).`));
       };
-      xhr.onerror = () => reject(new Error("Upload failed — the connection dropped."));
+      // No HTTP response reached us. Either the network really dropped, or a
+      // proxy cut the request short and its error page carried no CORS headers
+      // (which the browser then reports as a network failure, not a status).
+      xhr.onerror = () =>
+        reject(
+          new Error(
+            "Upload failed before the server answered — the connection dropped or was cut short by a proxy. If the file is large, try again; if it keeps failing at the same point, the upload is being timed out."
+          )
+        );
       xhr.onabort = () => reject(new Error("Upload cancelled."));
       xhr.ontimeout = () => reject(new Error("Upload timed out."));
 
