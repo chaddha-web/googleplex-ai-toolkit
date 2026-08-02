@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
+import multipart from "@fastify/multipart";
 import { otpRoutes } from "./routes/otp.js";
 import { authRoutes } from "./routes/auth.js";
 import { walletRoutes } from "./routes/wallet.js";
@@ -14,6 +15,10 @@ import { presenceRoutes } from "./routes/presence.js";
 import { securityRoutes } from "./routes/security.js";
 import { adminManagerRoutes } from "./routes/admins.js";
 import { auditRoutes } from "./routes/audit.js";
+import { onboardingRoutes } from "./routes/onboarding.js";
+import { mediaRoutes } from "./routes/media.js";
+import { themeRoutes } from "./routes/theme.js";
+import { MAX_UPLOAD_BYTES } from "./media.js";
 import { notify } from "./notify.js";
 import { startTelegramBot } from "./telegram-bot.js";
 
@@ -30,7 +35,18 @@ const app = Fastify({
   bodyLimit: 64 * 1024
 });
 
-await app.register(helmet, { contentSecurityPolicy: false });
+await app.register(helmet, {
+  contentSecurityPolicy: false,
+  // Uploaded media is embedded by the member app on another subdomain
+  // (<video>, CSS background). The default same-origin CORP header blocks that.
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+});
+
+// Admin media uploads (orientation video, dashboard background). The global
+// 64 KB bodyLimit does not apply to multipart — this is the ceiling that does.
+await app.register(multipart, {
+  limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 10 }
+});
 
 // Global IP rate limit. Per-route overrides (stricter on OTP) live on the
 // individual routes via their `config.rateLimit`.
@@ -98,6 +114,9 @@ await app.register(presenceRoutes);
 await app.register(securityRoutes);
 await app.register(adminManagerRoutes);
 await app.register(auditRoutes);
+await app.register(onboardingRoutes);
+await app.register(mediaRoutes);
+await app.register(themeRoutes);
 
 // Interactive Telegram command bot (/usage, /count, /paid, /stats).
 startTelegramBot();

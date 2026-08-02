@@ -1094,6 +1094,277 @@ export async function signOut(): Promise<void> {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// Orientation — the instructional video + quiz shown once after activation
+// ────────────────────────────────────────────────────────────────────────────
+
+/** off = no orientation · answer = must answer · pass = must also score. */
+export type Gating = "off" | "answer" | "pass";
+
+export type OrientationVideo = {
+  kind: "upload" | "url";
+  /** Stored value: a media filename for uploads, the link itself for urls. */
+  src: string;
+  title: string;
+  /** Ready-to-load URL — use this, not `src`. */
+  url: string;
+};
+
+export type OrientationQuestion = {
+  id: string;
+  prompt: string;
+  options: string[];
+  required: boolean;
+  /** True when the question has a correct answer and counts toward the score. */
+  graded: boolean;
+};
+
+export type Orientation = {
+  /** Should this member be held here before reaching the dashboard? */
+  required: boolean;
+  gating: Gating;
+  passMark: number;
+  maxAttempts: number;
+  video: OrientationVideo | null;
+  questions: OrientationQuestion[];
+  status: {
+    completedAt: number | null;
+    score: number | null;
+    attempts: number;
+    outOfAttempts: boolean;
+  };
+};
+
+export type OrientationResult = {
+  passed: boolean;
+  completed: boolean;
+  score: number | null;
+  correctCount?: number;
+  gradedCount?: number;
+  total?: number;
+  passMark?: number;
+  attempts?: number;
+  canRetry?: boolean;
+};
+
+export async function fetchOrientation(): Promise<Orientation | null> {
+  try {
+    const res = await authedFetch(`${AUTH_BASE}/auth/onboarding`);
+    if (!res.ok) return null;
+    return (await res.json()) as Orientation;
+  } catch {
+    // Never let a hiccup here trap a member outside their dashboard.
+    return null;
+  }
+}
+
+export async function submitOrientation(
+  answers: Record<string, number | null>
+): Promise<OrientationResult> {
+  const res = await authedFetch(`${AUTH_BASE}/auth/onboarding/submit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ answers })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Could not submit your answers.");
+  return data as OrientationResult;
+}
+
+// ── Admin: orientation authoring ────────────────────────────────────────────
+
+export type AdminQuestion = {
+  id: string;
+  prompt: string;
+  options: string[];
+  /** null = ungraded (survey-style), no right answer. */
+  correctIndex: number | null;
+  required: boolean;
+  sortOrder: number;
+  active: boolean;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type OnboardingCompletion = {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  code11: string;
+  onboarding_completed_at: number | null;
+  onboarding_score: number | null;
+  onboarding_attempts: number;
+};
+
+export type AdminOnboarding = {
+  config: {
+    gating: Gating;
+    passMark: number;
+    maxAttempts: number;
+    video: OrientationVideo | null;
+  };
+  questions: AdminQuestion[];
+  completions: OnboardingCompletion[];
+};
+
+async function authJson<T>(path: string, init?: RequestInit, fallbackErr = "Request failed."): Promise<T> {
+  const res = await authedFetch(`${AUTH_BASE}${path}`, init);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as any).error || fallbackErr);
+  return data as T;
+}
+
+export function adminOnboarding(): Promise<AdminOnboarding> {
+  return authJson<AdminOnboarding>("/auth/admin/onboarding", undefined, "Could not load the orientation.");
+}
+
+export function adminSetOnboardingConfig(patch: {
+  gating?: Gating;
+  passMark?: number;
+  maxAttempts?: number;
+  video?: { kind: "upload" | "url"; src: string; title?: string } | null;
+}): Promise<{ config: AdminOnboarding["config"] }> {
+  return authJson("/auth/admin/onboarding/config", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch)
+  }, "Could not save the orientation settings.");
+}
+
+export function adminCreateQuestion(q: {
+  prompt: string;
+  options: string[];
+  correctIndex: number | null;
+  required: boolean;
+  active?: boolean;
+}): Promise<{ question: AdminQuestion }> {
+  return authJson("/auth/admin/onboarding/questions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(q)
+  }, "Could not add the question.");
+}
+
+export function adminUpdateQuestion(
+  id: string,
+  patch: Partial<Omit<AdminQuestion, "id" | "createdAt" | "updatedAt">>
+): Promise<{ question: AdminQuestion }> {
+  return authJson(`/auth/admin/onboarding/questions/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch)
+  }, "Could not save the question.");
+}
+
+export function adminDeleteQuestion(id: string): Promise<{ ok: boolean }> {
+  return authJson(`/auth/admin/onboarding/questions/${id}`, { method: "DELETE" }, "Could not delete the question.");
+}
+
+export function adminReorderQuestions(ids: string[]): Promise<{ ok: boolean }> {
+  return authJson("/auth/admin/onboarding/reorder", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids })
+  }, "Could not reorder the questions.");
+}
+
+export type MemberResponse = {
+  questionId: string;
+  prompt: string;
+  attempt: number;
+  answerIndex: number | null;
+  answer: string | null;
+  correctIndex: number | null;
+  correct: boolean | null;
+  createdAt: number;
+};
+
+export function adminOnboardingResponses(userId: string): Promise<{ responses: MemberResponse[] }> {
+  return authJson(`/auth/admin/onboarding/responses/${userId}`, undefined, "Could not load the answers.");
+}
+
+export function adminResetOnboarding(userId: string): Promise<{ ok: boolean }> {
+  return authJson(`/auth/admin/onboarding/reset/${userId}`, { method: "POST" }, "Could not reset the orientation.");
+}
+
+// ── Admin: media library ────────────────────────────────────────────────────
+
+export type MediaFile = {
+  name: string;
+  size: number;
+  modified: number;
+  url: string;
+  type: string;
+};
+
+export function adminMediaList(): Promise<{ files: MediaFile[]; baseUrl: string; maxBytes: number }> {
+  return authJson("/auth/admin/media", undefined, "Could not load the media library.");
+}
+
+/** Upload one file. Content-Type is left unset so the browser writes the boundary. */
+export async function adminUploadMedia(file: File): Promise<{ name: string; url: string; size: number }> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await authedFetch(`${AUTH_BASE}/auth/admin/media`, { method: "POST", body: form });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as any).error || "Upload failed.");
+  return data as { name: string; url: string; size: number };
+}
+
+export function adminDeleteMedia(name: string): Promise<{ ok: boolean }> {
+  return authJson(`/auth/admin/media/${name}`, { method: "DELETE" }, "Could not delete the file.");
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Dashboard theme — one global background the admin sets for every member
+// ────────────────────────────────────────────────────────────────────────────
+
+export type DashboardTheme = {
+  kind: "default" | "gradient" | "image" | "video";
+  colors: string[];
+  angle: number;
+  src: string;
+  srcKind: "upload" | "url";
+  /** 0-100 black scrim so foreground text stays legible. */
+  dim: number;
+  /** Blur radius in px for image/video backgrounds. */
+  blur: number;
+  /** Ready-to-load URL for image/video kinds. */
+  url: string;
+};
+
+export const DEFAULT_DASHBOARD_THEME: DashboardTheme = {
+  kind: "default",
+  colors: ["#0b0b12", "#12081f"],
+  angle: 160,
+  src: "",
+  srcKind: "upload",
+  dim: 40,
+  blur: 0,
+  url: ""
+};
+
+/** Public — no auth. Falls back to the default so the dashboard always renders. */
+export async function fetchDashboardTheme(): Promise<DashboardTheme> {
+  try {
+    const res = await fetch(`${AUTH_BASE}/auth/theme`);
+    if (!res.ok) return DEFAULT_DASHBOARD_THEME;
+    const data = (await res.json()) as { theme?: DashboardTheme };
+    return data.theme ?? DEFAULT_DASHBOARD_THEME;
+  } catch {
+    return DEFAULT_DASHBOARD_THEME;
+  }
+}
+
+export function adminSetTheme(theme: Partial<DashboardTheme>): Promise<{ theme: DashboardTheme }> {
+  return authJson("/auth/admin/theme", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(theme)
+  }, "Could not save the theme.");
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // authedFetch — Bearer + transparent refresh on 401
 // ────────────────────────────────────────────────────────────────────────────
 

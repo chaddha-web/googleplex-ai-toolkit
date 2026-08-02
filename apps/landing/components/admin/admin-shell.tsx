@@ -81,6 +81,18 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M7.8 8.3a.6.6 0 1 0 0-.01" />
     </>
   ),
+  play: (
+    <>
+      <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5z" />
+      <path d="M10.5 9.2l4.3 2.8-4.3 2.8z" />
+    </>
+  ),
+  palette: (
+    <>
+      <path d="M12 3a9 9 0 1 0 0 18c1.2 0 1.8-.8 1.8-1.7 0-.9-.7-1.5-.7-2.3 0-.8.7-1.5 1.6-1.5H17a4 4 0 0 0 4-4c0-4.7-4-8.5-9-8.5Z" />
+      <path d="M7.5 12a.7.7 0 1 0 0-.01M10 8.2a.7.7 0 1 0 0-.01M14.5 8.2a.7.7 0 1 0 0-.01" />
+    </>
+  ),
   search: <path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM20 20l-3.5-3.5" />,
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   x: <path d="M6 6l12 12M18 6 6 18" />,
@@ -148,7 +160,9 @@ const NAV: NavGroup[] = [
     label: "Community",
     items: [
       { label: "Circle", href: "/circle", icon: "message" },
-      { label: "Live globe", href: "/globe", icon: "globe" }
+      { label: "Live globe", href: "/globe", icon: "globe" },
+      { label: "Orientation", href: "/orientation", icon: "play", cap: "settings" },
+      { label: "Theme", href: "/theme", icon: "palette", cap: "settings" }
     ]
   },
   {

@@ -4,6 +4,10 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AuthProvider, useAuth } from "@/components/auth-context";
 import { nextOnboardingPath } from "@/lib/auth-client";
+import { checkOrientation } from "@/lib/orientation-gate";
+import { DashboardBackground } from "@/components/dashboard-background";
+
+const ORIENTATION_PATH = "/app/setup/orientation";
 
 /**
  * Layout for everything under /app. Wraps in AuthProvider, gates on auth,
@@ -19,17 +23,33 @@ function Gate({ children }: { children: React.ReactNode }) {
       router.replace("/login");
       return;
     }
-    if (status === "authenticated" && user) {
-      const required = nextOnboardingPath(user);
-      // If they need to be at a setup step and aren't, bounce them there.
-      if (required && pathname !== required) {
-        router.replace(required);
-        return;
-      }
-      // If they're fully active but visiting /app/setup/*, bounce to /app.
-      if (!required && pathname.startsWith("/app/setup")) {
-        router.replace("/app");
-      }
+    if (status !== "authenticated" || !user) return;
+
+    const required = nextOnboardingPath(user);
+    // If they need to be at a setup step and aren't, bounce them there.
+    if (required && pathname !== required) {
+      router.replace(required);
+      return;
+    }
+    // The orientation page manages its own exit, so never bounce off it.
+    if (pathname === ORIENTATION_PATH) return;
+
+    // If they're fully active but visiting /app/setup/*, bounce to /app.
+    if (!required && pathname.startsWith("/app/setup")) {
+      router.replace("/app");
+      return;
+    }
+
+    // Activated members owe the orientation before the rest of /app. Async and
+    // non-blocking: the page renders, and we redirect only if it's actually due.
+    if (!required && user.walletStatus === "active") {
+      let cancelled = false;
+      void checkOrientation().then((due) => {
+        if (!cancelled && due) router.replace(ORIENTATION_PATH);
+      });
+      return () => {
+        cancelled = true;
+      };
     }
   }, [status, user, pathname, router]);
 
@@ -41,7 +61,13 @@ function Gate({ children }: { children: React.ReactNode }) {
     );
   }
   if (status === "anonymous") return null;
-  return <>{children}</>;
+  return (
+    <>
+      {/* Admin panel keeps its own chrome — the theme is for the member area. */}
+      {!pathname.startsWith("/app/admin") && <DashboardBackground />}
+      {children}
+    </>
+  );
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

@@ -147,6 +147,11 @@ services:
       # served at https://${DOMAIN}/media/avatars/*.
       - AVATAR_DIR=/srv/media/avatars
       - AVATAR_BASE_URL=https://${DOMAIN}/media/avatars
+      # Admin uploads (orientation video, dashboard background) — same shared
+      # media dir, served by the nginx `media` container below. nginx does the
+      # byte-range + caching work a long video needs; Node never streams it.
+      - UPLOAD_DIR=/srv/media/uploads
+      - UPLOAD_BASE_URL=https://${DOMAIN}/media/uploads
     command: ["npx", "tsx", "services/auth/src/server.ts"]
     expose:
       - "4200"

@@ -144,3 +144,12 @@ video {
   from { background-position: 0 0; }
   to   { background-position: 600px 600px; }
 }
+
+/* Admin-set dashboard theme (Admin → Theme). The member dashboard paints an
+   opaque black by default; when a theme is active we make that surface
+   transparent so the fixed background layer behind it shows through. The
+   attribute is set by components/dashboard-background.tsx, so with no theme
+   configured — or if the theme fetch fails — nothing here applies. */
+html[data-themed="1"] .app-surface {
+  background-color: transparent;
+}

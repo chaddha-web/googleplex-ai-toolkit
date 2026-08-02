@@ -123,7 +123,9 @@ export default function DepositPage() {
       };
       setStatus(updated);
       if (updated.active) {
-        setTimeout(() => router.push("/app"), 1500);
+        // Straight into the orientation — that page sends them on to /app if
+        // the admin hasn't configured one.
+        setTimeout(() => router.push("/app/setup/orientation"), 1500);
       }
     }, POLL_MS);
     return () => clearInterval(t);

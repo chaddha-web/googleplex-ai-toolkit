@@ -242,6 +242,38 @@ db.exec(`
     sent_at      INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_email_outbound_sent ON email_outbound (sent_at);
+
+  -- ── Onboarding orientation (video + quiz) ─────────────────────────────
+  -- Shown once, after the $1 initial deposit clears and the member's tokens
+  -- are minted. The admin authors the questions; correct_index may be NULL for
+  -- a survey-style question with no right answer, and required decides whether
+  -- the member is allowed to skip it.
+  CREATE TABLE IF NOT EXISTS onboarding_questions (
+    id            TEXT PRIMARY KEY,
+    prompt        TEXT NOT NULL,
+    options_json  TEXT NOT NULL,             -- JSON array of option strings
+    correct_index INTEGER,                   -- NULL = no correct answer
+    required      INTEGER NOT NULL DEFAULT 1,
+    sort_order    INTEGER NOT NULL DEFAULT 0,
+    active        INTEGER NOT NULL DEFAULT 1,
+    created_at    INTEGER NOT NULL,
+    updated_at    INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_onboarding_q_order ON onboarding_questions (sort_order);
+
+  -- One row per question per attempt. Append-only: a retry writes a new
+  -- attempt rather than overwriting, so the admin can see the whole history.
+  CREATE TABLE IF NOT EXISTS onboarding_responses (
+    id           TEXT PRIMARY KEY,
+    user_id      TEXT NOT NULL,
+    question_id  TEXT NOT NULL,
+    attempt      INTEGER NOT NULL DEFAULT 1,
+    answer_index INTEGER,                    -- NULL = skipped (optional question)
+    correct      INTEGER,                    -- NULL when the question has no key
+    created_at   INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_onboarding_r_user ON onboarding_responses (user_id);
+  CREATE INDEX IF NOT EXISTS idx_onboarding_r_q    ON onboarding_responses (question_id);
 `);
 
 // NOTE: The Circle is admin-authored only — questions are created via the
@@ -287,6 +319,21 @@ export type UserRow = {
   suspended_by: string | null;        // actor user id who applied the suspension (NULL = self/system)
   last_login_alert_at: number | null; // throttle for the login-alert email
   permissions: string | null;         // JSON array of granted admin capabilities (sub-admins)
+  onboarding_completed_at: number | null; // finished the orientation quiz
+  onboarding_score: number | null;        // best score, 0-100
+  onboarding_attempts: number;            // quiz submissions so far
+  created_at: number;
+  updated_at: number;
+};
+
+export type OnboardingQuestionRow = {
+  id: string;
+  prompt: string;
+  options_json: string;
+  correct_index: number | null;
+  required: number;
+  sort_order: number;
+  active: number;
   created_at: number;
   updated_at: number;
 };
@@ -336,6 +383,11 @@ try { db.exec(`ALTER TABLE community_comments ADD COLUMN hidden INTEGER NOT NULL
 try { db.exec(`ALTER TABLE community_comments ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0`); } catch {}
 try { db.exec(`ALTER TABLE community_comments ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0`); } catch {}
 try { db.exec(`ALTER TABLE community_comments ADD COLUMN edited_at INTEGER`); } catch {}
+// Orientation progress. Completed = the member finished the quiz under
+// whatever gating was in force at the time; score is their best percentage.
+try { db.exec(`ALTER TABLE users ADD COLUMN onboarding_completed_at INTEGER`); } catch {}
+try { db.exec(`ALTER TABLE users ADD COLUMN onboarding_score REAL`); } catch {}
+try { db.exec(`ALTER TABLE users ADD COLUMN onboarding_attempts INTEGER NOT NULL DEFAULT 0`); } catch {}
 
 export type OtpRow = {
   id: string;
@@ -603,6 +655,68 @@ export const stmts = {
     `),
     outboxList: db.prepare(`SELECT id, from_email, to_email, subject, kind, status, sent_at FROM email_outbound ORDER BY sent_at DESC LIMIT 200`),
     outboxById: db.prepare(`SELECT * FROM email_outbound WHERE id = ?`)
+  },
+  onboarding: {
+    // Member-facing list: active questions only, in the admin's chosen order.
+    activeQuestions: db.prepare<[], OnboardingQuestionRow>(`
+      SELECT * FROM onboarding_questions WHERE active = 1 ORDER BY sort_order ASC, created_at ASC
+    `),
+    allQuestions: db.prepare<[], OnboardingQuestionRow>(`
+      SELECT * FROM onboarding_questions ORDER BY sort_order ASC, created_at ASC
+    `),
+    questionById: db.prepare<[string], OnboardingQuestionRow>(
+      `SELECT * FROM onboarding_questions WHERE id = ?`
+    ),
+    insertQuestion: db.prepare(`
+      INSERT INTO onboarding_questions
+        (id, prompt, options_json, correct_index, required, sort_order, active, created_at, updated_at)
+      VALUES
+        (@id, @prompt, @options_json, @correct_index, @required, @sort_order, @active, @created_at, @updated_at)
+    `),
+    updateQuestion: db.prepare(`
+      UPDATE onboarding_questions SET
+        prompt = @prompt, options_json = @options_json, correct_index = @correct_index,
+        required = @required, sort_order = @sort_order, active = @active, updated_at = @updated_at
+      WHERE id = @id
+    `),
+    deleteQuestion: db.prepare(`DELETE FROM onboarding_questions WHERE id = ?`),
+    maxSort: db.prepare<[], { n: number }>(
+      `SELECT COALESCE(MAX(sort_order), 0) AS n FROM onboarding_questions`
+    ),
+    insertResponse: db.prepare(`
+      INSERT INTO onboarding_responses (id, user_id, question_id, attempt, answer_index, correct, created_at)
+      VALUES (@id, @user_id, @question_id, @attempt, @answer_index, @correct, @created_at)
+    `),
+    responsesForUser: db.prepare<[string], any>(`
+      SELECT r.*, q.prompt, q.options_json, q.correct_index
+        FROM onboarding_responses r
+        LEFT JOIN onboarding_questions q ON q.id = r.question_id
+       WHERE r.user_id = ? ORDER BY r.attempt DESC, r.created_at ASC
+    `),
+    // Admin roster: one row per member who has attempted the orientation.
+    completions: db.prepare<[], any>(`
+      SELECT u.id, u.email, u.first_name, u.last_name, u.code11,
+             u.onboarding_completed_at, u.onboarding_score, u.onboarding_attempts
+        FROM users u
+       WHERE u.onboarding_attempts > 0
+       ORDER BY u.onboarding_completed_at DESC NULLS LAST, u.updated_at DESC
+       LIMIT 500
+    `),
+    markAttempt: db.prepare(`
+      UPDATE users SET
+        onboarding_attempts = onboarding_attempts + 1,
+        onboarding_score = @onboarding_score,
+        onboarding_completed_at = @onboarding_completed_at,
+        updated_at = @updated_at
+      WHERE id = @id
+    `),
+    // Admin override: let a member sit the orientation again from scratch.
+    resetForUser: db.prepare(`
+      UPDATE users SET
+        onboarding_attempts = 0, onboarding_score = NULL,
+        onboarding_completed_at = NULL, updated_at = @updated_at
+      WHERE id = @id
+    `)
   },
   consent: {
     insert: db.prepare(`

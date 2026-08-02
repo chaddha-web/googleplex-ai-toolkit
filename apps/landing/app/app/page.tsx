@@ -24,7 +24,9 @@ export default function AppHome() {
   if (!user) return null; // gate handles redirect
 
   return (
-    <main className="min-h-screen bg-black text-white font-sans">
+    // `app-surface` lets an admin-set dashboard theme show through this
+    // otherwise-opaque black (see components/dashboard-background.tsx).
+    <main className="app-surface min-h-screen bg-black text-white font-sans">
       <Header />
       <section className="max-w-4xl mx-auto px-6 py-14">
         <WalletBanner status={user.walletStatus} />
