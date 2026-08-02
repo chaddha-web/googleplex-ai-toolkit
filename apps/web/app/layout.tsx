@@ -29,9 +29,7 @@ export function generateMetadata(): Metadata {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      {/* `app-surface` lets an admin-set dashboard theme show through this
-          otherwise-opaque black (see components/dashboard-background.tsx). */}
-      <body className="app-surface bg-black text-white min-h-screen antialiased font-sans selection:bg-white/20 selection:text-white">
+      <body className="bg-black text-white min-h-screen antialiased font-sans selection:bg-white/20 selection:text-white">
         <PostHogProvider>
           <Toaster />
           <AuthProvider>

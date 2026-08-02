@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-context";
 import { SessionHeartbeat } from "@/components/session-heartbeat";
+import { STOCK_BG_SCRIM, isOverridden, useDashboardTheme } from "@/lib/use-dashboard-theme";
 
 const LANDING_URL =
   process.env.NEXT_PUBLIC_LANDING_URL || "http://localhost:3010";
@@ -121,6 +122,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  // Null until resolved, which `isOverridden` reads as "keep the stock
+  // artwork" — a slow or failed theme fetch must never flash a blank page.
+  const overridden = isOverridden(useDashboardTheme());
 
   // Persist the collapsed rail preference.
   useEffect(() => {
@@ -178,13 +182,21 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <div
       className="cosmic min-h-screen w-full"
-      style={{
-        backgroundImage: `linear-gradient(180deg, rgba(7,8,20,0.74) 0%, rgba(7,8,20,0.5) 28%, rgba(7,8,20,0.48) 62%, rgba(7,8,20,0.72) 100%), url(${DASH_BG_URL})`,
-        backgroundSize: "cover",
-        backgroundPosition: "center top",
-        backgroundAttachment: "fixed",
-        backgroundColor: "#0a0b1a"
-      }}
+      // The stock Celestial-Lion artwork is painted HERE, by the shell itself.
+      // When an admin has set a theme we stand down and go transparent, so the
+      // fixed layer from <DashboardBackground> shows through instead — two
+      // opaque backgrounds would otherwise fight, and this one would win.
+      style={
+        overridden
+          ? { backgroundColor: "transparent" }
+          : {
+              backgroundImage: `${STOCK_BG_SCRIM}, url(${DASH_BG_URL})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center top",
+              backgroundAttachment: "fixed",
+              backgroundColor: "#0a0b1a"
+            }
+      }
     >
       <SessionHeartbeat />
       {/* Full-height sidebar — desktop. Width animates between the icon rail and

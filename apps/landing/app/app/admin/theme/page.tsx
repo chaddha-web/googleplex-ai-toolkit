@@ -32,8 +32,22 @@ const PRESETS: Array<{ name: string; colors: string[]; angle: number }> = [
   { name: "Slate", colors: ["#0d0d0f", "#1e1e24"], angle: 180 }
 ];
 
+/**
+ * What app.ggakingclub.com paints when no theme is set — the Celestial-Lion
+ * artwork under its scrim, hardcoded in apps/web DashboardShell. Mirrored here
+ * so "Default" previews the real thing instead of an empty black box.
+ * Keep in step with apps/web/lib/use-dashboard-theme.ts.
+ */
+const STOCK_BG_URL = "https://ggakingclub.com/media/celestial-lion.jpg";
+const STOCK_BG_SCRIM =
+  "linear-gradient(180deg, rgba(7,8,20,0.74) 0%, rgba(7,8,20,0.5) 28%, rgba(7,8,20,0.48) 62%, rgba(7,8,20,0.72) 100%)";
+
 const KINDS: Array<{ id: DashboardTheme["kind"]; label: string; hint: string }> = [
-  { id: "default", label: "Default", hint: "The stock black dashboard. Nothing overridden." },
+  {
+    id: "default",
+    label: "Default artwork",
+    hint: "The Celestial Lion the app ships with. Nothing overridden."
+  },
   { id: "gradient", label: "Gradient", hint: "Two to four colours. Cheapest to load, always crisp." },
   { id: "image", label: "Image", hint: "A photo or artwork, cover-fitted to the viewport." },
   { id: "video", label: "Video", hint: "Muted, looping, autoplaying. Keep it short and small." }
@@ -483,7 +497,7 @@ export default function ThemeAdminPage() {
             {dirty
               ? "This is what members will see once you save."
               : theme.kind === "default"
-                ? "Members currently see the stock black dashboard — no background is set."
+                ? "Members currently see the app's stock artwork — no override is set."
                 : `Members currently see the ${theme.kind} background above.`}
           </p>
         </div>
@@ -544,6 +558,17 @@ function Preview({ theme, media }: { theme: DashboardTheme; media: MediaFile[] }
 
   return (
     <div className="relative rounded-2xl overflow-hidden ring-1 ring-white/10 aspect-[9/16] max-h-[520px] bg-black">
+      {theme.kind === "default" && (
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `${STOCK_BG_SCRIM}, url(${STOCK_BG_URL})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center top",
+            backgroundColor: "#0a0b1a"
+          }}
+        />
+      )}
       {theme.kind === "gradient" && (
         <div
           className="absolute inset-0"

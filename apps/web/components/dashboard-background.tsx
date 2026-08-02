@@ -1,63 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { AUTH_BASE } from "@/lib/auth-client";
+import { isOverridden, useDashboardTheme } from "@/lib/use-dashboard-theme";
 
 /**
- * The dashboard background, set globally by the admin (admin.ggakingclub.com →
- * Theme) and shared by every member surface. Mirrors the landing app's copy in
- * apps/landing/components/dashboard-background.tsx — the two apps don't share a
- * component layer, so the markup is duplicated deliberately; keep them in step.
+ * The admin-set dashboard background override (admin.ggakingclub.com → Theme).
+ *
+ * Renders NOTHING for the default theme: the app's stock Celestial-Lion artwork
+ * is painted by DashboardShell itself, and that stays the job of the shell. This
+ * layer only exists when an admin has replaced it — at which point the shell
+ * goes transparent and this shows through.
  *
  * Fixed and behind everything (`-z-10`, `pointer-events-none`), so it can never
- * intercept a click. Renders nothing for the default theme, which leaves the
- * existing styling untouched — a failed fetch looks exactly like today.
+ * intercept a click.
  */
-
-type DashboardTheme = {
-  kind: "default" | "gradient" | "image" | "video";
-  colors: string[];
-  angle: number;
-  dim: number;
-  blur: number;
-  url: string;
-};
-
 export function DashboardBackground() {
-  const [theme, setTheme] = useState<DashboardTheme | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch(`${AUTH_BASE}/auth/theme`);
-        if (!res.ok) return;
-        const data = (await res.json()) as { theme?: DashboardTheme };
-        if (!cancelled && data.theme) setTheme(data.theme);
-      } catch {
-        /* leave the stock background in place */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Flag the document so the app's opaque black body turns transparent
-  // (see globals.css). Cleared on unmount.
-  useEffect(() => {
-    const themed = !!theme && theme.kind !== "default";
-    if (themed) document.documentElement.dataset.themed = "1";
-    else delete document.documentElement.dataset.themed;
-    return () => {
-      delete document.documentElement.dataset.themed;
-    };
-  }, [theme]);
-
-  if (!theme || theme.kind === "default") return null;
+  const theme = useDashboardTheme();
+  if (!isOverridden(theme) || !theme) return null;
 
   const scrim = theme.dim / 100;
   const filter = theme.blur > 0 ? `blur(${theme.blur}px)` : undefined;
+  // Blurring pulls the edges in, so scale up slightly to avoid a soft border.
   const lift = theme.blur > 0 ? "scale(1.06)" : undefined;
 
   return (
