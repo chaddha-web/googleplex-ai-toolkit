@@ -31,7 +31,7 @@ export async function securityRoutes(app: FastifyInstance) {
         notify(
           `🛑 <b>Account suspended</b> (member self-secured via login alert)\n` +
             `${user.email}\nID: <code>${user.code11}</code>`
-        );
+        , "members");
         recordAudit({
           actorId: user.id,
           actorEmail: user.email,
@@ -109,7 +109,7 @@ export async function securityRoutes(app: FastifyInstance) {
 
     const now = Date.now();
     stmts.user.clearSuspended.run({ id: user.id, updated_at: now });
-    notify(`✅ <b>Account unsuspended</b> by ${me.email}\n${user.email} · <code>${user.code11}</code>`);
+    notify(`✅ <b>Account unsuspended</b> by ${me.email}\n${user.email} · <code>${user.code11}</code>`, "members");
     recordAudit({
       actorId: me.id,
       actorEmail: me.email,

@@ -421,7 +421,7 @@ export async function emailRoutes(app: FastifyInstance) {
         error: String((err as Error).message).slice(0, 500),
         updated_at: Date.now()
       });
-      notify(`❌ <b>Campaign FAILED</b>\n<i>${c.subject}</i>\n${(err as Error).message}`);
+      notify(`❌ <b>Campaign FAILED</b>\n<i>${c.subject}</i>\n${(err as Error).message}`, "content");
     });
 
     return reply.send({ ok: true, status: "sending", recipient_count: recipients.length });
@@ -563,7 +563,7 @@ export async function emailRoutes(app: FastifyInstance) {
       resend_id: msgId,
       received_at: Date.now()
     });
-    notify(`📥 <b>Email received</b>\nfrom ${fromEmail}\n<i>${subject}</i>`);
+    notify(`📥 <b>Email received</b>\nfrom ${fromEmail}\n<i>${subject}</i>`, "content");
     return reply.send({ ok: true, id });
   });
 }

@@ -311,7 +311,7 @@ export async function onboardingRoutes(app: FastifyInstance) {
       action: "onboarding.config",
       detail: onboardingConfig()
     });
-    notify(`🎓 <b>Orientation updated</b>\nby ${me.email}`);
+    notify(`🎓 <b>Orientation updated</b>\nby ${me.email}`, "content");
     const fresh = onboardingConfig();
     return reply.send({ ok: true, config: { ...fresh, video: withVideoUrl(fresh.video) } });
   });

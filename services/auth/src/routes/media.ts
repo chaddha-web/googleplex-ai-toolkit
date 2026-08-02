@@ -85,7 +85,7 @@ export async function mediaRoutes(app: FastifyInstance) {
       targetLabel: name,
       detail: { size, mimetype: file.mimetype, original: file.filename }
     });
-    notify(`🎬 <b>Media uploaded</b>\n<code>${name}</code> · ${humanMb(size)}\nby ${me.email}`);
+    notify(`🎬 <b>Media uploaded</b>\n<code>${name}</code> · ${humanMb(size)}\nby ${me.email}`, "content");
     return reply.send({ ok: true, name, size, url: mediaUrl(name) });
   });
 

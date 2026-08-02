@@ -70,7 +70,7 @@ async function runOnce(): Promise<void> {
         /* skip this user, continue the run */
       }
     }
-    if (swept > 0) notify(`🤖 <b>Auto-flush</b> swept ${swept} member wallet(s) to treasury.`);
+    if (swept > 0) notify(`🤖 <b>Auto-flush</b> swept ${swept} member wallet(s) to treasury.`, "money");
   } finally {
     inFlight = false;
   }

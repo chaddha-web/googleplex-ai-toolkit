@@ -28,6 +28,7 @@ import {
 } from "@/components/admin/access";
 import { listAllUsers, type AdminUserRow } from "@/lib/auth-client";
 import type { Capability, User } from "@/lib/auth-client";
+import { TelegramPrompt } from "@/components/admin/telegram-prompt";
 
 // ── Icons (inline, currentColor, stroke) ─────────────────────────────────────
 
@@ -91,6 +92,12 @@ const ICONS: Record<string, ReactNode> = {
     <>
       <path d="M12 3a9 9 0 1 0 0 18c1.2 0 1.8-.8 1.8-1.7 0-.9-.7-1.5-.7-2.3 0-.8.7-1.5 1.6-1.5H17a4 4 0 0 0 4-4c0-4.7-4-8.5-9-8.5Z" />
       <path d="M7.5 12a.7.7 0 1 0 0-.01M10 8.2a.7.7 0 1 0 0-.01M14.5 8.2a.7.7 0 1 0 0-.01" />
+    </>
+  ),
+  bell: (
+    <>
+      <path d="M6 9a6 6 0 0 1 12 0c0 4 1.2 5.5 1.8 6.2.3.4 0 1-.5 1H4.7c-.5 0-.8-.6-.5-1C4.8 14.5 6 13 6 9Z" />
+      <path d="M10 19.5a2 2 0 0 0 4 0" />
     </>
   ),
   search: <path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM20 20l-3.5-3.5" />,
@@ -173,7 +180,9 @@ const NAV: NavGroup[] = [
       { label: "System health", href: "/system", icon: "activity" },
       { label: "Demo accounts", href: "/demo", icon: "flask", founder: true },
       { label: "Settings", href: "/settings", icon: "settings", cap: "settings" },
-      { label: "Admin access", href: "/permissions", icon: "shield", founder: true }
+      { label: "Admin access", href: "/permissions", icon: "shield", founder: true },
+      // Every admin manages their own alerts — no capability gate.
+      { label: "Alerts", href: "/alerts", icon: "bell" }
     ]
   }
 ];
@@ -496,7 +505,10 @@ function ShellInner({
           </button>
         </header>
 
-        <main className="flex-1 px-4 md:px-8 py-6 w-full max-w-[1400px] mx-auto">{children}</main>
+        <main className="flex-1 px-4 md:px-8 py-6 w-full max-w-[1400px] mx-auto">
+          <TelegramPrompt />
+          {children}
+        </main>
       </div>
 
       {mobileOpen && (

@@ -310,7 +310,7 @@ export async function authRoutes(app: FastifyInstance) {
       notify(
         `📝 <b>Profile completed</b>\n${user.email}\n` +
           `ID: <code>${user.code11}</code> · age ${Math.floor(age)} · ${body.country.trim()}`
-      );
+      , "signup");
     }
 
     return reply.send({ ok: true });
@@ -349,7 +349,7 @@ export async function authRoutes(app: FastifyInstance) {
     notify(
       `🪙 <b>Tokens minted</b>\n${user.email}\nID: <code>${user.code11}</code>\n` +
         `${TOKENS_PER_MEMBER.toLocaleString()} personalized tokens`
-    );
+    , "signup");
 
     return reply.send({ ok: true, tokensMinted: TOKENS_PER_MEMBER });
   });
@@ -389,7 +389,7 @@ export async function authRoutes(app: FastifyInstance) {
       `🪙 <b>GoogolPlex Seva Credit generated</b>\n${user.email}\n` +
         `ID: <code>${user.code11}</code>\n` +
         `${SEVA_CREDIT_AMOUNT.toLocaleString()} credits`
-    );
+    , "signup");
     sendSevaCreditEmail({
       to: user.email,
       firstName: user.first_name,

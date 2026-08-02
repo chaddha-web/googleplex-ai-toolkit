@@ -99,7 +99,7 @@ export async function themeRoutes(app: FastifyInstance) {
     writeSetting(THEME_KEY, JSON.stringify(clean));
 
     recordAudit({ actorId: me.id, actorEmail: me.email, action: "theme.set", detail: clean });
-    notify(`🎨 <b>Dashboard theme updated</b>\n${clean.kind}\nby ${me.email}`);
+    notify(`🎨 <b>Dashboard theme updated</b>\n${clean.kind}\nby ${me.email}`, "content");
     return reply.send({ ok: true, theme: resolved(dashboardTheme()) });
   });
 }

@@ -143,13 +143,13 @@ const HELP =
   "/help — this message\n\n" +
   "You also get automatic alerts: deploys, new signups, wallet activations, withdrawals, Studio unlocks, and errors.";
 
-async function send(text: string): Promise<void> {
+async function sendTo(chatId: string, text: string): Promise<void> {
   try {
     await fetch(`${API}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        chat_id: CHAT,
+        chat_id: chatId,
         text,
         parse_mode: "HTML",
         disable_web_page_preview: true
@@ -158,6 +158,12 @@ async function send(text: string): Promise<void> {
   } catch {
     /* best-effort */
   }
+}
+
+/** Reply to the owner chat. */
+async function send(text: string): Promise<void> {
+  if (!CHAT) return;
+  await sendTo(CHAT, text);
 }
 
 let offset = 0;
@@ -171,9 +177,27 @@ async function poll(): Promise<void> {
     for (const u of data.result ?? []) {
       offset = u.update_id + 1;
       const msg = u.message;
-      // Only the configured owner chat may issue commands.
-      if (!msg || String(msg.chat?.id) !== String(CHAT)) continue;
+      if (!msg?.chat?.id) continue;
+      const from = String(msg.chat.id);
       const cmd = (msg.text ?? "").trim().toLowerCase().split("@")[0];
+
+      // /start is answered for ANYONE — it is how an admin discovers the
+      // numeric id to paste into Admin → Alerts, and a bot cannot message
+      // someone until they've opened the chat anyway. It reveals nothing but
+      // the caller's own id, and grants nothing on its own: the id is useless
+      // until an authenticated admin links it from the panel.
+      if (cmd === "/start" && from !== String(CHAT)) {
+        await sendTo(
+          from,
+          `👋 <b>GoogolPlex alerts</b>\n\nYour Telegram ID is:\n<code>${from}</code>\n\n` +
+            `Paste it into Admin → Alerts to start receiving notifications. ` +
+            `If you're not a GoogolPlex admin, you can ignore this.`
+        );
+        continue;
+      }
+
+      // Everything else stays owner-only.
+      if (from !== String(CHAT)) continue;
       try {
         if (cmd === "/usage") await send(usageText());
         else if (cmd === "/count" || cmd === "/users") await send(countText());

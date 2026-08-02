@@ -230,7 +230,8 @@ export async function otpRoutes(app: FastifyInstance) {
         `🆕 <b>New signup</b>\n` +
           `${user.first_name} ${user.last_name}\n` +
           `${user.email}\n` +
-          `ID: <code>${user.code11}</code> · role: ${user.role}`
+          `ID: <code>${user.code11}</code> · role: ${user.role}`,
+        "signup"
       );
       // Welcome email (best-effort).
       sendWelcomeEmail({
@@ -246,7 +247,8 @@ export async function otpRoutes(app: FastifyInstance) {
         `🔓 <b>Login</b>\n${user.email}\n` +
           `ID: <code>${user.code11}</code> · role: ${user.role}\n` +
           `IP: ${req.ip}` +
-          (ua ? `\nUA: ${ua}` : "")
+          (ua ? `\nUA: ${ua}` : ""),
+        "login"
       );
 
       // Login-alert email — throttled to a new device/IP OR at most weekly.

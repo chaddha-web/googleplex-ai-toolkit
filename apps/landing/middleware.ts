@@ -10,7 +10,7 @@ const ADMIN_HOST = "admin.ggakingclub.com";
 const ADMIN_SEGMENTS = new Set([
   "overview", "members", "sessions", "sales", "withdrawals", "treasury", "reclaims",
   "campaigns", "inbox", "circle", "globe", "audit", "logs", "system",
-  "settings", "permissions", "demo", "orientation", "theme"
+  "settings", "permissions", "demo", "orientation", "theme", "alerts"
 ]);
 
 /** Map a clean admin path (/sessions, /members) to its physical route. */

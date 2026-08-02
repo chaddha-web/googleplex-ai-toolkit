@@ -122,7 +122,7 @@ export async function adminManagerRoutes(app: FastifyInstance) {
     }
 
     stmts.user.demoteById.run({ id: target.id, updated_at: Date.now() });
-    notify(`⬇️ <b>Admin demoted</b> by ${me.email}\n${target.email} · <code>${target.code11}</code>`);
+    notify(`⬇️ <b>Admin demoted</b> by ${me.email}\n${target.email} · <code>${target.code11}</code>`, "admin");
     recordAudit({
       actorId: me.id,
       actorEmail: me.email,

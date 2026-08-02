@@ -1448,6 +1448,58 @@ export function adminSetTheme(theme: Partial<DashboardTheme>): Promise<{ theme: 
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// Telegram alerts — each admin links their own chat
+// ────────────────────────────────────────────────────────────────────────────
+
+export type TelegramStatus = {
+  chatId: string | null;
+  /** Set only once a message actually reached the chat. Null = not linked. */
+  verifiedAt: number | null;
+  topics: string[];
+  /** What this admin may subscribe to — sub-admins get a reduced set. */
+  allowedTopics: string[];
+  labels: Record<string, string>;
+  isFounder: boolean;
+  botUsername: string | null;
+};
+
+export function adminTelegramStatus(): Promise<TelegramStatus> {
+  return authJson<TelegramStatus>("/auth/admin/telegram", undefined, "Could not load your alert settings.");
+}
+
+export function adminLinkTelegram(chatId: string, topics?: string[]): Promise<TelegramStatus> {
+  return authJson<TelegramStatus>(
+    "/auth/admin/telegram",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chatId, topics })
+    },
+    "Could not link that Telegram ID."
+  );
+}
+
+export function adminSetTelegramTopics(topics: string[]): Promise<TelegramStatus> {
+  return authJson<TelegramStatus>(
+    "/auth/admin/telegram/topics",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topics })
+    },
+    "Could not save your alert choices."
+  );
+}
+
+export function adminTestTelegram(): Promise<{ ok: boolean }> {
+  return authJson("/auth/admin/telegram/test", { method: "POST" }, "Could not send the test message.");
+}
+
+export function adminUnlinkTelegram(): Promise<TelegramStatus> {
+  return authJson<TelegramStatus>("/auth/admin/telegram", { method: "DELETE" }, "Could not unlink.");
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // authedFetch — Bearer + transparent refresh on 401
 // ────────────────────────────────────────────────────────────────────────────
 

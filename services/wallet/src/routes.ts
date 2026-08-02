@@ -1443,7 +1443,7 @@ export async function walletRoutes(app: FastifyInstance) {
       return reply.code(502).send({ error: "Broadcast failed — still held for retry.", detail: (e as Error).message });
     }
     await db.update(withdrawals).set({ status: "broadcast", broadcast_at: Date.now(), tx_hash: txHash, fee_raw: net.feeRaw }).where(eq(withdrawals.id, w.id));
-    notify(`✅ <b>Withdrawal approved + sent</b>\n${w.symbol} on ${w.chain}\ntx <code>${txHash}</code> · by ${admin.sub}`);
+    notify(`✅ <b>Withdrawal approved + sent</b>\n${w.symbol} on ${w.chain}\ntx <code>${txHash}</code> · by ${admin.sub}`, "withdrawal");
     auditToAuth({
       actorId: admin.sub,
       action: "withdrawal.approve",
@@ -1479,7 +1479,7 @@ export async function walletRoutes(app: FastifyInstance) {
       }).run();
       tx.update(withdrawals).set({ status: "rejected" }).where(eq(withdrawals.id, w.id)).run();
     });
-    notify(`🚫 <b>Withdrawal rejected + refunded</b>\n${w.symbol} on ${w.chain}\nuser <code>${w.user_id}</code> · by ${admin.sub}`);
+    notify(`🚫 <b>Withdrawal rejected + refunded</b>\n${w.symbol} on ${w.chain}\nuser <code>${w.user_id}</code> · by ${admin.sub}`, "withdrawal");
     auditToAuth({
       actorId: admin.sub,
       action: "withdrawal.reject",
@@ -1703,7 +1703,7 @@ export async function walletRoutes(app: FastifyInstance) {
         targetLabel: userId,
         detail: { note: req.body?.note ?? null }
       });
-      notify(`🧪 <b>Demo mode ENABLED</b>\nuser <code>${userId}</code>\nwithdrawals will NOT broadcast`);
+      notify(`🧪 <b>Demo mode ENABLED</b>\nuser <code>${userId}</code>\nwithdrawals will NOT broadcast`, "members");
       return reply.send({ ok: true, demo: true });
     }
 
@@ -1781,7 +1781,7 @@ export async function walletRoutes(app: FastifyInstance) {
               .map((r) => `${r.amount} ${r.symbol}${r.reason === "residual" ? " (converted)" : ""}`)
               .join(", ")}`
           : "no fabricated balance left to claw back")
-    );
+    , "members");
     return reply.send({ ok: true, demo: false, reversed });
   });
 
@@ -2198,7 +2198,7 @@ export async function walletRoutes(app: FastifyInstance) {
         /* continue with the rest */
       }
     }
-    notify(`💸 <b>Batch treasury flush</b>\n${swept} users · ${legs} legs · by ${admin.sub}`);
+    notify(`💸 <b>Batch treasury flush</b>\n${swept} users · ${legs} legs · by ${admin.sub}`, "money");
     auditToAuth({
       actorId: admin.sub,
       action: "treasury.flush_all",

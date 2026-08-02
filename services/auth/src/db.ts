@@ -322,6 +322,9 @@ export type UserRow = {
   onboarding_completed_at: number | null; // finished the orientation quiz
   onboarding_score: number | null;        // best score, 0-100
   onboarding_attempts: number;            // quiz submissions so far
+  telegram_chat_id: string | null;        // numeric Telegram chat id for alerts
+  telegram_verified_at: number | null;    // set once a test message got through
+  telegram_topics: string | null;         // JSON array of subscribed topics
   created_at: number;
   updated_at: number;
 };
@@ -388,6 +391,13 @@ try { db.exec(`ALTER TABLE community_comments ADD COLUMN edited_at INTEGER`); } 
 try { db.exec(`ALTER TABLE users ADD COLUMN onboarding_completed_at INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN onboarding_score REAL`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN onboarding_attempts INTEGER NOT NULL DEFAULT 0`); } catch {}
+// Per-admin Telegram notifications. chat_id is the numeric id the bot replies
+// with on /start; verified_at is set only once we've successfully delivered a
+// message to it, because Telegram silently refuses chats that never started
+// the bot. topics is a JSON array — see notify-topics.ts.
+try { db.exec(`ALTER TABLE users ADD COLUMN telegram_chat_id TEXT`); } catch {}
+try { db.exec(`ALTER TABLE users ADD COLUMN telegram_verified_at INTEGER`); } catch {}
+try { db.exec(`ALTER TABLE users ADD COLUMN telegram_topics TEXT`); } catch {}
 
 export type OtpRow = {
   id: string;
@@ -498,7 +508,26 @@ export const stmts = {
     `),
     setSuspended: db.prepare(`UPDATE users SET suspended_at = @suspended_at, suspended_by = @suspended_by, updated_at = @updated_at WHERE id = @id`),
     clearSuspended: db.prepare(`UPDATE users SET suspended_at = NULL, suspended_by = NULL, updated_at = @updated_at WHERE id = @id`),
-    stampLoginAlert: db.prepare(`UPDATE users SET last_login_alert_at = @last_login_alert_at WHERE id = @id`)
+    stampLoginAlert: db.prepare(`UPDATE users SET last_login_alert_at = @last_login_alert_at WHERE id = @id`),
+    // Telegram alert linkage. verified_at is only ever set after a real message
+    // got through, so an unverified row never receives anything.
+    setTelegram: db.prepare(`
+      UPDATE users SET
+        telegram_chat_id = @telegram_chat_id,
+        telegram_verified_at = @telegram_verified_at,
+        telegram_topics = @telegram_topics,
+        updated_at = @updated_at
+      WHERE id = @id
+    `),
+    setTelegramTopics: db.prepare(`
+      UPDATE users SET telegram_topics = @telegram_topics, updated_at = @updated_at WHERE id = @id
+    `),
+    clearTelegram: db.prepare(`
+      UPDATE users SET
+        telegram_chat_id = NULL, telegram_verified_at = NULL, telegram_topics = NULL,
+        updated_at = @updated_at
+      WHERE id = @id
+    `)
   },
   otp: {
     insert: db.prepare(`

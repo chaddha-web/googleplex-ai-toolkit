@@ -18,6 +18,7 @@ import { auditRoutes } from "./routes/audit.js";
 import { onboardingRoutes } from "./routes/onboarding.js";
 import { mediaRoutes } from "./routes/media.js";
 import { themeRoutes } from "./routes/theme.js";
+import { telegramRoutes } from "./routes/telegram.js";
 import { MAX_UPLOAD_BYTES } from "./media.js";
 import { notify } from "./notify.js";
 import { startTelegramBot } from "./telegram-bot.js";
@@ -117,6 +118,7 @@ await app.register(auditRoutes);
 await app.register(onboardingRoutes);
 await app.register(mediaRoutes);
 await app.register(themeRoutes);
+await app.register(telegramRoutes);
 
 // Interactive Telegram command bot (/usage, /count, /paid, /stats).
 startTelegramBot();

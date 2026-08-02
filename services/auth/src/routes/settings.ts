@@ -213,7 +213,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     // Empty value clears the setting (lets you wipe a key).
     if (value === "") {
       stmts.settings.delete.run(key);
-      notify(`⚙️ <b>Setting cleared</b>\n<code>${key}</code>\nby ${me.email}`);
+      notify(`⚙️ <b>Setting cleared</b>\n<code>${key}</code>\nby ${me.email}`, "settings");
       recordAudit({ actorId: me.id, actorEmail: me.email, action: "settings.clear", targetLabel: key });
       return reply.send({ ok: true, cleared: true });
     }
@@ -221,7 +221,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     // Audit alert. NEVER include the raw value of a secret — only the masked
     // form (e.g. "sk-…abcd"). Non-secrets show the literal value.
     const shown = isSecret(key) ? maskSecret(value) : value;
-    notify(`⚙️ <b>Setting updated</b>\n<code>${key}</code> = ${shown}\nby ${me.email}`);
+    notify(`⚙️ <b>Setting updated</b>\n<code>${key}</code> = ${shown}\nby ${me.email}`, "settings");
     recordAudit({ actorId: me.id, actorEmail: me.email, action: "settings.set", targetLabel: key, detail: { value: shown } });
     return reply.send({ ok: true });
   });
@@ -243,7 +243,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       return reply.send({ ok: true, alreadyAdmin: true, email: target.email });
     }
     stmts.user.promoteByCode.run({ code11, updated_at: Date.now() });
-    notify(`👑 <b>New admin</b>\n${target.email}\nID: <code>${code11}</code> (by ${me.email})`);
+    notify(`👑 <b>New admin</b>\n${target.email}\nID: <code>${code11}</code> (by ${me.email})`, "admin");
     recordAudit({
       actorId: me.id,
       actorEmail: me.email,
