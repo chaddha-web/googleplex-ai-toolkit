@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import { useAuth } from "@/components/auth-context";
 import { authedFetch, fetchMe } from "@/lib/auth-client";
 import { QrCode } from "@/components/qr-code";
+import { WalletPay } from "@/components/wallet-pay";
 
 const WALLET_BASE = (
   process.env.NEXT_PUBLIC_WALLET_BASE || "http://localhost:4201"
@@ -64,6 +65,8 @@ export default function DepositPage() {
   const router = useRouter();
   const { user } = useAuth();
   const [addresses, setAddresses] = useState<AddressInfo[] | null>(null);
+  /** Raw per-chain addresses, kept for the connect-a-wallet path. */
+  const [rawAddrs, setRawAddrs] = useState<{ eth?: string; bsc?: string; polygon?: string }>({});
   const [status, setStatus] = useState<DepositStatus | null>(
     user
       ? {
@@ -99,6 +102,7 @@ export default function DepositPage() {
         };
         if (cancelled) return;
         setAddresses(expandAddresses(data));
+        setRawAddrs({ eth: data.eth, bsc: data.bsc, polygon: data.polygon });
       } catch {
         if (!cancelled) setWalletOffline(true);
       }
@@ -216,11 +220,24 @@ export default function DepositPage() {
               No deposit addresses allocated yet. Try refresh in a moment.
             </p>
           ) : (
-            <div className="space-y-3">
-              {addresses.map((a) => (
-                <AddressRow key={`${a.chain}-${a.symbol}`} info={a} />
-              ))}
-            </div>
+            <>
+              {/* Connect-and-pay first: for anyone with a wallet installed this
+                  is one approval instead of copying an address between apps. */}
+              {!status?.active && (
+                <div className="mb-6">
+                  <WalletPay addresses={rawAddrs} defaultAmount="1.00" />
+                </div>
+              )}
+
+              <p className="text-white/35 text-[11px] tracking-[0.2em] uppercase mb-3">
+                Or send manually
+              </p>
+              <div className="space-y-3">
+                {addresses.map((a) => (
+                  <AddressRow key={`${a.chain}-${a.symbol}`} info={a} />
+                ))}
+              </div>
+            </>
           )}
 
           {error ? <p className="mt-4 text-rose-300/90 text-sm">{error}</p> : null}
