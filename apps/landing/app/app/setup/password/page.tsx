@@ -45,18 +45,13 @@ export default function PasswordSetupPage() {
       <div className="fixed inset-0 z-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_rgba(180,140,255,0.06)_0%,_transparent_60%)]" />
 
       <section className="relative z-10 w-full max-w-xl px-6 pt-16 md:pt-24 pb-24">
-        <Link
-          href="/app/setup/wallet"
-          className="inline-flex items-center gap-2 text-white/50 hover:text-white text-xs transition-colors mb-10"
-        >
-          ← Back
-        </Link>
-
+        {/* No back link: the previous step (the now/later choice) is retired,
+            and there is nothing to go back to mid-activation. */}
         <motion.p
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="text-white/40 text-xs tracking-[0.3em] uppercase mb-6"
+          className="text-white/40 text-xs tracking-[0.3em] uppercase mb-6 mt-10"
         >
           Wallet · 1 of 2
         </motion.p>

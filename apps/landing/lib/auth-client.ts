@@ -1460,6 +1460,20 @@ export function adminSetTheme(theme: Partial<DashboardTheme>): Promise<{ theme: 
   }, "Could not save the theme.");
 }
 
+/**
+ * Mint this member's 10B GoogolPlex Seva Credit against the $1 they deposited.
+ * Idempotent and one-time; refuses until the wallet is active.
+ */
+export async function generateSevaCredits(): Promise<{
+  sevaCredit: number;
+  alreadyGenerated?: boolean;
+}> {
+  const res = await authedFetch(`${AUTH_BASE}/auth/seva/generate`, { method: "POST" });
+  const data = await res.json().catch(() => ({}) as any);
+  if (!res.ok) throw new Error((data as any)?.error || "Could not generate your Seva Credit.");
+  return data as { sevaCredit: number; alreadyGenerated?: boolean };
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Telegram alerts — each admin links their own chat
 // ────────────────────────────────────────────────────────────────────────────

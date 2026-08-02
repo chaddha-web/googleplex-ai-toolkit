@@ -8,6 +8,7 @@ import { checkOrientation } from "@/lib/orientation-gate";
 import { DashboardBackground } from "@/components/dashboard-background";
 
 const ORIENTATION_PATH = "/app/setup/orientation";
+const ACTIVATION_PATH = "/app/setup/deposit";
 
 /**
  * Layout for everything under /app. Wraps in AuthProvider, gates on auth,
@@ -36,8 +37,10 @@ function Gate({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // The orientation page manages its own exit, so never bounce off it.
-    if (pathname === ORIENTATION_PATH) return;
+    // These two run their own end-of-flow sequences (the quiz result, and the
+    // Seva Credit reveal after payment) and route onward themselves. Bouncing
+    // off them would cut the member off mid-animation.
+    if (pathname === ORIENTATION_PATH || pathname === ACTIVATION_PATH) return;
 
     // Orientation comes BEFORE the $1: we want members to understand what the
     // deposit is for before they're asked to send it. Async and non-blocking —

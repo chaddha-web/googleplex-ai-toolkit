@@ -8,6 +8,7 @@ import { useAuth } from "@/components/auth-context";
 import { authedFetch, fetchMe } from "@/lib/auth-client";
 import { QrCode } from "@/components/qr-code";
 import { WalletPay } from "@/components/wallet-pay";
+import { SevaReveal } from "@/components/seva-reveal";
 
 const WALLET_BASE = (
   process.env.NEXT_PUBLIC_WALLET_BASE || "http://localhost:4201"
@@ -78,6 +79,18 @@ export default function DepositPage() {
   );
   const [walletOffline, setWalletOffline] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Payment cleared — play the Seva Credit sequence before the dashboard. */
+  const [reveal, setReveal] = useState(false);
+
+  // Arriving already active: if the credit was minted this is just a stale
+  // link, so go home. If it wasn't, they paid but never saw the reveal — an
+  // interrupted flow — so play it now rather than leaving credits unissued.
+  useEffect(() => {
+    if (!user || reveal) return;
+    if (user.walletStatus !== "active") return;
+    if ((user.tokensMinted ?? 0) > 0) router.replace("/app");
+    else setReveal(true);
+  }, [user, reveal, router]);
 
   // Try to load deposit addresses on mount.
   useEffect(() => {
@@ -127,25 +140,32 @@ export default function DepositPage() {
       };
       setStatus(updated);
       if (updated.active) {
-        // Straight into the orientation — that page sends them on to /app if
-        // the admin hasn't configured one.
-        setTimeout(() => router.push("/app/setup/orientation"), 1500);
+        // Don't navigate — the credit reveal plays right here, and sends them
+        // on to the dashboard when it's finished.
+        setReveal(true);
       }
     }, POLL_MS);
     return () => clearInterval(t);
   }, [status?.active, router]);
+
+  // Payment cleared: the whole page becomes the reveal. No back link and no
+  // deposit UI — the flow is over, there is nothing left to do here.
+  if (reveal) {
+    return (
+      <main className="relative w-full min-h-screen overflow-x-hidden flex flex-col items-center justify-center font-sans bg-black text-white selection:bg-white/20 selection:text-white">
+        <div className="fixed inset-0 z-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_rgba(180,140,255,0.06)_0%,_transparent_60%)]" />
+        <section className="relative z-10 w-full max-w-xl px-6 py-24">
+          <SevaReveal onDone={() => router.replace("/app")} />
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="relative w-full min-h-screen overflow-x-hidden flex flex-col items-center font-sans bg-black text-white selection:bg-white/20 selection:text-white">
       <div className="fixed inset-0 z-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_rgba(180,140,255,0.06)_0%,_transparent_60%)]" />
 
       <section className="relative z-10 w-full max-w-xl px-6 pt-16 md:pt-24 pb-24">
-        <Link
-          href="/app"
-          className="inline-flex items-center gap-2 text-white/50 hover:text-white text-xs transition-colors mb-10"
-        >
-          ← Dashboard
-        </Link>
 
         <motion.p
           initial={{ opacity: 0, y: 12 }}
