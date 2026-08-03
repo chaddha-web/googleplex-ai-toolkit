@@ -7,6 +7,7 @@ import { startPriceRefresh } from "./prices.js";
 import { startDepositScanner } from "./scanner.js";
 import { startAutoFlush } from "./auto-flush.js";
 import { notify } from "./notify.js";
+import { redact, redactedErrorSerializer } from "./redact.js";
 
 const PORT = Number(process.env.PORT ?? 4201);
 const ORIGINS = (process.env.CORS_ORIGINS ?? "http://localhost:3000,http://localhost:3001,http://localhost:3010")
@@ -15,7 +16,13 @@ const ORIGINS = (process.env.CORS_ORIGINS ?? "http://localhost:3000,http://local
   .filter(Boolean);
 
 const app = Fastify({
-  logger: true,
+  logger: {
+    // viem puts the FULL RPC URL — Alchemy API key and all — into its error
+    // messages, so any log.error on a failed RPC call wrote the key to disk.
+    // Scrubbing here rather than at the call sites means a newly added
+    // log.error can't reintroduce the leak. See redact.ts.
+    serializers: { err: redactedErrorSerializer }
+  },
   trustProxy: true,
   bodyLimit: 64 * 1024
 });
@@ -25,10 +32,12 @@ app.setErrorHandler((err, req, reply) => {
   const status = err.statusCode ?? 500;
   if (status >= 500) {
     req.log.error({ err }, "unhandled error");
-    notify(`❌ <b>Wallet 5xx</b>\n${req.method} ${req.url}\n${err.message}`);
+    // Same scrub for Telegram: an RPC failure's message carries the API key.
+    notify(`❌ <b>Wallet 5xx</b>\n${req.method} ${req.url}\n${redact(err.message)}`);
     return reply.code(500).send({ error: "Internal server error." });
   }
-  return reply.code(status).send({ error: err.message || "Request failed." });
+  // 4xx messages reach the browser, so they get scrubbed too.
+  return reply.code(status).send({ error: redact(err.message) || "Request failed." });
 });
 
 await app.register(helmet);
@@ -82,6 +91,6 @@ try {
   notify(`🚀 <b>Wallet service started</b>\nport ${PORT} · pid ${process.pid}`);
 } catch (err) {
   app.log.error(err);
-  notify(`💥 <b>Wallet service FAILED to start</b>\n${(err as Error).message}`);
+  notify(`💥 <b>Wallet service FAILED to start</b>\n${redact((err as Error).message)}`);
   process.exit(1);
 }

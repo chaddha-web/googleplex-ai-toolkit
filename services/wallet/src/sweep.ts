@@ -25,6 +25,7 @@ import { TOKENS } from "./tokens.js";
 import * as evm from "./sign/evm.js";
 import * as tron from "./sign/tron.js";
 import * as btc from "./sign/btc.js";
+import { redact } from "./redact.js";
 
 export type SweepLeg = {
   chain: string;
@@ -253,7 +254,11 @@ export async function executeUser(userId: string, adminId: string): Promise<Swee
   const row = await userRow(userId);
   const out: SweepResult = { ok: true, legs: [] };
 
-  const record = (leg: SweepLeg, status: string, txHash?: string, error?: string) => {
+  const record = (leg: SweepLeg, status: string, txHash?: string, rawError?: string) => {
+    // A failed sweep stores the viem error verbatim, and that error carries the
+    // full RPC URL — API key included. This row is shown in the admin UI and
+    // kept forever, so scrub before it is written, not on display.
+    const error = rawError ? redact(rawError) : undefined;
     db.insert(treasurySweeps)
       .values({
         id: ulid(),
