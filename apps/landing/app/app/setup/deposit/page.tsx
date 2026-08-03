@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/components/auth-context";
 import { authedFetch, fetchMe } from "@/lib/auth-client";
@@ -81,6 +81,42 @@ export default function DepositPage() {
   const [error, setError] = useState<string | null>(null);
   /** Payment cleared — play the Seva Credit sequence before the dashboard. */
   const [reveal, setReveal] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [checkNote, setCheckNote] = useState<string | null>(null);
+
+  /**
+   * Force an immediate on-chain check instead of waiting for the 8s poll or the
+   * 2-minute background scanner. POST /wallet/refresh reconciles the member's
+   * deposit addresses, credits anything new, and flips them to active if the $1
+   * has cleared — so this is the same path the scanner takes, just on demand.
+   */
+  const checkNow = useCallback(async () => {
+    setChecking(true);
+    setCheckNote(null);
+    try {
+      const res = await authedFetch(`${WALLET_BASE}/wallet/refresh`, { method: "POST" });
+      if (!res.ok) throw new Error(`Wallet service returned ${res.status}`);
+
+      // The ledger is authoritative; re-read the member to pick up any credit.
+      const u = await fetchMe();
+      const creditedUsd = u?.initialDepositCreditedUsd ?? 0;
+      const active = u?.walletStatus === "active";
+      setStatus({ creditedUsd, thresholdUsd: 1, active });
+
+      if (active) setReveal(true);
+      else if (creditedUsd > 0) {
+        setCheckNote(`Found $${creditedUsd.toFixed(2)} so far — waiting for the rest.`);
+      } else {
+        setCheckNote(
+          "Nothing on-chain yet. If you've just sent it, give it a minute to confirm and check again."
+        );
+      }
+    } catch {
+      setCheckNote("Couldn't reach the wallet service. Try again in a moment.");
+    } finally {
+      setChecking(false);
+    }
+  }, []);
 
   // Arriving already active: if the credit was minted this is just a stale
   // link, so go home. If it wasn't, they paid but never saw the reveal — an
@@ -203,16 +239,40 @@ export default function DepositPage() {
           transition={{ duration: 0.7, delay: 0.3 }}
           className="liquid-glass rounded-3xl mt-10 p-6"
         >
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <p className="text-white/40 text-[10px] tracking-[0.3em] uppercase">
               Activation progress
             </p>
-            {status?.active ? (
-              <span className="text-emerald-300 text-xs">Wallet active ✓</span>
-            ) : (
-              <span className="text-white/30 text-xs">Waiting for deposit…</span>
-            )}
+            <div className="flex items-center gap-3">
+              {status?.active ? (
+                <span className="text-emerald-300 text-xs">Wallet active ✓</span>
+              ) : (
+                <span className="text-white/30 text-xs">Waiting for deposit…</span>
+              )}
+              {!status?.active && (
+                <button
+                  type="button"
+                  onClick={checkNow}
+                  disabled={checking}
+                  title="Check the chain for your deposit right now"
+                  className="inline-flex items-center gap-1.5 rounded-full ring-1 ring-white/15 hover:ring-white/35 text-white/70 hover:text-white text-xs px-3 py-1.5 transition-colors disabled:opacity-50"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    className={`w-3.5 h-3.5 ${checking ? "animate-spin" : ""}`}
+                  >
+                    <path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4h-4" />
+                  </svg>
+                  {checking ? "Checking…" : "Check now"}
+                </button>
+              )}
+            </div>
           </div>
+          {checkNote && <p className="text-white/40 text-xs mt-2">{checkNote}</p>}
           <p className="text-3xl font-medium tracking-tight mt-3">
             ${(status?.creditedUsd ?? 0).toFixed(2)}
             <span className="text-white/40 text-base ml-2">
