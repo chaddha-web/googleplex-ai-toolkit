@@ -18,6 +18,7 @@ import { getPolBalance, getPolygonErc20Balance } from "./chain/polygon.js";
 import { getTrxBalance, getTrc20Balance } from "./chain/tron.js";
 import { getBtcBalance } from "./chain/btc.js";
 import { tokensByChain, type Chain, type Token } from "./tokens.js";
+import { redact } from "./redact.js";
 import {
   aggregate,
   totalUsd,
@@ -82,10 +83,13 @@ async function readChain(
       } catch (err) {
         // Log + zero. We do NOT raise — the user should still see the rest
         // of their balances. The error is observable in server logs.
+        // redact(): viem puts the full RPC URL, API key and all, in its
+        // message. This line was the actual source of the key ending up on
+        // disk — it bypasses pino, so the logger's serializer never saw it.
         // eslint-disable-next-line no-console
         console.warn(
           `[reconcile] ${chain}/${t.symbol} read failed for ${address}:`,
-          (err as Error).message
+          redact((err as Error).message)
         );
         out[t.symbol] = "0";
       }

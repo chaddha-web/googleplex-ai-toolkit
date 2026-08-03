@@ -7,7 +7,11 @@ import { startPriceRefresh } from "./prices.js";
 import { startDepositScanner } from "./scanner.js";
 import { startAutoFlush } from "./auto-flush.js";
 import { notify } from "./notify.js";
-import { redact, redactedErrorSerializer } from "./redact.js";
+import { guardConsole, redact, redactedErrorSerializer } from "./redact.js";
+
+// Before anything else can log: scrub console.* too. The pino serializer only
+// covers the logger, and the leak that reached disk came from a console.warn.
+guardConsole();
 
 const PORT = Number(process.env.PORT ?? 4201);
 const ORIGINS = (process.env.CORS_ORIGINS ?? "http://localhost:3000,http://localhost:3001,http://localhost:3010")

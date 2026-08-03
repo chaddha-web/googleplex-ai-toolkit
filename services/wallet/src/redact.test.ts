@@ -76,4 +76,24 @@ _resetRedactCache();
   assert.equal(redactDeep(undefined), undefined);
 }
 
+// ── console guard: the sink that actually leaked ──────────────────────────
+{
+  const { guardConsole } = await import("./redact.js");
+  const captured: string[] = [];
+  const realWarn = console.warn.bind(console);
+  console.warn = (...a: unknown[]) => captured.push(a.map(String).join(" "));
+
+  guardConsole();
+  console.warn(
+    "[reconcile] bsc/BNB read failed:",
+    "URL: https://bnb-mainnet.g.alchemy.com/v2/SUPERSECRETKEY123"
+  );
+
+  const seen = captured.join("\n");
+  console.warn = realWarn;
+  assert.ok(seen.length > 0, "the guard must still print, not swallow");
+  assert.ok(!seen.includes("SUPERSECRETKEY123"), "console.warn is scrubbed — this was the real leak");
+  assert.ok(seen.includes("[reconcile]"), "the useful part of the message survives");
+}
+
 console.log("✓ redaction tests passed");

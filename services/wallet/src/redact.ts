@@ -95,3 +95,31 @@ export function redactedErrorSerializer(err: any): {
 export function _resetRedactCache(): void {
   cached = null;
 }
+
+/**
+ * Scrub anything written straight to the console.
+ *
+ * The pino serializer only sees what goes through the logger. The leak that
+ * actually put the key on disk was a `console.warn` in reconcile.ts, which
+ * bypasses pino entirely — as would an uncaught rejection, a dependency's own
+ * warning, or the next console.log somebody adds. Patching console closes the
+ * whole class rather than one instance of it.
+ *
+ * Idempotent, and deliberately never throws: a logger that can crash the
+ * process is worse than the leak it prevents.
+ */
+let consoleGuarded = false;
+export function guardConsole(): void {
+  if (consoleGuarded) return;
+  consoleGuarded = true;
+  for (const level of ["log", "info", "warn", "error", "debug", "trace"] as const) {
+    const original = console[level].bind(console);
+    console[level] = (...args: unknown[]) => {
+      try {
+        original(...args.map((a) => (typeof a === "string" ? redact(a) : redactDeep(a))));
+      } catch {
+        original(...args);
+      }
+    };
+  }
+}
