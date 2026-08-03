@@ -1,11 +1,12 @@
 import { createPublicClient, http, parseAbi } from "viem";
 import { polygon } from "viem/chains";
+import { alchemyFetch } from "../alchemy-jwt.js";
 
 const RPC = process.env.POLYGON_RPC_URL ?? "https://polygon-rpc.com";
 
 export const polygonClient = createPublicClient({
   chain: polygon,
-  transport: http(RPC)
+  transport: http(RPC, { fetchFn: alchemyFetch })
 });
 
 const ERC20_ABI = parseAbi([

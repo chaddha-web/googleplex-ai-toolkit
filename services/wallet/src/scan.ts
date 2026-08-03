@@ -25,6 +25,7 @@ import { bscClient } from "./chain/bsc.js";
 import { polygonClient } from "./chain/polygon.js";
 import { TOKENS } from "./tokens.js";
 import { treasurySenderAddresses } from "./treasury.js";
+import { alchemyFetch } from "./alchemy-jwt.js";
 
 type EvmScanChain = "eth" | "bsc" | "polygon";
 
@@ -203,7 +204,9 @@ async function scanEvmAlchemy(
     ]
   };
 
-  const res = await fetch(rpc, {
+  // alchemyFetch, not fetch: this is the deposit indexer, so it must carry the
+  // JWT when JWT auth is configured. It falls through to plain fetch otherwise.
+  const res = await alchemyFetch(rpc, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body)

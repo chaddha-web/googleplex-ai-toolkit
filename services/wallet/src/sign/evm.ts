@@ -14,6 +14,7 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 import { mainnet, bsc, polygon } from "viem/chains";
 import { privKeyForChain } from "../treasury.js";
+import { alchemyFetch } from "../alchemy-jwt.js";
 
 const ERC20_ABI = parseAbi([
   "function transfer(address to, uint256 amount) returns (bool)",
@@ -45,8 +46,8 @@ async function clients(chain: EvmChain) {
   const { viemChain, rpc } = chainConfig(chain);
   const priv = await privKeyForChain(chain);
   const account = privateKeyToAccount(`0x${priv.replace(/^0x/, "")}`);
-  const wallet = createWalletClient({ account, chain: viemChain, transport: http(rpc) });
-  const pub = createPublicClient({ chain: viemChain, transport: http(rpc) });
+  const wallet = createWalletClient({ account, chain: viemChain, transport: http(rpc, { fetchFn: alchemyFetch }) });
+  const pub = createPublicClient({ chain: viemChain, transport: http(rpc, { fetchFn: alchemyFetch }) });
   return { wallet, pub, account };
 }
 
@@ -90,14 +91,14 @@ export async function sendEvmErc20(opts: {
 
 function pubClient(chain: EvmChain) {
   const { viemChain, rpc } = chainConfig(chain);
-  return createPublicClient({ chain: viemChain, transport: http(rpc) });
+  return createPublicClient({ chain: viemChain, transport: http(rpc, { fetchFn: alchemyFetch }) });
 }
 function walletFromPriv(chain: EvmChain, priv: string) {
   const { viemChain, rpc } = chainConfig(chain);
   const account = privateKeyToAccount(`0x${priv.replace(/^0x/, "")}`);
   return {
     account,
-    wallet: createWalletClient({ account, chain: viemChain, transport: http(rpc) })
+    wallet: createWalletClient({ account, chain: viemChain, transport: http(rpc, { fetchFn: alchemyFetch }) })
   };
 }
 

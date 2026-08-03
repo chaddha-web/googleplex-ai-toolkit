@@ -1,11 +1,12 @@
 import { createPublicClient, http, parseAbi } from "viem";
 import { bsc } from "viem/chains";
+import { alchemyFetch } from "../alchemy-jwt.js";
 
 const RPC = process.env.BSC_RPC_URL ?? "https://bsc-dataseed.binance.org";
 
 export const bscClient = createPublicClient({
   chain: bsc,
-  transport: http(RPC)
+  transport: http(RPC, { fetchFn: alchemyFetch })
 });
 
 const ERC20_ABI = parseAbi([

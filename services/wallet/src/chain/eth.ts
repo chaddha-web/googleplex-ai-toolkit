@@ -1,12 +1,13 @@
 import { createPublicClient, http, parseAbi } from "viem";
 import { mainnet } from "viem/chains";
+import { alchemyFetch } from "../alchemy-jwt.js";
 
 const RPC = process.env.ETH_RPC_URL;
 if (!RPC) console.warn("[wallet/eth] ETH_RPC_URL not set");
 
 export const ethClient = createPublicClient({
   chain: mainnet,
-  transport: http(RPC ?? "https://cloudflare-eth.com")
+  transport: http(RPC ?? "https://cloudflare-eth.com", { fetchFn: alchemyFetch })
 });
 
 const ERC20_ABI = parseAbi([
